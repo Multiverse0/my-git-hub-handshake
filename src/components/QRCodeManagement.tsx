@@ -180,7 +180,7 @@ export function QRCodeManagement() {
   useEffect(() => {
     if (!organization?.id) return;
     
-    const loadLocations = () => {
+    const loadLocations = async () => {
       try {
         const result = await getOrganizationTrainingLocations(organization.id);
         if (result.error) {

@@ -340,7 +340,7 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
   React.useEffect(() => {
     if (!organization?.id) return;
     
-    const loadMembers = () => {
+    const loadMembers = async () => {
       try {
         const result = await getOrganizationMembers(organization.id);
         if (result.error) {
