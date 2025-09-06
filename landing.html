@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AKTIVLOGG.no - Digital treningsregistrering for skytterlag og idrettslag</title>
+    <meta name="description" content="Enkel og sikker digital løsning for registrering av treningsaktivitet. Perfekt for skytterlag, pistolklubber og idrettslag som ønsker effektiv medlemsadministrasjon.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'aktivlogg-yellow': '#FFD700',
+                        'aktivlogg-dark': '#1F2937',
+                        'aktivlogg-gray': '#111827'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+        }
+        .hero-pattern {
+            background-image: radial-gradient(circle at 25% 25%, rgba(255, 215, 0, 0.1) 0%, transparent 50%),
+                              radial-gradient(circle at 75% 75%, rgba(255, 215, 0, 0.1) 0%, transparent 50%);
+        }
+        .feature-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            color: #1F2937;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(255, 215, 0, 0.3);
+        }
+        .section-divider {
+            background: linear-gradient(90deg, transparent 0%, #FFD700 50%, transparent 100%);
+            height: 1px;
+        }
+    </style>
+</head>
+<body class="bg-aktivlogg-gray text-white">
+    <!-- Navigation -->
+    <nav class="bg-aktivlogg-dark/95 backdrop-blur-sm border-b border-aktivlogg-yellow/20 sticky top-0 z-50">
+        <div class="container mx-auto px-4">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-3">
+                    <img src="public/Logo SVPK 2 linjer hvit tekst.svg" alt="SVPK Logo" class="h-10">
+                    <div class="text-aktivlogg-yellow font-bold text-xl">AKTIVLOGG.no</div>
+                </div>
+                <div class="hidden md:flex items-center space-x-6">
+                    <a href="#features" class="text-gray-300 hover:text-aktivlogg-yellow transition-colors">Funksjoner</a>
+                    <a href="#benefits" class="text-gray-300 hover:text-aktivlogg-yellow transition-colors">Fordeler</a>
+                    <a href="#pricing" class="text-gray-300 hover:text-aktivlogg-yellow transition-colors">Priser</a>
+                    <a href="#contact" class="text-gray-300 hover:text-aktivlogg-yellow transition-colors">Kontakt</a>
+                    <a href="mailto:yngve@promonorge.no" class="btn-primary px-6 py-2 rounded-lg">
+                        Få demo
+                    </a>
+                </div>
+                <button class="md:hidden text-aktivlogg-yellow">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero-pattern py-20 lg:py-32">
+        <div class="container mx-auto px-4">
+            <div class="max-w-4xl mx-auto text-center">
+                <div class="mb-8">
+                    <img src="public/Logo SVPK 2 linjer hvit tekst.svg" alt="SVPK Logo" class="h-20 mx-auto mb-6">
+                    <h1 class="text-5xl lg:text-7xl font-bold mb-6">
+                        <span class="text-aktivlogg-yellow">AKTIVLOGG</span><span class="text-white">.no</span>
+                    </h1>
+                    <p class="text-xl lg:text-2xl text-gray-300 mb-8 leading-relaxed">
+                        Digital treningsregistrering for <span class="text-aktivlogg-yellow font-semibold">skytterlag</span> og <span class="text-aktivlogg-yellow font-semibold">idrettslag</span>
+                    </p>
+                    <p class="text-lg text-gray-400 mb-12 max-w-3xl mx-auto">
+                        Slutt med papirbaserte lister og manuelle systemer. AKTIVLOGG gir deg en komplett digital løsning 
+                        for å registrere, administrere og dokumentere treningsaktivitet - alt i ett system.
+                    </p>
+                </div>
+                
+                <div class="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
+                    <a href="mailto:yngve@promonorge.no" class="btn-primary px-8 py-4 rounded-xl text-lg">
+                        🚀 Få gratis demo
+                    </a>
+                    <a href="#features" class="border-2 border-aktivlogg-yellow text-aktivlogg-yellow px-8 py-4 rounded-xl text-lg hover:bg-aktivlogg-yellow hover:text-aktivlogg-dark transition-all">
+                        Se funksjoner
+                    </a>
+                </div>
+
+                <!-- Hero Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-2xl mx-auto">
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-aktivlogg-yellow mb-2">⚡</div>
+                        <div class="text-sm text-gray-400">Rask registrering med QR-koder</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-aktivlogg-yellow mb-2">📱</div>
+                        <div class="text-sm text-gray-400">Fungerer på alle enheter</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-aktivlogg-yellow mb-2">🔒</div>
+                        <div class="text-sm text-gray-400">Sikker og GDPR-kompatibel</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Problem Section -->
+    <section class="py-20 bg-aktivlogg-dark/50">
+        <div class="container mx-auto px-4">
+            <div class="max-w-4xl mx-auto">
+                <div class="text-center mb-16">
+                    <h2 class="text-3xl lg:text-4xl font-bold mb-6">
+                        Sliter dere med <span class="text-red-400">disse utfordringene</span>?
+                    </h2>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-red-900/20 border border-red-700 rounded-xl p-6">
+                        <div class="text-red-400 text-4xl mb-4">📝</div>
+                        <h3 class="text-xl font-semibold mb-3 text-red-400">Papirbaserte lister</h3>
+                        <p class="text-gray-300">Håndskrevne lister som forsvinner, blir ødelagt eller er vanskelige å lese</p>
+                    </div>
+                    
+                    <div class="bg-red-900/20 border border-red-700 rounded-xl p-6">
+                        <div class="text-red-400 text-4xl mb-4">⏰</div>
+                        <h3 class="text-xl font-semibold mb-3 text-red-400">Tidkrevende administrasjon</h3>
+                        <p class="text-gray-300">Timer med manuell databehandling og rapportgenerering</p>
+                    </div>
+                    
+                    <div class="bg-red-900/20 border border-red-700 rounded-xl p-6">
+                        <div class="text-red-400 text-4xl mb-4">❌</div>
+                        <h3 class="text-xl font-semibold mb-3 text-red-400">Manglende dokumentasjon</h3>
+                        <p class="text-gray-300">Vanskelig å dokumentere aktivitet for myndigheter og forsikring</p>
+                    </div>
+                    
+                    <div class="bg-red-900/20 border border-red-700 rounded-xl p-6">
+                        <div class="text-red-400 text-4xl mb-4">🔍</div>
+                        <h3 class="text-xl font-semibold mb-3 text-red-400">Ingen oversikt</h3>
+                        <p class="text-gray-300">Umulig å få god oversikt over medlemsaktivitet og trender</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Solution Section -->
+    <section class="py-20">
+        <div class="container mx-auto px-4">
+            <div class="max-w-4xl mx-auto text-center">
+                <h2 class="text-3xl lg:text-4xl font-bold mb-6">
+                    <span class="text-aktivlogg-yellow">AKTIVLOGG</span> løser alle disse problemene
+                </h2>
+                <p class="text-xl text-gray-300 mb-12">
+                    En komplett digital løsning som gjør treningsregistrering enkelt, sikkert og effektivt
+                </p>
+                
+                <div class="bg-gradient-to-r from-aktivlogg-yellow/10 to-orange-500/10 border border-aktivlogg-yellow/30 rounded-2xl p-8 mb-12">
+                    <div class="text-6xl mb-4">🎯</div>
+                    <h3 class="text-2xl font-bold text-aktivlogg-yellow mb-4">Så enkelt som 1-2-3</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+                        <div class="flex items-start gap-3">
+                            <div class="bg-aktivlogg-yellow text-aktivlogg-dark w-8 h-8 rounded-full flex items-center justify-center font-bold">1</div>
+                            <div>
+                                <h4 class="font-semibold mb-1">Skann QR-kode</h4>
+                                <p class="text-sm text-gray-400">Medlemmet skanner QR-koden på skytebanen</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <div class="bg-aktivlogg-yellow text-aktivlogg-dark w-8 h-8 rounded-full flex items-center justify-center font-bold">2</div>
+                            <div>
+                                <h4 class="font-semibold mb-1">Automatisk registrering</h4>
+                                <p class="text-sm text-gray-400">Systemet registrerer automatisk oppmøte</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <div class="bg-aktivlogg-yellow text-aktivlogg-dark w-8 h-8 rounded-full flex items-center justify-center font-bold">3</div>
+                            <div>
+                                <h4 class="font-semibold mb-1">Admin godkjenner</h4>
+                                <p class="text-sm text-gray-400">Standplassleder godkjenner med ett klikk</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-20 bg-aktivlogg-dark/30">
+        <div class="container mx-auto px-4">
+            <div class="max-w-6xl mx-auto">
+                <div class="text-center mb-16">
+                    <h2 class="text-3xl lg:text-4xl font-bold mb-6">
+                        Kraftige funksjoner som <span class="text-aktivlogg-yellow">forenkler hverdagen</span>
+                    </h2>
+                    <p class="text-xl text-gray-300">Alt dere trenger for effektiv treningsadministrasjon</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <!-- QR Scanner -->
+                    <div class="feature-card bg-aktivlogg-dark border border-gray-700 rounded-xl p-6">
+                        <div class="text-aktivlogg-yellow text-5xl mb-4">📱</div>
+                        <h3 class="text-xl font-semibold mb-3">QR-kode Skanning</h3>
+                        <p class="text-gray-300 mb-4">
+                            Medlemmer registrerer oppmøte ved å skanne QR-kode på skytebanen. 
+                            Rask, enkelt og feilfritt.
+                        </p>
+                        <ul class="text-sm text-gray-400 space-y-1">
+                            <li>✓ Fungerer på alle mobiler</li>
+                            <li>✓ Automatisk tidsstempel</li>
+                            <li>✓ Ingen app-nedlasting nødvendig</li>
+                        </ul>
+                    </div>
+
+                    <!-- Admin Dashboard -->
+                    <div class="feature-card bg-aktivlogg-dark border border-gray-700 rounded-xl p-6">
+                        <div class="text-aktivlogg-yellow text-5xl mb-4">👨‍💼</div>
+                        <h3 class="text-xl font-semibold mb-3">Admin Dashboard</h3>
+                        <p class="text-gray-300 mb-4">
+                            Komplett administrasjonspanel for standplassledere og klubbadministratorer.
+                        </p>
+                        <ul class="text-sm text-gray-400 space-y-1">
+                            <li>✓ Godkjenn treningsøkter</li>
+                            <li>✓ Administrer medlemmer</li>
+                            <li>✓ Generer rapporter</li>
+                        </ul>
+                    </div>
+
+                    <!-- Training Log -->
+                    <div class="feature-card bg-aktivlogg-dark border border-gray-700 rounded-xl p-6">
+                        <div class="text-aktivlogg-yellow text-5xl mb-4">📊</div>
+                        <h3 class="text-xl font-semibold mb-3">Digital Treningslogg</h3>
+                        <p class="text-gray-300 mb-4">
+                            Automatisk generering av treningslogger som kan brukes til våpensøknader.
+                        </p>
+                        <ul class="text-sm text-gray-400 space-y-1">
+                            <li>✓ PDF-eksport</li>
+                            <li>✓ Politigodkjent format</li>
+                            <li>✓ Automatisk beregning</li>
+                        </ul>
+                    </div>
+
+                    <!-- Member Management -->
+                    <div class="feature-card bg-aktivlogg-dark border border-gray-700 rounded-xl p-6">
+                        <div class="text-aktivlogg-yellow text-5xl mb-4">👥</div>
+                        <h3 class="text-xl font-semibold mb-3">Medlemsadministrasjon</h3>
+                        <p class="text-gray-300 mb-4">
+                            Enkelt system for å administrere medlemmer, roller og tilganger.
+                        </p>
+                        <ul class="text-sm text-gray-400 space-y-1">
+                            <li>✓ Automatisk registrering</li>
+                            <li>✓ Godkjenningsworkflow</li>
+                            <li>✓ Rollebasert tilgang</li>
+                        </ul>
+                    </div>
+
+                    <!-- Multi-tenant -->
+                    <div class="feature-card bg-aktivlogg-dark border border-gray-700 rounded-xl p-6">
+                        <div class="text-aktivlogg-yellow text-5xl mb-4">🏢</div>
+                        <h3 class="text-xl font-semibold mb-3">Multi-organisasjon</h3>
+                        <p class="text-gray-300 mb-4">
+                            Støtter flere organisasjoner i samme system med egne innstillinger.
+                        </p>
+                        <ul class="text-sm text-gray-400 space-y-1">
+                            <li>✓ Egne fargetemaer</li>
+                            <li>✓ Tilpassede logoer</li>
+                            <li>✓ Separate databaser</li>
+                        </ul>
+                    </div>
+
+                    <!-- Security -->
+                    <div class="feature-card bg-aktivlogg-dark border border-gray-700 rounded-xl p-6">
+                        <div class="text-aktivlogg-yellow text-5xl mb-4">🔒</div>
+                        <h3 class="text-xl font-semibold mb-3">Sikkerhet & Personvern</h3>
+                        <p class="text-gray-300 mb-4">
+                            Bygget med sikkerhet i fokus og fullt GDPR-kompatibelt.
+                        </p>
+                        <ul class="text-sm text-gray-400 space-y-1">
+                            <li>✓ Krypterte data</li>
+                            <li>✓ GDPR-kompatibel</li>
+                            <li>✓ Norske servere</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Benefits Section -->
+    <section id="benefits" class="py-20">
+        <div class="container mx-auto px-4">
+            <div class="max-w-6xl mx-auto">
+                <div class="text-center mb-16">
+                    <h2 class="text-3xl lg:text-4xl font-bold mb-6">
+                        Hvorfor velge <span class="text-aktivlogg-yellow">AKTIVLOGG</span>?
+                    </h2>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+                    <div class="space-y-8">
+                        <div class="flex items-start gap-4">
+                            <div class="bg-aktivlogg-yellow text-aktivlogg-dark w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl">⏱️</div>
+                            <div>
+                                <h3 class="text-xl font-semibold mb-2">Spar 90% av tiden</h3>
+                                <p class="text-gray-300">Fra timevis manuelt arbeid til sekunder med automatisering</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start gap-4">
+                            <div class="bg-aktivlogg-yellow text-aktivlogg-dark w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl">📈</div>
+                            <div>
+                                <h3 class="text-xl font-semibold mb-2">Bedre oversikt</h3>
+                                <p class="text-gray-300">Få verdifull innsikt i medlemsaktivitet og trender</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start gap-4">
+                            <div class="bg-aktivlogg-yellow text-aktivlogg-dark w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl">✅</div>
+                            <div>
+                                <h3 class="text-xl font-semibold mb-2">Myndighetsgodkjent</h3>
+                                <p class="text-gray-300">Generer dokumentasjon som godkjennes av politiet for våpensøknader</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-start gap-4">
+                            <div class="bg-aktivlogg-yellow text-aktivlogg-dark w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl">🎯</div>
+                            <div>
+                                <h3 class="text-xl font-semibold mb-2">Spesialtilpasset</h3>
+                                <p class="text-gray-300">Utviklet spesielt for norske skytterlag og idrettslag</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gradient-to-br from-aktivlogg-yellow/10 to-orange-500/10 border border-aktivlogg-yellow/30 rounded-2xl p-8">
+                        <div class="text-center">
+                            <div class="text-6xl mb-6">🏆</div>
+                            <h3 class="text-2xl font-bold text-aktivlogg-yellow mb-4">Allerede i bruk hos</h3>
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-center gap-3">
+                                    <img src="public/Logo SVPK 2 linjer hvit tekst.svg" alt="SVPK Logo" class="h-8">
+                                    <span class="font-semibold">Svolvær Pistolklubb</span>
+                                </div>
+                                <p class="text-gray-400 text-sm">
+                                    "AKTIVLOGG har revolusjonert måten vi administrerer treningsaktivitet på. 
+                                    Fra kaos til kontroll på få minutter!"
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Technical Features -->
+    <section class="py-20 bg-aktivlogg-dark/30">
+        <div class="container mx-auto px-4">
+            <div class="max-w-6xl mx-auto">
+                <div class="text-center mb-16">
+                    <h2 class="text-3xl lg:text-4xl font-bold mb-6">
+                        Tekniske <span class="text-aktivlogg-yellow">spesifikasjoner</span>
+                    </h2>
+                    <p class="text-xl text-gray-300">Moderne teknologi for pålitelig drift</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="bg-aktivlogg-dark border border-gray-700 rounded-xl p-6 text-center">
+                        <div class="text-aktivlogg-yellow text-3xl mb-3">☁️</div>
+                        <h3 class="font-semibold mb-2">Skybasert</h3>
+                        <p class="text-sm text-gray-400">Tilgjengelig overalt, alltid oppdatert</p>
+                    </div>
+                    
+                    <div class="bg-aktivlogg-dark border border-gray-700 rounded-xl p-6 text-center">
+                        <div class="text-aktivlogg-yellow text-3xl mb-3">📱</div>
+                        <h3 class="font-semibold mb-2">Responsiv</h3>
+                        <p class="text-sm text-gray-400">Fungerer perfekt på mobil, tablet og PC</p>
+                    </div>
+                    
+                    <div class="bg-aktivlogg-dark border border-gray-700 rounded-xl p-6 text-center">
+                        <div class="text-aktivlogg-yellow text-3xl mb-3">🔄</div>
+                        <h3 class="font-semibold mb-2">Sanntid</h3>
+                        <p class="text-sm text-gray-400">Alle endringer synkroniseres umiddelbart</p>
+                    </div>
+                    
+                    <div class="bg-aktivlogg-dark border border-gray-700 rounded-xl p-6 text-center">
+                        <div class="text-aktivlogg-yellow text-3xl mb-3">🇳🇴</div>
+                        <h3 class="font-semibold mb-2">Norsk</h3>
+                        <p class="text-sm text-gray-400">Utviklet i Norge, for norske forhold</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="py-20">
+        <div class="container mx-auto px-4">
+            <div class="max-w-4xl mx-auto">
+                <div class="text-center mb-16">
+                    <h2 class="text-3xl lg:text-4xl font-bold mb-6">
+                        Enkle og <span class="text-aktivlogg-yellow">forutsigbare priser</span>
+                    </h2>
+                    <p class="text-xl text-gray-300">Ingen skjulte kostnader eller overraskelser</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Starter Plan -->
+                    <div class="bg-aktivlogg-dark border border-gray-700 rounded-2xl p-8">
+                        <div class="text-center mb-6">
+                            <h3 class="text-2xl font-bold mb-2">Starter</h3>
+                            <p class="text-gray-400 mb-4">Perfekt for mindre klubber</p>
+                            <div class="text-4xl font-bold text-aktivlogg-yellow mb-2">
+                                Kr 299<span class="text-lg text-gray-400">/mnd</span>
+                            </div>
+                            <p class="text-sm text-gray-400">Opp til 50 medlemmer</p>
+                        </div>
+                        
+                        <ul class="space-y-3 mb-8">
+                            <li class="flex items-center gap-3">
+                                <div class="text-green-400">✓</div>
+                                <span>QR-kode registrering</span>
+                            </li>
+                            <li class="flex items-center gap-3">
+                                <div class="text-green-400">✓</div>
+                                <span>Medlemsadministrasjon</span>
+                            </li>
+                            <li class="flex items-center gap-3">
+                                <div class="text-green-400">✓</div>
+                                <span>PDF-rapporter</span>
+                            </li>
+                            <li class="flex items-center gap-3">
+                                <div class="text-green-400">✓</div>
+                                <span>E-post support</span>
+                            </li>
+                        </ul>
+                        
+                        <a href="mailto:yngve@promonorge.no?subject=Interessert i AKTIVLOGG Starter" class="btn-primary w-full py-3 rounded-xl text-center block">
+                            Velg Starter
+                        </a>
+                    </div>
+
+                    <!-- Professional Plan -->
+                    <div class="bg-gradient-to-br from-aktivlogg-yellow/10 to-orange-500/10 border-2 border-aktivlogg-yellow rounded-2xl p-8 relative">
+                        <div class="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                            <span class="bg-aktivlogg-yellow text-aktivlogg-dark px-4 py-1 rounded-full text-sm font-bold">
+                                MEST POPULÆR
+                            </span>
+                        </div>
+                        
+                        <div class="text-center mb-6">
+                            <h3 class="text-2xl font-bold mb-2">Professional</h3>
+                            <p class="text-gray-400 mb-4">For større klubber og organisasjoner</p>
+                            <div class="text-4xl font-bold text-aktivlogg-yellow mb-2">
+                                Kr 599<span class="text-lg text-gray-400">/mnd</span>
+                            </div>
+                            <p class="text-sm text-gray-400">Ubegrenset medlemmer</p>
+                        </div>
+                        
+                        <ul class="space-y-3 mb-8">
+                            <li class="flex items-center gap-3">
+                                <div class="text-green-400">✓</div>
+                                <span>Alt fra Starter</span>
+                            </li>
+                            <li class="flex items-center gap-3">
+                                <div class="text-green-400">✓</div>
+                                <span>Ubegrenset medlemmer</span>
+                            </li>
+                            <li class="flex items-center gap-3">
+                                <div class="text-green-400">✓</div>
+                                <span>Avanserte rapporter</span>
+                            </li>
+                            <li class="flex items-center gap-3">
+                                <div class="text-green-400">✓</div>
+                                <span>Tilpasset branding</span>
+                            </li>
+                            <li class="flex items-center gap-3">
+                                <div class="text-green-400">✓</div>
+                                <span>Prioritert support</span>
+                            </li>
+                            <li class="flex items-center gap-3">
+                                <div class="text-green-400">✓</div>
+                                <span>Telefon support</span>
+                            </li>
+                        </ul>
+                        
+                        <a href="mailto:yngve@promonorge.no?subject=Interessert i AKTIVLOGG Professional" class="btn-primary w-full py-3 rounded-xl text-center block">
+                            Velg Professional
+                        </a>
+                    </div>
+                </div>
+
+                <div class="text-center mt-12">
+                    <p class="text-gray-400 mb-4">
+                        🎁 <strong>Spesialtilbud:</strong> Første måned gratis for alle nye kunder!
+                    </p>
+                    <p class="text-sm text-gray-500">
+                        Alle priser er eks. mva. Ingen bindingstid. Avbestill når som helst.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Demo Section -->
+    <section class="py-20 bg-aktivlogg-dark/50">
+        <div class="container mx-auto px-4">
+            <div class="max-w-4xl mx-auto text-center">
+                <h2 class="text-3xl lg:text-4xl font-bold mb-6">
+                    Se <span class="text-aktivlogg-yellow">AKTIVLOGG</span> i aksjon
+                </h2>
+                <p class="text-xl text-gray-300 mb-12">
+                    Book en gratis demo og se hvordan AKTIVLOGG kan transformere deres treningsadministrasjon
+                </p>
+                
+                <div class="bg-aktivlogg-dark border border-aktivlogg-yellow/30 rounded-2xl p-8">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div class="text-center">
+                            <div class="text-aktivlogg-yellow text-3xl mb-2">15</div>
+                            <div class="text-sm text-gray-400">minutter demo</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-aktivlogg-yellow text-3xl mb-2">0</div>
+                            <div class="text-sm text-gray-400">kroner kostnad</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-aktivlogg-yellow text-3xl mb-2">∞</div>
+                            <div class="text-sm text-gray-400">spørsmål velkommen</div>
+                        </div>
+                    </div>
+                    
+                    <a href="mailto:yngve@promonorge.no?subject=Ønsker demo av AKTIVLOGG&body=Hei!%0A%0AVi er interessert i en demo av AKTIVLOGG for vårt lag.%0A%0AKlubbens navn: %0AAntall medlemmer: %0AKontaktperson: %0ATelefon: %0A%0ATakk!" 
+                       class="btn-primary px-8 py-4 rounded-xl text-lg inline-block">
+                        📅 Book gratis demo nå
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="py-20">
+        <div class="container mx-auto px-4">
+            <div class="max-w-4xl mx-auto">
+                <div class="text-center mb-16">
+                    <h2 class="text-3xl lg:text-4xl font-bold mb-6">
+                        Ofte stilte <span class="text-aktivlogg-yellow">spørsmål</span>
+                    </h2>
+                </div>
+
+                <div class="space-y-6">
+                    <div class="bg-aktivlogg-dark border border-gray-700 rounded-xl p-6">
+                        <h3 class="text-lg font-semibold mb-3 text-aktivlogg-yellow">Hvor lang tid tar det å komme i gang?</h3>
+                        <p class="text-gray-300">
+                            AKTIVLOGG kan være oppe og kjøre på under 30 minutter. Vi setter opp systemet for dere 
+                            og gir opplæring til administratorer.
+                        </p>
+                    </div>
+                    
+                    <div class="bg-aktivlogg-dark border border-gray-700 rounded-xl p-6">
+                        <h3 class="text-lg font-semibold mb-3 text-aktivlogg-yellow">Kan vi tilpasse systemet til våre behov?</h3>
+                        <p class="text-gray-300">
+                            Ja! AKTIVLOGG kan tilpasses med deres logo, farger og spesifikke krav. 
+                            Vi jobber tett med hver kunde for å sikre perfekt tilpasning.
+                        </p>
+                    </div>
+                    
+                    <div class="bg-aktivlogg-dark border border-gray-700 rounded-xl p-6">
+                        <h3 class="text-lg font-semibold mb-3 text-aktivlogg-yellow">Er dataene våre sikre?</h3>
+                        <p class="text-gray-300">
+                            Absolutt. AKTIVLOGG bruker moderne sikkerhetsteknologi, krypterte databaser 
+                            og er fullt GDPR-kompatibelt. Alle data lagres på norske servere.
+                        </p>
+                    </div>
+                    
+                    <div class="bg-aktivlogg-dark border border-gray-700 rounded-xl p-6">
+                        <h3 class="text-lg font-semibold mb-3 text-aktivlogg-yellow">Hva hvis vi vil slutte å bruke systemet?</h3>
+                        <p class="text-gray-300">
+                            Ingen bindingstid! Dere kan avbestille når som helst, og vi hjelper dere med 
+                            å eksportere alle data i standard formater.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="py-20 gradient-bg">
+        <div class="container mx-auto px-4">
+            <div class="max-w-4xl mx-auto text-center">
+                <h2 class="text-3xl lg:text-4xl font-bold mb-6 text-aktivlogg-dark">
+                    Klar for å modernisere treningsadministrasjonen?
+                </h2>
+                <p class="text-xl text-aktivlogg-dark/80 mb-12">
+                    Bli med tusenvis av fornøyde brukere som har gjort treningsregistrering enkelt og effektivt
+                </p>
+                
+                <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                    <a href="mailto:yngve@promonorge.no?subject=Ønsker å komme i gang med AKTIVLOGG" 
+                       class="bg-aktivlogg-dark text-aktivlogg-yellow px-8 py-4 rounded-xl text-lg font-semibold hover:bg-gray-800 transition-all">
+                        🚀 Kom i gang i dag
+                    </a>
+                    <a href="mailto:yngve@promonorge.no?subject=Spørsmål om AKTIVLOGG" 
+                       class="border-2 border-aktivlogg-dark text-aktivlogg-dark px-8 py-4 rounded-xl text-lg font-semibold hover:bg-aktivlogg-dark hover:text-aktivlogg-yellow transition-all">
+                        💬 Still spørsmål
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="contact" class="bg-aktivlogg-dark border-t border-aktivlogg-yellow/20 py-16">
+        <div class="container mx-auto px-4">
+            <div class="max-w-6xl mx-auto">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <!-- Company Info -->
+                    <div>
+                        <div class="flex items-center gap-3 mb-6">
+                            <img src="public/Logo SVPK 2 linjer hvit tekst.svg" alt="SVPK Logo" class="h-8">
+                            <div class="text-aktivlogg-yellow font-bold text-xl">AKTIVLOGG.no</div>
+                        </div>
+                        <p class="text-gray-400 mb-4">
+                            Digital treningsregistrering for moderne skytterlag og idrettslag.
+                        </p>
+                        <p class="text-sm text-gray-500">
+                            Utviklet av <a href="https://promonorge.no" class="text-aktivlogg-yellow hover:text-yellow-400">promonorge.no</a>
+                        </p>
+                    </div>
+
+                    <!-- Quick Links -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4 text-aktivlogg-yellow">Hurtiglenker</h3>
+                        <ul class="space-y-2">
+                            <li><a href="#features" class="text-gray-400 hover:text-aktivlogg-yellow transition-colors">Funksjoner</a></li>
+                            <li><a href="#benefits" class="text-gray-400 hover:text-aktivlogg-yellow transition-colors">Fordeler</a></li>
+                            <li><a href="#pricing" class="text-gray-400 hover:text-aktivlogg-yellow transition-colors">Priser</a></li>
+                            <li><a href="mailto:yngve@promonorge.no" class="text-gray-400 hover:text-aktivlogg-yellow transition-colors">Support</a></li>
+                        </ul>
+                    </div>
+
+                    <!-- Contact -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4 text-aktivlogg-yellow">Kontakt oss</h3>
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-3">
+                                <div class="text-aktivlogg-yellow">📧</div>
+                                <a href="mailto:yngve@promonorge.no" class="text-gray-400 hover:text-aktivlogg-yellow transition-colors">
+                                    yngve@promonorge.no
+                                </a>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="text-aktivlogg-yellow">🌐</div>
+                                <a href="https://promonorge.no" class="text-gray-400 hover:text-aktivlogg-yellow transition-colors">
+                                    promonorge.no
+                                </a>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="text-aktivlogg-yellow">🇳🇴</div>
+                                <span class="text-gray-400">Utviklet i Norge</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-divider my-12"></div>
+
+                <div class="text-center">
+                    <p class="text-gray-500 text-sm">
+                        © 2025 AKTIVLOGG.no - Utviklet av promonorge.no. Alle rettigheter reservert.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Smooth Scrolling -->
+    <script>
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Mobile menu toggle (if needed)
+        const mobileMenuButton = document.querySelector('.md\\:hidden');
+        if (mobileMenuButton) {
+            mobileMenuButton.addEventListener('click', function() {
+                // Add mobile menu functionality here if needed
+                console.log('Mobile menu clicked');
+            });
+        }
+    </script>
+</body>
+</html>
