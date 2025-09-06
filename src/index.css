@@ -1,0 +1,158 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #111827;
+  --bg-secondary: #1f2937;
+  --bg-tertiary: #374151;
+  --text-primary: #f9fafb;
+  --text-secondary: #d1d5db;
+  --text-tertiary: #9ca3af;
+  --border-primary: #374151;
+  --primary-color: #FFD700;
+  --secondary-color: #1F2937;
+  --background-color: #111827;
+}
+
+.light {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-tertiary: #64748b;
+  --border-primary: #e2e8f0;
+  --background-color: #ffffff;
+}
+
+body {
+  background-color: var(--background-color);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+
+/* Navigation styling */
+nav {
+  background-color: var(--bg-secondary) !important;
+  border-bottom-color: var(--border-primary) !important;
+}
+
+/* Card styling */
+.card {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-primary);
+  color: var(--text-primary);
+}
+
+.light .card {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-primary);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* Button styling */
+.light .btn-secondary {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+}
+
+.light .btn-secondary:hover {
+  background-color: var(--bg-primary);
+}
+
+/* Input styling */
+.light input, .light textarea, .light select {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-primary);
+}
+
+.light input:focus, .light textarea:focus, .light select:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.1);
+}
+
+.btn-primary {
+  @apply font-semibold py-2 px-4 rounded-lg 
+         transition-colors duration-200 flex items-center justify-center gap-2;
+  background-color: var(--primary-color, #FFD700);
+  color: var(--secondary-color, #1F2937);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  @apply bg-gray-800 hover:bg-gray-700 text-gray-100 font-semibold py-2 px-4 rounded-lg 
+         transition-colors duration-200 flex items-center justify-center gap-2 border border-gray-700;
+}
+
+.card {
+  @apply bg-gray-800 rounded-lg p-6 border border-gray-700;
+}
+
+/* Dynamic theming support */
+.theme-bg {
+  background-color: var(--background-color);
+  color: var(--text-primary);
+}
+
+.theme-primary {
+  color: var(--primary-color, #FFD700);
+}
+
+.theme-bg-primary {
+  background-color: var(--primary-color, #FFD700);
+}
+
+.theme-border-primary {
+  border-color: var(--primary-color, #FFD700);
+}
+
+/* Ensure proper contrast in light mode */
+.light .text-gray-400 {
+  color: var(--text-tertiary);
+}
+
+.light .text-gray-300 {
+  color: var(--text-secondary);
+}
+
+.light .bg-gray-800 {
+  background-color: var(--bg-secondary);
+}
+
+.light .bg-gray-700 {
+  background-color: var(--bg-tertiary);
+}
+
+.light .border-gray-700 {
+  border-color: var(--border-primary);
+}
+/* Override bg-gray-900 in light mode to be white */
+.light .bg-gray-900 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(255 255 255);
+}
+
+/* Hide scrollbar for mobile menu */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
