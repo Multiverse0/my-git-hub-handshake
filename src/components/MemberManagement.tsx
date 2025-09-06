@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Search, ChevronUp, ChevronDown, XCircle, CheckCircle, AlertCircle, Edit2, PlusCircle, Shield, ShieldOff, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { getOrganizationMembers, approveMember, updateMemberRole } from '../lib/supabase';
 import { sendMemberApprovalEmail, generateLoginUrl } from '../lib/emailService';
-import bcrypt from 'bcryptjs';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import type { OrganizationMember } from '../lib/types';
 
 interface Member {
   id: number;
@@ -318,14 +319,15 @@ function EditModal({ member, onClose, onSave }: EditModalProps) {
 }
 
 export function MemberManagement({ onMemberCountChange }: MemberManagementProps) {
-  const { user } = useAuth();
+  const { user, organization } = useAuth();
   const { t } = useLanguage();
-  const [members, setMembers] = useState<Member[]>(initialMembers);
+  const [members, setMembers] = useState<OrganizationMember[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortField, setSortField] = useState<'registrationDate' | 'fullName'>('registrationDate');
+  const [sortField, setSortField] = useState<'created_at' | 'full_name'>('created_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [error, setError] = useState<string | null>(null);
-  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [editingMember, setEditingMember] = useState<OrganizationMember | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;
@@ -334,48 +336,38 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
   const canManageAdmins = user?.user_type === 'super_user' || 
                           (user?.member_profile?.role === 'admin');
 
-  // Load members from localStorage on component mount
+  // Load members from database
   React.useEffect(() => {
+    if (!organization?.id) return;
+    
     const loadMembers = () => {
       try {
-        const savedMembers = localStorage.getItem('members');
-        const savedMembersData = savedMembers ? JSON.parse(savedMembers) : [];
+        const result = await getOrganizationMembers(organization.id);
+        if (result.error) {
+          throw new Error(result.error);
+        }
         
-        const parsedMembers = savedMembersData.map((member: any) => ({
-          ...member,
-          registrationDate: member.registrationDate ? 
-            (isNaN(new Date(member.registrationDate).getTime()) ? 
-              new Date() : 
-              new Date(member.registrationDate)) : 
-            new Date(),
-          role: member.role || 'user' // Default to 'user' if role is missing
-        }));
-        
-        // Combine with dummy data
-        const allMembers = [...dummyMembers, ...parsedMembers];
-        setMembers(allMembers);
+        setMembers(result.data || []);
       } catch (error) {
         console.error('Error loading members:', error);
-        setMembers(dummyMembers); // Fallback to dummy data
+        setMembers([]);
+      } finally {
+        setLoading(false);
       }
     };
 
     loadMembers();
-  }, []);
+  }, [organization?.id]);
 
-  // Save members to localStorage whenever members change
+  // Update member count when members change
   React.useEffect(() => {
-    if (members.length > 0) {
-      localStorage.setItem('members', JSON.stringify(members));
-      // Notify parent component of pending count change
-      if (onMemberCountChange) {
-        const pendingCount = members.filter(member => !member.approved).length;
-        onMemberCountChange(pendingCount);
-      }
+    if (onMemberCountChange) {
+      const pendingCount = members.filter(member => !member.approved).length;
+      onMemberCountChange(pendingCount);
     }
   }, [members]);
 
-  const handleSort = (field: 'registrationDate' | 'fullName') => {
+  const handleSort = (field: 'created_at' | 'full_name') => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -384,35 +376,33 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
     }
   };
 
-  const handleApprove = async (memberId: number) => {
+  const handleApprove = async (memberId: string) => {
     const member = members.find(m => m.id === memberId);
     if (!member) return;
 
-    // Update member status
-    setMembers(prev => prev.map(m =>
-      m.id === memberId ? { 
-        ...m, 
-        approved: true
-      } : m
-    ));
-
-    // Try to send approval email, but don't fail if email service is not configured
     try {
-      // Generate temporary password for approved member
+      const result = await approveMember(memberId);
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      // Update local state
+      setMembers(prev => prev.map(m =>
+        m.id === memberId ? { ...m, approved: true } : m
+      ));
+
+      // Try to send approval email
       const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4).toUpperCase();
       
-      // Get organization info from localStorage or context
-      const savedOrg = localStorage.getItem('currentOrganization');
-      if (savedOrg) {
-        const orgData = JSON.parse(savedOrg);
-        const loginUrl = generateLoginUrl(orgData.slug || 'svpk');
+      if (organization) {
+        const loginUrl = generateLoginUrl(organization.slug);
         const adminName = user?.member_profile?.full_name || user?.super_user_profile?.full_name || 'Administrator';
         
         const emailResult = await sendMemberApprovalEmail(
           member.email,
-          member.fullName,
-          orgData.name || 'Organisasjonen',
-          orgData.id || 'default-org',
+          member.full_name,
+          organization.name,
+          organization.id,
           tempPassword,
           loginUrl,
           adminName
@@ -420,17 +410,13 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
         
         if (!emailResult.success) {
           console.warn('Approval email failed (email service not configured):', emailResult.error);
-          // Show a non-blocking notification that email failed but approval succeeded
           setError(`Medlem godkjent, men e-post kunne ikke sendes. Kontakt medlemmet manuelt med innloggingsopplysninger.`);
           setTimeout(() => setError(null), 5000);
-        } else {
-          console.log('✅ Approval email sent successfully');
         }
       }
     } catch (error) {
-      console.warn('Email service error (continuing with approval):', error);
-      setError(`Medlem godkjent, men e-post kunne ikke sendes. Kontakt medlemmet manuelt.`);
-      setTimeout(() => setError(null), 5000);
+      console.error('Error approving member:', error);
+      setError(error instanceof Error ? error.message : 'Kunne ikke godkjenne medlem');
     }
   };
 
@@ -480,15 +466,29 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
     }
   };
 
-  const handleUnapprove = (memberId: number) => {
+  const handleUnapprove = async (memberId: string) => {
     if (window.confirm('Er du sikker på at du vil fjerne godkjenningen av dette medlemmet?')) {
-      setMembers(prev => prev.map(member =>
-        member.id === memberId ? { ...member, approved: false } : member
-      ));
+      try {
+        const { error } = await supabase
+          .from('organization_members')
+          .update({ approved: false })
+          .eq('id', memberId);
+        
+        if (error) {
+          throw new Error('Kunne ikke fjerne godkjenning');
+        }
+        
+        setMembers(prev => prev.map(member =>
+          member.id === memberId ? { ...member, approved: false } : member
+        ));
+      } catch (error) {
+        console.error('Error unapproving member:', error);
+        setError('Kunne ikke fjerne godkjenning');
+      }
     }
   };
 
-  const handleSaveEdit = (updatedMember: Member) => {
+  const handleSaveEdit = (updatedMember: OrganizationMember) => {
     setMembers(prev => prev.map(member =>
       member.id === updatedMember.id ? updatedMember : member
     ));
@@ -508,43 +508,66 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
     setShowAddModal(false);
   };
 
-  const handleToggleAdmin = (memberId: number) => {
+  const handleToggleAdmin = async (memberId: string) => {
     if (!canManageAdmins) return;
     
     const member = members.find(m => m.id === memberId);
     if (!member) return;
     
-    const newRole = member.role === 'admin' ? 'user' : 'admin';
+    const newRole = member.role === 'admin' ? 'member' : 'admin';
     const action = newRole === 'admin' ? 'gi admin-rettigheter til' : 'fjerne admin-rettigheter fra';
     
-    if (window.confirm(`Er du sikker på at du vil ${action} ${member.fullName}?`)) {
-      setMembers(prev => prev.map(m =>
-        m.id === memberId 
-          ? { ...m, role: newRole }
-          : m
-      ));
+    if (window.confirm(`Er du sikker på at du vil ${action} ${member.full_name}?`)) {
+      try {
+        const result = await updateMemberRole(memberId, newRole);
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        
+        setMembers(prev => prev.map(m =>
+          m.id === memberId ? { ...m, role: newRole } : m
+        ));
+      } catch (error) {
+        console.error('Error updating member role:', error);
+        setError('Kunne ikke oppdatere medlemsrolle');
+      }
     }
   };
 
-  const handleDeleteMember = (memberId: number, memberName: string) => {
+  const handleDeleteMember = async (memberId: string, memberName: string) => {
     if (!canManageAdmins) return;
     
-    if (window.confirm(`Er du sikker på at du vil slette medlemmet "${memberName}" permanent fra systemet? Denne handlingen kan ikke angres.`)) {
-      setMembers(prev => prev.filter(member => member.id !== memberId));
+    if (window.confirm(`Er du sikker på at du vil slette medlemmet "${memberName}" permanent? Denne handlingen kan ikke angres.`)) {
+      try {
+        const { error } = await supabase
+          .from('organization_members')
+          .delete()
+          .eq('id', memberId);
+        
+        if (error) {
+          throw new Error('Kunne ikke slette medlem');
+        }
+        
+        setMembers(prev => prev.filter(member => member.id !== memberId));
+      } catch (error) {
+        console.error('Error deleting member:', error);
+        setError('Kunne ikke slette medlem');
+      }
     }
   };
+  
   const filteredAndSortedMembers = members
     .filter(member => 
-      (member.fullName ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (member.full_name ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (member.email ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (member.memberNumber ?? '').includes(searchTerm)
+      (member.member_number ?? '').includes(searchTerm)
     )
     .sort((a, b) => {
       let comparison = 0;
-      if (sortField === 'registrationDate') {
-        comparison = a.registrationDate.getTime() - b.registrationDate.getTime();
-      } else if (sortField === 'fullName') {
-        comparison = a.fullName.localeCompare(b.fullName);
+      if (sortField === 'created_at') {
+        comparison = new Date(a.created_at!).getTime() - new Date(b.created_at!).getTime();
+      } else if (sortField === 'full_name') {
+        comparison = a.full_name.localeCompare(b.full_name);
       }
       return sortDirection === 'asc' ? comparison : -comparison;
     });

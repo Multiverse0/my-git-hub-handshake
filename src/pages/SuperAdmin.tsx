@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Users, Settings, Plus, Edit2, Trash2, Shield, ShieldOff, UserPlus, AlertCircle, CheckCircle, X, Loader2, Eye, EyeOff, Copy, Save, Package, Download, Globe } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase, createOrganization } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { Organization, OrganizationMember } from '../lib/types';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { DataExportManager } from '../components/DataExportManager';
 import { LanguageFileManager } from '../components/LanguageFileManager';
-import bcrypt from 'bcryptjs';
 
 interface OrganizationWithStats extends Organization {
   member_count: number;
@@ -688,51 +687,35 @@ export function SuperAdmin() {
     try {
       setLoading(true);
       
-      // Load all organizations from localStorage
-      const savedOrgs = localStorage.getItem('organizations');
-      const allOrganizations = savedOrgs ? JSON.parse(savedOrgs) : [];
+      // Load organizations from database
+      const { data: allOrganizations, error } = await supabase
+        .from('organizations')
+        .select('*')
+        .order('created_at', { ascending: false });
       
-      // If no organizations exist, create default SVPK
-      if (allOrganizations.length === 0) {
-        const defaultOrg = {
-          id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-          name: 'Svolvær Pistolklubb',
-          slug: 'svpk',
-          description: 'Norges beste pistolklubb',
-          email: 'post@svpk.no',
-          phone: '+47 123 45 678',
-          website: 'https://svpk.no',
-          address: 'Svolværgata 1, 8300 Svolvær',
-          primary_color: '#FFD700',
-          secondary_color: '#1F2937',
-          logo_url: null,
-          active: true,
-          admin_notes: 'Månedspris: Kr 599\nKontaktperson: Yngve Rødli\nE-post: yngve68@me.com\nTelefon: +47 123 45 678',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        
-        allOrganizations.push(defaultOrg);
-        localStorage.setItem('organizations', JSON.stringify(allOrganizations));
-        localStorage.setItem('currentOrganization', JSON.stringify(defaultOrg));
+      if (error) {
+        throw new Error(error.message);
       }
       
-      // Get member counts for each organization
-      const savedMembers = localStorage.getItem('members');
-      const members = savedMembers ? JSON.parse(savedMembers) : [];
-      
-      const organizationsWithStats = allOrganizations.map((org: any) => {
-        const orgMembers = members.filter((m: any) => m.organization_id === org.id);
-        const memberCount = orgMembers.length;
-        const adminCount = orgMembers.filter((m: any) => m.role === 'admin').length;
+      // Get member counts for each organization from database
+      const organizationsWithStats = await Promise.all(
+        (allOrganizations || []).map(async (org: Organization) => {
+          const { data: members } = await supabase
+            .from('organization_members')
+            .select('id, role')
+            .eq('organization_id', org.id);
+          
+          const memberCount = members?.length || 0;
+          const adminCount = members?.filter(m => m.role === 'admin').length || 0;
+          
+          return {
+            ...org,
+            member_count: memberCount,
+            admin_count: adminCount
+          };
+        })
+      );
         
-        return {
-          ...org,
-          member_count: memberCount,
-          admin_count: adminCount
-        };
-      });
-      
       setOrganizations(organizationsWithStats);
     } catch (error) {
       console.error('Error loading organizations:', error);
@@ -744,16 +727,40 @@ export function SuperAdmin() {
 
   const loadSuperUsers = () => {
     try {
-      const savedSuperUsers = localStorage.getItem('superUsers');
-      if (savedSuperUsers) {
-        const users = JSON.parse(savedSuperUsers);
-        setSuperUsers(users);
-      } else {
-        setSuperUsers([]);
-      }
+      const loadUsers = async () => {
+        const { data: users, error } = await supabase
+          .from('super_users')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('Error loading super users:', error);
+          setSuperUsers([]);
+        } else {
+          setSuperUsers(users || []);
+        }
+      };
+      
+      loadUsers();
     } catch (error) {
-      console.error('Error loading super users:', error);
+      console.error('Error in loadSuperUsers:', error);
       setSuperUsers([]);
+    }
+  };
+
+  const handleCreateOrganization = async (orgData: any) => {
+    try {
+      const result = await createOrganization(orgData);
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      // Refresh organizations list
+      loadOrganizations();
+      return result.data;
+    } catch (error) {
+      console.error('Error creating organization:', error);
+      throw error;
     }
   };
 

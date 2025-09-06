@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { QrCode, Plus, Edit2, Trash2, Eye, EyeOff, X, Save, Loader2, AlertCircle, CheckCircle, Copy } from 'lucide-react';
+import { getOrganizationTrainingLocations, createTrainingLocation, updateTrainingLocation } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import type { TrainingLocation } from '../lib/types';
 
 interface QRLocation {
   id: string;
@@ -169,87 +171,117 @@ function EditModal({ location, onClose, onSave }: EditModalProps) {
 
 export function QRCodeManagement() {
   const { organization } = useAuth();
-  const [locations, setLocations] = useState<QRLocation[]>([]);
-  const [editingLocation, setEditingLocation] = useState<QRLocation | null>(null);
+  const [locations, setLocations] = useState<TrainingLocation[]>([]);
+  const [editingLocation, setEditingLocation] = useState<TrainingLocation | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Default locations for SVPK
-  const defaultLocations: QRLocation[] = [
-    {
-      id: '1',
-      name: 'Innendørs 25m',
-      qr_code_id: 'svpk-innendors-25m',
-      description: 'Innendørs skytebane for 25 meter skyting',
-      active: true,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: '2',
-      name: 'Utendørs 25m',
-      qr_code_id: 'svpk-utendors-25m',
-      description: 'Utendørs skytebane for 25 meter skyting',
-      active: true,
-      created_at: new Date().toISOString()
-    }
-  ];
 
   useEffect(() => {
+    if (!organization?.id) return;
+    
     const loadLocations = () => {
       try {
-        const saved = localStorage.getItem('rangeLocations');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          setLocations(parsed);
-        } else {
-          // Initialize with default locations
-          setLocations(defaultLocations);
-          localStorage.setItem('rangeLocations', JSON.stringify(defaultLocations));
+        const result = await getOrganizationTrainingLocations(organization.id);
+        if (result.error) {
+          throw new Error(result.error);
         }
+        
+        setLocations(result.data || []);
       } catch (error) {
         console.error('Error loading QR locations:', error);
-        setLocations(defaultLocations);
+        setLocations([]);
       } finally {
         setLoading(false);
       }
     };
 
     loadLocations();
-  }, []);
+  }, [organization?.id]);
 
-  const handleSave = (updatedLocation: QRLocation) => {
-    if (editingLocation) {
-      // Update existing
-      const updatedLocations = locations.map(loc => 
-        loc.id === updatedLocation.id ? updatedLocation : loc
-      );
-      setLocations(updatedLocations);
-      localStorage.setItem('rangeLocations', JSON.stringify(updatedLocations));
-    } else {
-      // Add new
-      const newLocations = [...locations, updatedLocation];
-      setLocations(newLocations);
-      localStorage.setItem('rangeLocations', JSON.stringify(newLocations));
+  const handleSave = async (locationData: TrainingLocation) => {
+    if (!organization?.id) return;
+    
+    try {
+      if (editingLocation) {
+        // Update existing
+        const result = await updateTrainingLocation(locationData.id, {
+          name: locationData.name,
+          qr_code_id: locationData.qr_code_id,
+          description: locationData.description,
+          active: locationData.active
+        });
+        
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        
+        setLocations(prev => prev.map(loc => 
+          loc.id === locationData.id ? result.data! : loc
+        ));
+      } else {
+        // Create new
+        const result = await createTrainingLocation(organization.id, {
+          name: locationData.name,
+          qr_code_id: locationData.qr_code_id,
+          description: locationData.description
+        });
+        
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        
+        setLocations(prev => [...prev, result.data!]);
+      }
+    } catch (error) {
+      console.error('Error saving location:', error);
+      setError(error instanceof Error ? error.message : 'Kunne ikke lagre lokasjon');
     }
     
     setEditingLocation(null);
     setShowAddModal(false);
   };
 
-  const handleDelete = (locationId: string) => {
+  const handleDelete = async (locationId: string) => {
     if (window.confirm('Er du sikker på at du vil slette denne skytebanen?')) {
-      const updatedLocations = locations.filter(loc => loc.id !== locationId);
-      setLocations(updatedLocations);
-      localStorage.setItem('rangeLocations', JSON.stringify(updatedLocations));
+      try {
+        const { error } = await supabase
+          .from('training_locations')
+          .delete()
+          .eq('id', locationId);
+        
+        if (error) {
+          throw new Error('Kunne ikke slette treningslokasjon');
+        }
+        
+        setLocations(prev => prev.filter(loc => loc.id !== locationId));
+      } catch (error) {
+        console.error('Error deleting location:', error);
+        setError('Kunne ikke slette treningslokasjon');
+      }
     }
   };
 
-  const handleToggleActive = (locationId: string) => {
-    const updatedLocations = locations.map(loc =>
-      loc.id === locationId ? { ...loc, active: !loc.active } : loc
-    );
-    setLocations(updatedLocations);
-    localStorage.setItem('rangeLocations', JSON.stringify(updatedLocations));
+  const handleToggleActive = async (locationId: string) => {
+    try {
+      const location = locations.find(loc => loc.id === locationId);
+      if (!location) return;
+      
+      const result = await updateTrainingLocation(locationId, {
+        active: !location.active
+      });
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      setLocations(prev => prev.map(loc =>
+        loc.id === locationId ? { ...loc, active: !loc.active } : loc
+      ));
+    } catch (error) {
+      console.error('Error toggling location status:', error);
+      setError('Kunne ikke endre status for treningslokasjon');
+    }
   };
 
   if (loading) {

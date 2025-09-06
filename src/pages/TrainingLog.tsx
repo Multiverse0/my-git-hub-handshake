@@ -3,9 +3,11 @@ import { Download, Calendar, Target, CheckCircle, Clock, Award, TrendingUp, Plus
 import { format, subMonths, isAfter } from 'date-fns';
 import { jsPDF } from 'jspdf';
 import { useDropzone } from 'react-dropzone';
+import { getMemberTrainingSessions, updateTrainingDetails, uploadTargetImage } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ManualTrainingModal } from '../components/ManualTrainingModal';
+import type { MemberTrainingSession } from '../lib/types';
 
 interface TrainingEntry {
   id: string;
@@ -230,157 +232,67 @@ function EditTrainingModal({ entry, onClose, onSave }: EditTrainingModalProps) {
 }
 
 export function TrainingLog() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const { t } = useLanguage();
-  const [trainingSessions, setTrainingSessions] = useState<TrainingEntry[]>([]);
+  const [trainingSessions, setTrainingSessions] = useState<MemberTrainingSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [showManualModal, setShowManualModal] = useState(false);
-  const [editingEntry, setEditingEntry] = useState<TrainingEntry | null>(null);
+  const [editingEntry, setEditingEntry] = useState<MemberTrainingSession | null>(null);
   const [organizationFilter, setOrganizationFilter] = useState<'all' | 'NSF' | 'DFS' | 'DSSN'>('all');
   const [activityFilter, setActivityFilter] = useState<'all' | 'Trening' | 'Stevne' | 'Dugnad'>('all');
-  const [organizationSettings, setOrganizationSettings] = useState<any>({
-    nsf_enabled: true,
-    dfs_enabled: false,
-    dssn_enabled: false
-  });
-  const [availableActivities, setAvailableActivities] = useState<string[]>(['Trening', 'Stevne', 'Dugnad']);
 
-  // Generate some example training sessions including DSSN activities
-  const generateExampleSessions = (): TrainingEntry[] => {
-    const sessions: TrainingEntry[] = [];
-    const today = new Date();
-    
-    // Add recent sessions with mix of NSF and DSSN activities
-    const activities = [
-      { name: 'Trening', org: 'NSF' },
-      { name: 'Stevne', org: 'NSF' },
-      { name: 'Dugnad', org: 'NSF' },
-      { name: 'Dynamisk trening', org: 'DSSN' },
-      { name: 'Åpent dynamisk stevne', org: 'DSSN' }
-    ];
-    
-    const locations = [
-      'Innendørs 25m',
-      'Utendørs 25m', 
-      'Dynamisk bane',
-      'Feltbane'
-    ];
-
-    // Generate 25 sessions over the last 2 years
-    for (let i = 0; i < 25; i++) {
-      const daysAgo = Math.floor(Math.random() * 730); // Random day in last 2 years
-      const sessionDate = new Date(today.getTime() - daysAgo * 24 * 60 * 60 * 1000);
-      const activity = activities[Math.floor(Math.random() * activities.length)];
-      const location = locations[Math.floor(Math.random() * locations.length)];
-      
-      sessions.push({
-        id: `session-${i}`,
-        date: sessionDate,
-        location,
-        duration: '2 timer',
-        verified: Math.random() > 0.1, // 90% verified
-        verifiedBy: Math.random() > 0.5 ? 'Magne Angelsen' : 'Kenneth S. Fahle',
-        activity: activity.name,
-        organization: activity.org
-      });
-    }
-
-    return sessions.sort((a, b) => b.date.getTime() - a.date.getTime());
-  };
 
   useEffect(() => {
-    // Load organization settings
-    const loadOrganizationSettings = () => {
-      try {
-        const savedOrg = localStorage.getItem('currentOrganization');
-        if (savedOrg) {
-          const orgData = JSON.parse(savedOrg);
-          setOrganizationSettings({
-            nsf_enabled: orgData.nsf_enabled !== false,
-            dfs_enabled: orgData.dfs_enabled || false,
-            dssn_enabled: orgData.dssn_enabled || false
-          });
-          
-          // Load available activity types
-          if (orgData.activity_types && Array.isArray(orgData.activity_types)) {
-            setAvailableActivities(orgData.activity_types);
-          } else {
-            // Fallback to default activities
-            setAvailableActivities(['Trening', 'Stevne', 'Dugnad']);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading organization settings:', error);
-      }
-    };
 
     const loadTrainingSessions = () => {
+      if (!user?.id) return;
+      
       try {
-        const savedSessions = localStorage.getItem('trainingSessions');
-        let sessions: TrainingEntry[] = [];
-        
-        if (savedSessions) {
-          const parsed = JSON.parse(savedSessions);
-          sessions = parsed.map((session: any) => ({
-            id: session.id,
-            date: new Date(session.date),
-            location: session.location || session.rangeName || 'Ukjent',
-            duration: session.duration || '2 timer',
-            verified: session.verified || session.approved || false,
-            verifiedBy: session.verifiedBy || session.rangeOfficer,
-            activity: session.activity || 'Trening',
-            organization: session.organization || (session.activity?.includes('Dynamisk') ? 'DSSN' : 'NSF')
-          }));
+        const result = await getMemberTrainingSessions(user.id);
+        if (result.error) {
+          throw new Error(result.error);
         }
 
-        // Add example sessions for demo
-        const exampleSessions = generateExampleSessions();
-        const allSessions = [...sessions, ...exampleSessions];
-        
-        setTrainingSessions(allSessions);
+        setTrainingSessions(result.data || []);
       } catch (error) {
         console.error('Error loading training sessions:', error);
-        setTrainingSessions(generateExampleSessions());
+        setTrainingSessions([]);
       } finally {
         setLoading(false);
       }
     };
 
-    loadOrganizationSettings();
     loadTrainingSessions();
 
-    // Listen for updates
-    const handleUpdate = () => loadTrainingSessions();
-    window.addEventListener('trainingDataUpdated', handleUpdate);
-    window.addEventListener('storage', handleUpdate);
+    // Refresh data every 30 seconds
+    const interval = setInterval(loadTrainingSessions, 30000);
     
     return () => {
-      window.removeEventListener('trainingDataUpdated', handleUpdate);
-      window.removeEventListener('storage', handleUpdate);
+      clearInterval(interval);
     };
-  }, []);
+  }, [user?.id]);
 
   // Calculate requirements
   const calculateRequirements = () => {
     const twoYearsAgo = subMonths(new Date(), 24);
-    const recentSessions = trainingSessions.filter(session => 
-      isAfter(session.date, twoYearsAgo) && session.verified
+    const recentSessions = trainingSessions.filter(session =>
+      isAfter(new Date(session.start_time), twoYearsAgo) && session.verified
     );
 
-    // Standard requirements (NSF)
-    const standardSessions = recentSessions.filter(session => 
-      session.organization !== 'DSSN'
+    // Standard requirements (NSF/DFS)
+    const standardSessions = recentSessions.filter(session =>
+      !session.details?.training_type?.includes('Dynamisk')
     );
 
     // Dynamic requirements (DSSN)
-    const dynamicTrainings = recentSessions.filter(session => 
-      session.organization === 'DSSN' && 
-      (session.activity === 'Dynamisk trening' || session.activity === 'Trening')
+    const dynamicTrainings = recentSessions.filter(session =>
+      session.details?.training_type?.includes('Dynamisk') &&
+      session.details?.training_type?.includes('trening')
     );
     
-    const dynamicCompetitions = recentSessions.filter(session => 
-      session.organization === 'DSSN' && 
-      (session.activity === 'Åpent dynamisk stevne' || session.activity === 'Stevne')
+    const dynamicCompetitions = recentSessions.filter(session =>
+      session.details?.training_type?.includes('Dynamisk') &&
+      session.details?.training_type?.includes('stevne')
     );
 
     return {
@@ -691,14 +603,26 @@ export function TrainingLog() {
     };
   }, []);
 
-  const handleEditEntry = (entry: TrainingEntry) => {
+  const handleEditEntry = (entry: MemberTrainingSession) => {
     setEditingEntry(entry);
   };
 
-  const handleSaveEdit = (updatedEntry: TrainingEntry & { details?: TrainingDetails }) => {
-    setTrainingSessions(prev => prev.map(session => 
-      session.id === updatedEntry.id ? updatedEntry : session
-    ));
+  const handleSaveEdit = async (updatedEntry: MemberTrainingSession & { details?: TrainingDetails }) => {
+    try {
+      if (updatedEntry.details) {
+        await updateTrainingDetails(updatedEntry.id, updatedEntry.details);
+      }
+      
+      // Refresh sessions from database
+      if (user?.id) {
+        const result = await getMemberTrainingSessions(user.id);
+        if (result.data) {
+          setTrainingSessions(result.data);
+        }
+      }
+    } catch (error) {
+      console.error('Error saving training details:', error);
+    }
     setEditingEntry(null);
   };
 
@@ -717,13 +641,19 @@ export function TrainingLog() {
   
   // Apply filters
   let filteredSessions = verifiedSessions.filter(session => {
-    const matchesOrg = organizationFilter === 'all' || session.organization === organizationFilter;
-    const matchesActivity = activityFilter === 'all' || session.activity === activityFilter;
+    const trainingType = session.details?.training_type || 'Trening';
+    const matchesOrg = organizationFilter === 'all' || 
+      (organizationFilter === 'DSSN' && trainingType.includes('Dynamisk')) ||
+      (organizationFilter === 'NSF' && !trainingType.includes('Dynamisk')) ||
+      (organizationFilter === 'DFS' && trainingType.includes('Felt'));
+    const matchesActivity = activityFilter === 'all' || trainingType.includes(activityFilter);
     return matchesOrg && matchesActivity;
   });
   
   // Apply sorting - always newest first
-  filteredSessions = filteredSessions.sort((a, b) => b.date.getTime() - a.date.getTime());
+  filteredSessions = filteredSessions.sort((a, b) => 
+    new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
+  );
 
   return (
     <div className="space-y-8">

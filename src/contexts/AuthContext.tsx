@@ -5,7 +5,10 @@ import {
   getOrganizationBySlug,
   setUserContext,
   getOrganizationBranding,
-  checkSuperUsersExist
+  checkSuperUsersExist,
+  getCurrentUser,
+  signOut,
+  supabase
 } from '../lib/supabase';
 import type { AuthUser, Organization, OrganizationBranding } from '../lib/types';
 
@@ -54,10 +57,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const checkSetupStatus = async () => {
     try {
       const superUsersExist = await checkSuperUsersExist();
-      setNeedsSetup(false); // Always skip setup now
+      setNeedsSetup(!superUsersExist);
     } catch (error) {
       console.error('Error checking setup status:', error);
-      setNeedsSetup(false);
+      setNeedsSetup(true);
     }
   };
 
@@ -67,88 +70,87 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await checkSetupStatus();
       
       try {
-        const savedAuth = localStorage.getItem('currentAuth');
-        const savedOrg = localStorage.getItem('currentOrganization');
+        // Check if user is already authenticated with Supabase
+        const { data: { session } } = await supabase.auth.getSession();
         
-        if (savedAuth) {
-          const authData = JSON.parse(savedAuth);
-          setUser(authData);
-          setIsAuthenticated(true);
-          
-          // Set user context for RLS
-          try {
-            await setUserContext(authData.email);
-          } catch (error) {
-            console.warn('Failed to set user context during initialization:', error);
-          }
-          
-          // Load organization if user is organization member
-          if (authData.user_type === 'organization_member' && savedOrg) {
-            const orgData = JSON.parse(savedOrg);
-            setOrganization(orgData);
+        if (session?.user) {
+          const currentUser = await getCurrentUser();
+          if (currentUser) {
+            setUser(currentUser);
+            setIsAuthenticated(true);
             
-            // Load branding
-            const brandingData = await getOrganizationBranding(orgData.id);
-            // Override with localStorage data if available
-            brandingData.logo_url = orgData.logo_url || brandingData.logo_url;
-            if (orgData.primary_color) brandingData.primary_color = orgData.primary_color;
-            if (orgData.secondary_color) brandingData.secondary_color = orgData.secondary_color;
-            setBranding(brandingData);
-          } else if (authData.user_type === 'super_user' && savedOrg) {
-            // For super users, load organization from localStorage
-            const orgData = JSON.parse(savedOrg);
-            setOrganization(orgData);
+            // Set user context for RLS
+            await setUserContext(currentUser.email);
             
-            // Load branding from localStorage
-            const brandingData = {
-              organization_name: orgData.name || 'Idrettsklubb',
-              primary_color: orgData.primary_color || '#FFD700',
-              secondary_color: orgData.secondary_color || '#1F2937',
-              logo_url: orgData.logo_url || undefined
-            };
-            setBranding(brandingData);
+            // Load organization if user is organization member
+            if (currentUser.user_type === 'organization_member' && currentUser.organization) {
+              setOrganization(currentUser.organization);
+              
+              // Load branding
+              const brandingData = await getOrganizationBranding(currentUser.organization.id);
+              setBranding(brandingData);
+            }
           }
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
-        // Clear invalid data
-        localStorage.removeItem('currentAuth');
-        localStorage.removeItem('currentOrganization');
       } finally {
         setLoading(false);
       }
     };
+    
     initializeAuth();
+    
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const currentUser = await getCurrentUser();
+        if (currentUser) {
+          setUser(currentUser);
+          setIsAuthenticated(true);
+          await setUserContext(currentUser.email);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setOrganization(null);
+        setIsAuthenticated(false);
+        setBranding({
+          organization_name: 'Idrettsklubb',
+          primary_color: '#FFD700',
+          secondary_color: '#1F2937'
+        });
+      }
+    });
+    
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string, rememberMe: boolean, organizationSlug?: string) => {
     try {
       setLoading(true);
       
-      const result = await authenticateUser(email, password, organizationSlug);
+      const result = await authenticateUser(email, password);
       
       if (result.error) {
         throw new Error(result.error);
       }
 
       if (result.data) {
-        setUser(result.data.user);
+        const user = result.data.user;
+        setUser(user);
         setIsAuthenticated(true);
         
         // Set user context for RLS
-        await setUserContext(email);
-        
-        // Store auth data
-        const storage = rememberMe ? localStorage : sessionStorage;
-        storage.setItem('currentAuth', JSON.stringify(result.data.user));
+        await setUserContext(user.email);
         
         // Handle organization context
-        if (result.data.organization) {
-          setOrganization(result.data.organization);
-          localStorage.setItem('currentOrganization', JSON.stringify(result.data.organization));
+        if (user.organization) {
+          setOrganization(user.organization);
           
           // Load branding
-          const brandingData = await getOrganizationBranding(result.data.organization.id);
+          const brandingData = await getOrganizationBranding(user.organization.id);
           setBranding(brandingData);
         }
       }
@@ -159,6 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }
   };
+  
   const register = async (organizationSlug: string, email: string, password: string, fullName: string, memberNumber?: string) => {
     try {
       setLoading(true);
@@ -186,29 +189,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Kun super-brukere kan bytte organisasjon');
       }
 
-      // Load organization from localStorage
-      const savedOrgs = localStorage.getItem('organizations');
-      if (savedOrgs) {
-        const organizations = JSON.parse(savedOrgs);
-        const targetOrg = organizations.find((org: any) => org.slug === organizationSlug);
-        
-        if (targetOrg) {
-          setOrganization(targetOrg);
-          localStorage.setItem('currentOrganization', JSON.stringify(targetOrg));
-          
-          // Load branding
-          const brandingData = {
-            organization_name: targetOrg.name || 'Idrettsklubb',
-            primary_color: targetOrg.primary_color || '#FFD700',
-            secondary_color: targetOrg.secondary_color || '#1F2937',
-            logo_url: targetOrg.logo_url || undefined
-          };
-          setBranding(brandingData);
-          return;
-        }
+      // Get organization from database
+      const result = await getOrganizationBySlug(organizationSlug);
+      if (result.error || !result.data) {
+        throw new Error(result.error || 'Organisasjon ikke funnet');
       }
 
-      throw new Error('Organisasjon ikke funnet');
+      setOrganization(result.data);
+      
+      // Load branding
+      const brandingData = await getOrganizationBranding(result.data.id);
+      setBranding(brandingData);
 
     } catch (error) {
       console.error('Error switching organization:', error);
@@ -225,7 +216,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setOrganization(result.data);
-      localStorage.setItem('currentOrganization', JSON.stringify(result.data));
       
       // Load branding
       const brandingData = await getOrganizationBranding(result.data.id);
@@ -237,7 +227,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await signOut();
     setUser(null);
     setOrganization(null);
     setIsAuthenticated(false);
@@ -246,10 +237,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       primary_color: '#FFD700',
       secondary_color: '#1F2937'
     });
-    
-    localStorage.removeItem('currentAuth');
-    localStorage.removeItem('currentOrganization');
-    sessionStorage.removeItem('currentAuth');
   };
 
   return (

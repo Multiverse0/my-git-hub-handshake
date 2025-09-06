@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Clock, User, MapPin, Calendar, AlertCircle, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { getOrganizationTrainingSessions, verifyTrainingSession } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import type { MemberTrainingSession } from '../lib/types';
 
 interface PendingTraining {
   id: string;
@@ -45,153 +47,112 @@ const generateDummyApprovals = (): PendingTraining[] => {
 };
 
 export function TrainingApprovalQueue({ onCountChange }: TrainingApprovalQueueProps) {
-  const { profile } = useAuth();
-  const [pendingTrainings, setPendingTrainings] = useState<PendingTraining[]>([]);
+  const { user, profile, organization } = useAuth();
+  const [pendingTrainings, setPendingTrainings] = useState<MemberTrainingSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  // Load pending training approvals from localStorage
+  // Load pending training sessions from database
   useEffect(() => {
+    if (!organization?.id) return;
+    
     const loadPendingTrainings = () => {
       try {
-        const saved = localStorage.getItem('pendingTrainingApprovals');
-        let pending: PendingTraining[] = [];
+        const loadSessions = async () => {
+          const result = await getOrganizationTrainingSessions(organization.id);
+          if (result.data) {
+            const unverifiedSessions = result.data.filter(session => !session.verified);
+            setPendingTrainings(unverifiedSessions);
+            
+            // Notify parent component of count change
+            if (onCountChange) {
+              onCountChange(unverifiedSessions.length);
+            }
+          }
+        };
         
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          pending = parsed.filter((training: PendingTraining) => !training.approved);
-        } else {
-          // Generate dummy data for demo
-          const dummyData = generateDummyApprovals();
-          localStorage.setItem('pendingTrainingApprovals', JSON.stringify(dummyData));
-          pending = dummyData;
-        }
-        
-        setPendingTrainings(pending);
-        
-        // Notify parent component of count change
-        if (onCountChange) {
-          onCountChange(pending.length);
-        }
+        loadSessions().catch(error => {
+          console.error('Error loading pending trainings:', error);
+          setPendingTrainings([]);
+          if (onCountChange) {
+            onCountChange(0);
+          }
+        }).finally(() => {
+          setLoading(false);
+        });
       } catch (error) {
-        console.error('Error loading pending trainings:', error);
-        // Fallback to dummy data
-        const dummyData = generateDummyApprovals();
-        setPendingTrainings(dummyData);
+        console.error('Error in loadPendingTrainings:', error);
+        setPendingTrainings([]);
         if (onCountChange) {
-          onCountChange(dummyData.length);
+          onCountChange(0);
         }
-      } finally {
         setLoading(false);
       }
     };
 
     loadPendingTrainings();
 
-    // Listen for updates
-    const interval = setInterval(loadPendingTrainings, 2000);
+    // Refresh every 30 seconds
+    const interval = setInterval(loadPendingTrainings, 30000);
     
     return () => clearInterval(interval);
-  }, [onCountChange]);
+  }, [organization?.id, onCountChange]);
 
-  const handleApprove = async (trainingId: string) => {
-    setProcessingId(trainingId);
+  const handleApprove = async (sessionId: string) => {
+    setProcessingId(sessionId);
     
     try {
-      // Update pending approvals
-      const saved = localStorage.getItem('pendingTrainingApprovals');
-      if (saved) {
-        const approvals = JSON.parse(saved);
-        const updatedApprovals = approvals.map((approval: PendingTraining) =>
-          approval.id === trainingId 
-            ? { ...approval, approved: true, approvedBy: profile?.full_name || 'Admin', approvedAt: new Date().toISOString() }
-            : approval
-        );
-        localStorage.setItem('pendingTrainingApprovals', JSON.stringify(updatedApprovals));
-      }
-
-      // Update training sessions
-      const savedSessions = localStorage.getItem('trainingSessions');
-      if (savedSessions) {
-        const sessions = JSON.parse(savedSessions);
-        const training = pendingTrainings.find(t => t.id === trainingId);
-        
-        if (training) {
-          const updatedSessions = sessions.map((session: any) =>
-            session.id === training.sessionId
-              ? { 
-                  ...session, 
-                  verified: true, 
-                  approved: true,
-                  verifiedBy: profile?.full_name || 'Admin',
-                  rangeOfficer: profile?.full_name || 'Admin',
-                  verification_time: new Date().toISOString()
-                }
-              : session
-          );
-          localStorage.setItem('trainingSessions', JSON.stringify(updatedSessions));
-        }
+      const result = await verifyTrainingSession(sessionId, profile?.full_name || 'Admin');
+      
+      if (result.error) {
+        throw new Error(result.error);
       }
 
       // Remove from pending list
-      setPendingTrainings(prev => prev.filter(training => training.id !== trainingId));
+      setPendingTrainings(prev => prev.filter(training => training.id !== sessionId));
       
       // Update count
       if (onCountChange) {
         onCountChange(pendingTrainings.length - 1);
       }
 
-      // Trigger refresh
-      localStorage.setItem('trainingLogLastUpdate', Date.now().toString());
-      
     } catch (error) {
       console.error('Error approving training:', error);
+      setError('Kunne ikke godkjenne treningsøkt');
     } finally {
       setProcessingId(null);
     }
   };
 
-  const handleReject = async (trainingId: string) => {
+  const handleReject = async (sessionId: string) => {
     if (!window.confirm('Er du sikker på at du vil avslå denne treningsøkten?')) {
       return;
     }
 
-    setProcessingId(trainingId);
+    setProcessingId(sessionId);
     
     try {
-      // Remove from pending approvals
-      const saved = localStorage.getItem('pendingTrainingApprovals');
-      if (saved) {
-        const approvals = JSON.parse(saved);
-        const updatedApprovals = approvals.filter((approval: PendingTraining) => approval.id !== trainingId);
-        localStorage.setItem('pendingTrainingApprovals', JSON.stringify(updatedApprovals));
-      }
-
-      // Remove from training sessions
-      const savedSessions = localStorage.getItem('trainingSessions');
-      if (savedSessions) {
-        const sessions = JSON.parse(savedSessions);
-        const training = pendingTrainings.find(t => t.id === trainingId);
-        
-        if (training) {
-          const updatedSessions = sessions.filter((session: any) => session.id !== training.sessionId);
-          localStorage.setItem('trainingSessions', JSON.stringify(updatedSessions));
-        }
+      // Delete the training session from database
+      const { error } = await supabase
+        .from('member_training_sessions')
+        .delete()
+        .eq('id', sessionId);
+      
+      if (error) {
+        throw new Error('Kunne ikke slette treningsøkt');
       }
 
       // Remove from pending list
-      setPendingTrainings(prev => prev.filter(training => training.id !== trainingId));
+      setPendingTrainings(prev => prev.filter(training => training.id !== sessionId));
       
       // Update count
       if (onCountChange) {
         onCountChange(pendingTrainings.length - 1);
       }
 
-      // Trigger refresh
-      localStorage.setItem('trainingLogLastUpdate', Date.now().toString());
-      
     } catch (error) {
       console.error('Error rejecting training:', error);
+      setError('Kunne ikke avslå treningsøkt');
     } finally {
       setProcessingId(null);
     }
@@ -228,23 +189,23 @@ export function TrainingApprovalQueue({ onCountChange }: TrainingApprovalQueuePr
                   <div className="flex items-center gap-3 mb-3">
                     <User className="w-5 h-5 text-svpk-yellow" />
                     <div>
-                      <h4 className="font-medium">{training.memberName}</h4>
-                      <p className="text-sm text-gray-400">Medlem #{training.memberNumber}</p>
+                      <h4 className="font-medium">{training.member?.full_name}</h4>
+                      <p className="text-sm text-gray-400">Medlem #{training.member?.member_number}</p>
                     </div>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div className="flex items-center gap-2">
                       <Calendar className="w-4 h-4 text-gray-400" />
-                      <span>{format(new Date(training.date), 'dd.MM.yyyy HH:mm')}</span>
+                      <span>{format(new Date(training.start_time), 'dd.MM.yyyy HH:mm')}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-gray-400" />
-                      <span>{training.location}</span>
+                      <span>{training.location?.name}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="w-4 h-4 text-gray-400" />
-                      <span>{training.duration}</span>
+                      <span>{training.duration_minutes ? `${training.duration_minutes} min` : '2 timer'}</span>
                     </div>
                   </div>
                 </div>

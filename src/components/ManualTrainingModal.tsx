@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
-import { addManualTrainingSession, supabase } from '../lib/supabase';
+import { addManualTrainingSession, getOrganizationTrainingLocations, getOrganizationMembers } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import type { ManualTrainingSession } from '../lib/types';
 
 interface Props {
   onClose: () => void;
@@ -22,126 +21,88 @@ const rangeOfficers = [
 ].sort();
 
 export function ManualTrainingModal({ onClose, onSuccess }: Props) {
-  const { profile } = useAuth();
+  const { user, profile, organization } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [rangeLocations, setRangeLocations] = useState<Array<{id: string, name: string}>>([]);
+  const [trainingLocations, setTrainingLocations] = useState<Array<{id: string, name: string}>>([]);
   const [loadingRanges, setLoadingRanges] = useState(true);
-  const [approvedMembers, setApprovedMembers] = useState<string[]>([]);
+  const [organizationMembers, setOrganizationMembers] = useState<Array<{id: string, full_name: string}>>([]);
   const [activityTypes, setActivityTypes] = useState<string[]>(['Trening', 'Stevne', 'Dugnad']);
-  const [formData, setFormData] = useState<ManualTrainingSession>({
+  const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
-    location: '',
-    branch: 'NSF',
+    locationId: '',
+    memberId: '',
+    activity: 'Trening',
     notes: '',
-    activity: 'Trening'
   });
-  const [rangeOfficer, setRangeOfficer] = useState({
-    name: '',
-  });
-  const [selectedMember, setSelectedMember] = useState('');
-  const [customMember, setCustomMember] = useState('');
-  const [isCustomMember, setIsCustomMember] = useState(false);
-  const [isCustomRangeOfficer, setIsCustomRangeOfficer] = useState(false);
 
-  // Load range locations and approved members on component mount
+  // Load training locations and organization members
   React.useEffect(() => {
-    const loadRangeLocations = async () => {
+    if (!organization?.id) return;
+    
+    const loadData = async () => {
       try {
         setLoadingRanges(true);
-        const { data, error } = await supabase
-          .from('range_locations')
-          .select('id, name')
-          .order('name');
+        
+        // Load training locations
+        const locationsResult = await getOrganizationTrainingLocations(organization.id);
+        if (locationsResult.data) {
+          setTrainingLocations(locationsResult.data);
+          if (locationsResult.data.length > 0) {
+            setFormData(prev => ({ ...prev, locationId: locationsResult.data[0].id }));
+          }
+        }
 
-        if (error) throw error;
-        
-        setRangeLocations(data || []);
-        
-        // Set first range as default if available
-        if (data && data.length > 0) {
-          setFormData(prev => ({ ...prev, location: data[0].name }));
+        // Load organization members
+        const membersResult = await getOrganizationMembers(organization.id);
+        if (membersResult.data) {
+          const approvedMembers = membersResult.data.filter(member => member.approved && member.active);
+          setOrganizationMembers(approvedMembers);
         }
       } catch (error) {
-        console.error('Error loading range locations:', error);
-        setError('Kunne ikke laste skytebaner');
+        console.error('Error loading data:', error);
+        setError('Kunne ikke laste data');
       } finally {
         setLoadingRanges(false);
       }
     };
 
-    const loadApprovedMembers = () => {
-      try {
-        const savedMembers = localStorage.getItem('members');
-        if (savedMembers) {
-          const members = JSON.parse(savedMembers);
-          const approved = members
-            .filter((member: any) => member.approved)
-            .map((member: any) => member.fullName || member.full_name)
-            .filter(Boolean)
-            .sort();
-          setApprovedMembers(approved);
-          console.log('Loaded approved members for manual training:', approved);
-        }
-      } catch (error) {
-        console.error('Error loading approved members:', error);
-        setApprovedMembers([]);
-      }
-    };
 
-    const loadActivityTypes = () => {
-      try {
-        const savedActivityTypes = localStorage.getItem('activityTypes');
-        if (savedActivityTypes) {
-          const types = JSON.parse(savedActivityTypes);
-          setActivityTypes(types);
-        } else {
-          // Load from organization settings
-          const savedOrg = localStorage.getItem('currentOrganization');
-          if (savedOrg) {
-            const orgData = JSON.parse(savedOrg);
-            if (orgData.activity_types) {
-              setActivityTypes(orgData.activity_types);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error loading activity types:', error);
-        setActivityTypes(['Trening', 'Stevne', 'Dugnad']);
-      }
-    };
-
-    loadRangeLocations();
-    loadApprovedMembers();
-    loadActivityTypes();
-  }, []);
+    loadData();
+  }, [organization?.id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
 
-    const memberName = isCustomMember ? customMember : selectedMember;
-    if (!memberName) {
-      setError('Vennligst velg eller skriv inn et medlemsnavn');
+    if (!formData.memberId || !formData.locationId || !organization?.id) {
+      setError('Vennligst fyll ut alle påkrevde felt');
       setIsSubmitting(false);
       return;
     }
 
-    // Use current admin's name as range officer
-    const adminName = profile?.full_name || 'Administrator';
 
     try {
-      await addManualTrainingSession(
-        { ...formData, memberName },
-        rangeOfficer.name || adminName
+      const result = await addManualTrainingSession(
+        organization.id,
+        formData.memberId,
+        formData.locationId,
+        {
+          date: formData.date,
+          activity: formData.activity,
+          notes: formData.notes
+        },
+        profile?.full_name || 'Administrator'
       );
       
-      // Force refresh of training data in parent component
-      window.dispatchEvent(new CustomEvent('trainingDataUpdated'));
+      if (result.error) {
+        throw new Error(result.error);
+      }
       
       onSuccess();
     } catch (error) {
+      console.error('Error creating manual training session:', error);
       setError(error instanceof Error ? error.message : 'Det oppstod en feil');
     } finally {
       setIsSubmitting(false);
@@ -165,41 +126,20 @@ export function ManualTrainingModal({ onClose, onSuccess }: Props) {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
-                Velg Medlem
+                Medlem
               </label>
-              <div className="space-y-2">
-                <select
-                  value={isCustomMember ? '' : selectedMember}
-                  onChange={(e) => {
-                    if (e.target.value === 'custom') {
-                      setIsCustomMember(true);
-                      setSelectedMember('');
-                    } else {
-                      setIsCustomMember(false);
-                      setSelectedMember(e.target.value);
-                    }
-                  }}
-                  className="w-full bg-gray-700 rounded-md px-3 py-2"
-                  disabled={isSubmitting}
-                >
-                  <option value="">Velg et medlem...</option>
-                  {approvedMembers.map(member => (
-                    <option key={member} value={member}>{member}</option>
-                  ))}
-                  <option value="custom">Skriv inn annet navn...</option>
-                </select>
-
-                {isCustomMember && (
-                  <input
-                    type="text"
-                    value={customMember}
-                    onChange={(e) => setCustomMember(e.target.value)}
-                    placeholder="Skriv inn medlemsnavn"
-                    className="w-full bg-gray-700 rounded-md px-3 py-2"
-                    disabled={isSubmitting}
-                  />
-                )}
-              </div>
+              <select
+                value={formData.memberId}
+                onChange={(e) => setFormData(prev => ({ ...prev, memberId: e.target.value }))}
+                className="w-full bg-gray-700 rounded-md px-3 py-2"
+                required
+                disabled={isSubmitting}
+              >
+                <option value="">Velg medlem...</option>
+                {organizationMembers.map(member => (
+                  <option key={member.id} value={member.id}>{member.full_name}</option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -218,45 +158,29 @@ export function ManualTrainingModal({ onClose, onSuccess }: Props) {
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
-                Skytebane
+                Treningslokasjon
               </label>
               {loadingRanges ? (
                 <div className="w-full bg-gray-700 rounded-md px-3 py-2 flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Laster skytebaner...</span>
+                  <span>Laster lokasjoner...</span>
                 </div>
               ) : (
                 <select
-                  value={formData.location}
-                  onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                  value={formData.locationId}
+                  onChange={(e) => setFormData(prev => ({ ...prev, locationId: e.target.value }))}
                   className="w-full bg-gray-700 rounded-md px-3 py-2"
                   required
                   disabled={isSubmitting}
                 >
-                  <option value="">Velg skytebane...</option>
-                  {rangeLocations.map(range => (
-                    <option key={range.id} value={range.name}>{range.name}</option>
+                  <option value="">Velg lokasjon...</option>
+                  {trainingLocations.map(location => (
+                    <option key={location.id} value={location.id}>{location.name}</option>
                   ))}
                 </select>
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Bransje
-              </label>
-              <select
-                value={formData.branch || 'NSF'}
-                onChange={(e) => setFormData(prev => ({ ...prev, branch: e.target.value }))}
-                className="w-full bg-gray-700 rounded-md px-3 py-2"
-                required
-                disabled={isSubmitting}
-              >
-                <option value="NSF">NSF</option>
-                <option value="DSSN">DSSN</option>
-                <option value="DFS">DFS</option>
-              </select>
-            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
@@ -288,53 +212,6 @@ export function ManualTrainingModal({ onClose, onSuccess }: Props) {
               />
             </div>
 
-            <div className="border-t border-gray-700 my-6 pt-6">
-              <h4 className="font-medium mb-4">Standplassleder</h4>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Standplassleder (valgfritt)
-                  </label>
-                  <div className="space-y-2">
-                    <select
-                      value={isCustomRangeOfficer ? '' : rangeOfficer.name}
-                      onChange={(e) => {
-                        if (e.target.value === 'custom') {
-                          setIsCustomRangeOfficer(true);
-                          setRangeOfficer(prev => ({ ...prev, name: '' }));
-                        } else {
-                          setIsCustomRangeOfficer(false);
-                          setRangeOfficer(prev => ({ ...prev, name: e.target.value }));
-                        }
-                      }}
-                      className="w-full bg-gray-700 rounded-md px-3 py-2"
-                      disabled={isSubmitting}
-                    >
-                      <option value="">Bruk mitt navn som standplassleder</option>
-                      {rangeOfficers.map(officer => (
-                        <option key={officer} value={officer}>{officer}</option>
-                      ))}
-                      <option value="custom">Skriv inn annet navn...</option>
-                    </select>
-
-                    {isCustomRangeOfficer && (
-                      <input
-                        type="text"
-                        value={rangeOfficer.name}
-                        onChange={(e) => setRangeOfficer(prev => ({ ...prev, name: e.target.value }))}
-                        placeholder="Skriv inn standplassleder navn"
-                        className="w-full bg-gray-700 rounded-md px-3 py-2"
-                        disabled={isSubmitting}
-                      />
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Hvis ikke valgt, brukes ditt navn som standplassleder
-                  </p>
-                </div>
-              </div>
-            </div>
 
             {error && (
               <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg flex items-center gap-2 text-red-200">

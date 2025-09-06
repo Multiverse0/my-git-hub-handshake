@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import bcrypt from 'bcryptjs';
 import type { 
   Organization, 
   OrganizationMember, 
@@ -16,12 +15,31 @@ import type {
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables. Please check your .env file.');
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Check if any super users exist
 export async function checkSuperUsersExist(): Promise<boolean> {
-  // Always return true to skip setup - we have hardcoded super user
-  return true;
+  try {
+    const { data, error } = await supabase
+      .from('super_users')
+      .select('id')
+      .eq('active', true)
+      .limit(1);
+
+    if (error) {
+      console.error('Error checking super users:', error);
+      return false;
+    }
+
+    return (data && data.length > 0);
+  } catch (error) {
+    console.error('Error checking super users:', error);
+    return false;
+  }
 }
 
 // Create the first super user (only works if no super users exist)
@@ -31,34 +49,49 @@ export async function createFirstSuperUser(
   fullName: string
 ): Promise<ApiResponse<SuperUser>> {
   try {
-    // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    // Use localStorage since Supabase connection is failing
-    const newSuperUser = {
-      id: crypto.randomUUID(),
-      email,
-      full_name: fullName,
-      password_hash: passwordHash,
-      branch: sessionData.branch,
-      duration: '2 timer', // Keep duration as default for compatibility
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    // Save to localStorage
-    const existingSuperUsers = localStorage.getItem('superUsers');
-    const superUsers = existingSuperUsers ? JSON.parse(existingSuperUsers) : [];
-    
-    // Check for duplicate email
-    if (superUsers.some((user: any) => user.email === email)) {
-      return { error: 'E-post er allerede registrert' };
+    // First check if any super users exist
+    const superUsersExist = await checkSuperUsersExist();
+    if (superUsersExist) {
+      return { error: 'Super-brukere eksisterer allerede i systemet' };
     }
-    
-    superUsers.push(newSuperUser);
-    localStorage.setItem('superUsers', JSON.stringify(superUsers));
-    
-    return { data: newSuperUser };
+
+    // Create user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+          user_type: 'super_user'
+        }
+      }
+    });
+
+    if (authError) {
+      return { error: authError.message };
+    }
+
+    if (!authData.user) {
+      return { error: 'Kunne ikke opprette bruker' };
+    }
+
+    // Create super user record
+    const { data: superUser, error: superUserError } = await supabase
+      .from('super_users')
+      .insert({
+        id: authData.user.id,
+        email,
+        full_name: fullName,
+        active: true
+      })
+      .select()
+      .single();
+
+    if (superUserError) {
+      return { error: 'Kunne ikke opprette super-bruker profil' };
+    }
+
+    return { data: superUser };
   } catch (error) {
     console.error('Error creating first super user:', error);
     return { error: 'Det oppstod en feil ved opprettelse av super-bruker' };
@@ -75,263 +108,81 @@ export async function setUserContext(email: string) {
     });
   } catch (error) {
     console.warn('Failed to set user context:', error);
-    // Continue without setting context - app will still work with reduced functionality
   }
 }
 
 // Authentication functions
-export async function authenticateUser(email: string, password: string): Promise<ApiResponse<AuthUser>> {
+export async function authenticateUser(email: string, password: string): Promise<ApiResponse<{ user: AuthUser }>> {
   try {
-    // Check for hardcoded super user first
-    if (email === 'yngve@promonorge.no' && password === '12345678') {
-      const hardcodedSuperUser = {
-        id: 'hardcoded-super-user',
-        email: 'yngve@promonorge.no',
-        full_name: 'Yngve Rødli',
-        active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      
-      return {
-        data: {
-          user: {
-            id: hardcodedSuperUser.id,
-            email: hardcodedSuperUser.email,
-            user_type: 'super_user',
-            super_user_profile: hardcodedSuperUser
-          }
-        }
-      };
+    // Sign in with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (authError) {
+      return { error: 'Ugyldig e-post eller passord' };
     }
 
-    // Check for hardcoded admin user first
-    if (email === 'post@svpk.no' && password === '12345678') {
-      // Create hardcoded admin user
-      const hardcodedAdmin = {
-        id: 'hardcoded-admin-svpk',
-        organization_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-        email: 'post@svpk.no',
-        full_name: 'SVPK Administrator',
-        member_number: 'ADMIN001',
-        password_hash: await bcrypt.hash('12345678', 10),
-        role: 'admin',
-        approved: true,
-        active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      
-      // Ensure this admin is in localStorage
-      const savedMembers = localStorage.getItem('members');
-      const members = savedMembers ? JSON.parse(savedMembers) : [];
-      
-      // Check if hardcoded admin already exists
-      const existingAdmin = members.find((m: any) => m.email === 'post@svpk.no');
-      if (!existingAdmin) {
-        members.push(hardcodedAdmin);
-        localStorage.setItem('members', JSON.stringify(members));
-      }
-      
-      // Get organization from localStorage
-      const localOrg = localStorage.getItem('currentOrganization');
-      const organization = localOrg ? JSON.parse(localOrg) : null;
-
-      return {
-        data: {
-          user: {
-            id: hardcodedAdmin.id,
-            email: hardcodedAdmin.email,
-            user_type: 'organization_member',
-            organization_id: hardcodedAdmin.organization_id,
-            organization: organization,
-            member_profile: hardcodedAdmin
-          }
-        }
-      };
+    if (!authData.user) {
+      return { error: 'Innlogging feilet' };
     }
 
-    // For any other email/password combination, create them as admin user automatically
-    const autoAdminUser = {
-      id: `auto-admin-${Date.now()}`,
-      organization_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-      email: email,
-      full_name: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-      member_number: `AUTO${Date.now().toString().slice(-4)}`,
-      password_hash: await bcrypt.hash(password, 10),
-      role: 'admin',
-      approved: true,
-      active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    // Save to localStorage
-    const savedMembers = localStorage.getItem('members');
-    const members = savedMembers ? JSON.parse(savedMembers) : [];
-    
-    // Check if user already exists
-    const existingMember = members.find((m: any) => m.email === email);
-    if (!existingMember) {
-      members.push(autoAdminUser);
-      localStorage.setItem('members', JSON.stringify(members));
-    }
-    
-    // Get organization from localStorage
-    const localOrg = localStorage.getItem('currentOrganization');
-    const organization = localOrg ? JSON.parse(localOrg) : null;
+    // Set user context for RLS
+    await setUserContext(email);
 
-    return {
-      data: {
-        user: {
-          id: autoAdminUser.id,
-          email: autoAdminUser.email,
-          user_type: 'organization_member',
-          organization_id: autoAdminUser.organization_id,
-          organization: organization,
-          member_profile: autoAdminUser
-        }
-      }
-    };
-
-    // First check localStorage for super users (fallback)
-    const localSuperUsers = localStorage.getItem('superUsers');
-    if (localSuperUsers) {
-      const superUsers = JSON.parse(localSuperUsers);
-      const superUser = superUsers.find((user: any) => user.email === email && user.active);
-      
-      if (superUser) {
-        const isValidPassword = await bcrypt.compare(password, superUser.password_hash);
-        if (isValidPassword) {
-          return {
-            data: {
-              user: {
-                id: superUser.id,
-                email: superUser.email,
-                user_type: 'super_user',
-                super_user_profile: superUser
-              }
-            }
-          };
-        }
-      }
-    }
-
-    // Check organization members - first get member without status filters
-    const { data: member, error: memberError } = await supabase
-      .from('organization_members')
+    // Check if user is a super user
+    const { data: superUser } = await supabase
+      .from('super_users')
       .select('*')
+      .eq('id', authData.user.id)
+      .eq('active', true)
+      .single();
+
+    if (superUser) {
+      return {
+        data: {
+          user: {
+            id: superUser.id,
+            email: superUser.email,
+            user_type: 'super_user',
+            super_user_profile: superUser
+          }
+        }
+      };
+    }
+
+    // Check if user is an organization member
+    const { data: member } = await supabase
+      .from('organization_members')
+      .select(`
+        *,
+        organization:organizations(*)
+      `)
       .eq('email', email)
-      .maybeSingle();
+      .eq('active', true)
+      .single();
 
     if (member) {
-      const isValidPassword = await bcrypt.compare(password, member.password_hash);
-      if (isValidPassword) {
-        // Check account status after password validation
-        if (!member.approved) {
-          return { error: 'Kontoen din er ikke godkjent ennå. Vennligst vent på administratorgodkjenning.' };
-        }
-        
-        if (!member.active) {
-          return { error: 'Kontoen din er inaktiv. Vennligst kontakt administrator.' };
-        }
-        
-        // Get organization from localStorage
-        const localOrg = localStorage.getItem('currentOrganization');
-        const organization = localOrg ? JSON.parse(localOrg) : null;
+      if (!member.approved) {
+        return { error: 'Kontoen din er ikke godkjent ennå. Vennligst vent på administratorgodkjenning.' };
+      }
 
-        return {
-          data: {
-            user: {
-              id: member.id,
-              email: member.email,
-              user_type: 'organization_member',
-              organization_id: member.organization_id,
-              organization: organization,
-              member_profile: member
-            }
+      return {
+        data: {
+          user: {
+            id: member.id,
+            email: member.email,
+            user_type: 'organization_member',
+            organization_id: member.organization_id,
+            organization: member.organization,
+            member_profile: member
           }
-        };
-      }
+        }
+      };
     }
 
-    // Check localStorage for super users since Supabase connection is failing
-    const localSuperUsers2 = localStorage.getItem('superUsers');
-    if (localSuperUsers2) {
-      const superUsers = JSON.parse(localSuperUsers2);
-      const superUser = superUsers.find((user: any) => 
-        user.email === email && user.active
-      );
-      
-      if (superUser) {
-        const isValidPassword = await bcrypt.compare(password, superUser.password_hash);
-        if (isValidPassword) {
-          return {
-            data: {
-              user: {
-                id: superUser.id,
-                email: superUser.email,
-                user_type: 'super_user',
-                super_user_profile: superUser
-              }
-            }
-          };
-        }
-      }
-    }
-
-    // Check localStorage for organization members
-    const localMembers = localStorage.getItem('members');
-    if (localMembers) {
-      const members = JSON.parse(localMembers);
-      console.log('Checking localStorage members for login:', members);
-      console.log('Looking for email:', email);
-      
-      const member = members.find((m: any) => 
-        m.email === email
-      );
-      
-      console.log('Found member:', member);
-      
-      if (member) {
-        // Check account status after finding the member
-        if (!member.approved) {
-          return { error: 'Kontoen din er ikke godkjent ennå. Vennligst vent på administratorgodkjenning.' };
-        }
-        
-        if (member.active === false) {
-          return { error: 'Kontoen din er inaktiv. Vennligst kontakt administrator.' };
-        }
-        
-        if (!member.password_hash) {
-          return { error: 'Passord ikke satt for denne brukeren. Kontakt administrator.' };
-        }
-        
-        const isValidPassword = await bcrypt.compare(password, member.password_hash);
-        console.log('Password validation result:', isValidPassword);
-        
-        if (isValidPassword) {
-          // Get organization from localStorage
-          const localOrg = localStorage.getItem('currentOrganization');
-          const organization = localOrg ? JSON.parse(localOrg) : null;
-
-          return {
-            data: {
-              user: {
-                id: member.id.toString(),
-                email: member.email,
-                user_type: 'organization_member',
-                organization_id: member.organization_id,
-                organization: organization,
-                member_profile: member
-              }
-            }
-          };
-        }
-      }
-    }
-
-    return { error: 'Ugyldig e-post eller passord' };
+    return { error: 'Bruker ikke funnet eller ikke aktivert' };
   } catch (error) {
     console.error('Authentication error:', error);
     return { error: 'Det oppstod en feil ved innlogging' };
@@ -339,24 +190,57 @@ export async function authenticateUser(email: string, password: string): Promise
 }
 
 export async function registerOrganizationMember(
-  organizationId: string,
+  organizationSlug: string,
   email: string,
   password: string,
   fullName: string,
-  memberNumber: string
+  memberNumber?: string
 ): Promise<ApiResponse<OrganizationMember>> {
   try {
-    // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
+    // Get organization by slug
+    const { data: organization, error: orgError } = await supabase
+      .from('organizations')
+      .select('id')
+      .eq('slug', organizationSlug)
+      .eq('active', true)
+      .single();
 
+    if (orgError || !organization) {
+      return { error: 'Organisasjon ikke funnet' };
+    }
+
+    // Create user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+          user_type: 'organization_member'
+        }
+      }
+    });
+
+    if (authError) {
+      if (authError.message.includes('already registered')) {
+        return { error: 'E-post er allerede registrert' };
+      }
+      return { error: authError.message };
+    }
+
+    if (!authData.user) {
+      return { error: 'Kunne ikke opprette bruker' };
+    }
+
+    // Create organization member record
     const { data: member, error: memberError } = await supabase
       .from('organization_members')
       .insert({
-        organization_id: organizationId,
+        id: authData.user.id,
+        organization_id: organization.id,
         email,
         full_name: fullName,
         member_number: memberNumber,
-        password_hash: passwordHash,
         approved: false // Requires admin approval
       })
       .select()
@@ -379,40 +263,18 @@ export async function registerOrganizationMember(
 // Organization functions
 export async function getOrganizationBySlug(slug: string): Promise<ApiResponse<Organization>> {
   try {
-    // Use localStorage fallback since Supabase connection is failing
-    const localOrg = localStorage.getItem('currentOrganization');
-    if (localOrg) {
-      const orgData = JSON.parse(localOrg);
-      if (orgData.slug === slug) {
-        return { data: orgData };
-      }
+    const { data, error } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('slug', slug)
+      .eq('active', true)
+      .single();
+
+    if (error) {
+      return { error: 'Organisasjon ikke funnet' };
     }
 
-    // Return default organization for SVPK
-    if (slug === 'svpk') {
-      const defaultOrg = {
-        id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-        name: 'Svolvær Pistolklubb',
-        slug: 'svpk',
-        description: 'Norges beste pistolklubb',
-        email: 'post@svpk.no',
-        phone: '+47 123 45 678',
-        website: 'https://svpk.no',
-        address: 'Svolværgata 1, 8300 Svolvær',
-        primary_color: '#FFD700',
-        secondary_color: '#1F2937',
-        logo_url: null,
-        active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      
-      // Save to localStorage for future use
-      localStorage.setItem('currentOrganization', JSON.stringify(defaultOrg));
-      return { data: defaultOrg };
-    }
-
-    return { error: 'Organisasjon ikke funnet' };
+    return { data };
   } catch (error) {
     console.error('Error fetching organization:', error);
     return { error: 'Kunne ikke hente organisasjon' };
@@ -425,13 +287,13 @@ export async function getOrganizationBranding(organizationId: string): Promise<O
       .from('organizations')
       .select('name, primary_color, secondary_color, logo_url')
       .eq('id', organizationId)
-      .limit(1);
+      .single();
 
     return {
-      organization_name: org && org[0]?.name || 'Idrettsklubb',
-      primary_color: org && org[0]?.primary_color || '#FFD700',
-      secondary_color: org && org[0]?.secondary_color || '#1F2937',
-      logo_url: org && org[0]?.logo_url
+      organization_name: org?.name || 'Idrettsklubb',
+      primary_color: org?.primary_color || '#FFD700',
+      secondary_color: org?.secondary_color || '#1F2937',
+      logo_url: org?.logo_url
     };
   } catch (error) {
     console.error('Error fetching branding:', error);
@@ -456,49 +318,35 @@ export async function updateOrganizationLogo(organizationId: string, logoFile: F
       return { error: 'Filen er for stor. Maksimal størrelse er 2MB.' };
     }
 
-    try {
-      const fileName = `${organizationId}-logo-${Date.now()}.${fileExt}`;
-      const filePath = `organization-logos/${fileName}`;
+    const fileName = `${organizationId}-logo-${Date.now()}.${fileExt}`;
+    const filePath = `organization-logos/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('logos')
-        .upload(filePath, logoFile, {
-          cacheControl: '3600',
-          upsert: true
-        });
-
-      if (uploadError) {
-        console.warn('Supabase storage error:', uploadError);
-        throw new Error('Storage bucket not available');
-      }
-
-      const { data: urlData } = supabase.storage
-        .from('logos')
-        .getPublicUrl(filePath);
-
-      // Update organization
-      const { error: updateError } = await supabase
-        .from('organizations')
-        .update({ logo_url: urlData.publicUrl })
-        .eq('id', organizationId);
-
-      if (updateError) throw updateError;
-
-      return { data: urlData.publicUrl };
-    } catch (supabaseError) {
-      // Fallback to base64 data URL for localStorage
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const logoUrl = e.target?.result as string;
-          resolve({ data: logoUrl });
-        };
-        reader.onerror = () => {
-          reject({ error: 'Kunne ikke lese filen' });
-        };
-        reader.readAsDataURL(logoFile);
+    const { error: uploadError } = await supabase.storage
+      .from('logos')
+      .upload(filePath, logoFile, {
+        cacheControl: '3600',
+        upsert: true
       });
+
+    if (uploadError) {
+      return { error: 'Kunne ikke laste opp logo' };
     }
+
+    const { data: urlData } = supabase.storage
+      .from('logos')
+      .getPublicUrl(filePath);
+
+    // Update organization
+    const { error: updateError } = await supabase
+      .from('organizations')
+      .update({ logo_url: urlData.publicUrl })
+      .eq('id', organizationId);
+
+    if (updateError) {
+      return { error: 'Kunne ikke oppdatere organisasjon med ny logo' };
+    }
+
+    return { data: urlData.publicUrl };
   } catch (error) {
     console.error('Error uploading logo:', error);
     return { error: 'Kunne ikke laste opp logo' };
@@ -536,7 +384,9 @@ export async function getOrganizationTrainingLocations(organizationId: string): 
       .eq('active', true)
       .order('name');
 
-    if (error) throw error;
+    if (error) {
+      return { error: 'Kunne ikke hente treningslokasjoner' };
+    }
 
     return { data: data || [] };
   } catch (error) {
@@ -552,6 +402,20 @@ export async function startTrainingSession(
   locationId: string
 ): Promise<ApiResponse<MemberTrainingSession>> {
   try {
+    // Check if member already has a session today
+    const today = new Date().toISOString().split('T')[0];
+    const { data: existingSession } = await supabase
+      .from('member_training_sessions')
+      .select('id')
+      .eq('member_id', memberId)
+      .gte('start_time', `${today}T00:00:00Z`)
+      .lt('start_time', `${today}T23:59:59Z`)
+      .single();
+
+    if (existingSession) {
+      return { error: 'Du har allerede registrert trening i dag' };
+    }
+
     const { data, error } = await supabase
       .from('member_training_sessions')
       .insert({
@@ -559,9 +423,8 @@ export async function startTrainingSession(
         member_id: memberId,
         location_id: locationId,
         start_time: new Date().toISOString(),
-        verified: true,
-        verified_by: 'QR System',
-        verification_time: new Date().toISOString()
+        verified: false,
+        manual_entry: false
       })
       .select(`
         *,
@@ -572,7 +435,9 @@ export async function startTrainingSession(
       `)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      return { error: 'Kunne ikke starte treningsøkt' };
+    }
 
     return { data };
   } catch (error) {
@@ -604,7 +469,9 @@ export async function getMemberTrainingSessions(
 
     const { data, error } = await query;
 
-    if (error) throw error;
+    if (error) {
+      return { error: 'Kunne ikke hente treningsøkter' };
+    }
 
     return { data: data || [] };
   } catch (error) {
@@ -636,7 +503,9 @@ export async function getOrganizationTrainingSessions(
 
     const { data, error } = await query;
 
-    if (error) throw error;
+    if (error) {
+      return { error: 'Kunne ikke hente treningsøkter' };
+    }
 
     return { data: data || [] };
   } catch (error) {
@@ -661,12 +530,72 @@ export async function verifyTrainingSession(
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      return { error: 'Kunne ikke verifisere treningsøkt' };
+    }
 
     return { data };
   } catch (error) {
     console.error('Error verifying training session:', error);
     return { error: 'Kunne ikke verifisere treningsøkt' };
+  }
+}
+
+export async function addManualTrainingSession(
+  organizationId: string,
+  memberId: string,
+  locationId: string,
+  sessionData: {
+    date: string;
+    activity: string;
+    notes?: string;
+  },
+  verifiedBy: string
+): Promise<ApiResponse<MemberTrainingSession>> {
+  try {
+    const { data, error } = await supabase
+      .from('member_training_sessions')
+      .insert({
+        organization_id: organizationId,
+        member_id: memberId,
+        location_id: locationId,
+        start_time: new Date(sessionData.date).toISOString(),
+        end_time: new Date(new Date(sessionData.date).getTime() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours later
+        duration_minutes: 120,
+        verified: true,
+        verified_by: verifiedBy,
+        verification_time: new Date().toISOString(),
+        manual_entry: true,
+        notes: sessionData.notes
+      })
+      .select(`
+        *,
+        member:organization_members(*),
+        location:training_locations(*),
+        details:training_session_details(*),
+        target_images:session_target_images(*)
+      `)
+      .single();
+
+    if (error) {
+      return { error: 'Kunne ikke opprette manuell treningsøkt' };
+    }
+
+    // Add training details if activity is specified
+    if (sessionData.activity) {
+      await supabase
+        .from('training_session_details')
+        .insert({
+          session_id: data.id,
+          training_type: sessionData.activity,
+          notes: sessionData.notes
+        });
+    }
+
+    return { data };
+  } catch (error) {
+    console.error('Error adding manual training session:', error);
+    return { error: 'Kunne ikke opprette manuell treningsøkt' };
   }
 }
 
@@ -694,7 +623,9 @@ export async function uploadTargetImage(file: File, sessionId: string): Promise<
         upsert: false
       });
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      return { error: 'Kunne ikke laste opp målbilde' };
+    }
 
     const { data: urlData } = supabase.storage
       .from('targets')
@@ -709,7 +640,9 @@ export async function uploadTargetImage(file: File, sessionId: string): Promise<
         filename: file.name
       });
 
-    if (insertError) throw insertError;
+    if (insertError) {
+      return { error: 'Kunne ikke lagre målbilde referanse' };
+    }
 
     return { data: urlData.publicUrl };
   } catch (error) {
@@ -745,7 +678,9 @@ export async function uploadMemberDocument(
         upsert: true
       });
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      return { error: 'Kunne ikke laste opp dokument' };
+    }
 
     const { data: urlData } = supabase.storage
       .from('documents')
@@ -758,7 +693,9 @@ export async function uploadMemberDocument(
       .update({ [updateField]: urlData.publicUrl })
       .eq('id', memberId);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      return { error: 'Kunne ikke oppdatere medlemsprofil' };
+    }
 
     return { data: urlData.publicUrl };
   } catch (error) {
@@ -790,7 +727,9 @@ export async function uploadProfileImage(file: File, memberId: string): Promise<
         upsert: true
       });
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      return { error: 'Kunne ikke laste opp profilbilde' };
+    }
 
     const { data: urlData } = supabase.storage
       .from('avatars')
@@ -802,50 +741,15 @@ export async function uploadProfileImage(file: File, memberId: string): Promise<
       .update({ avatar_url: urlData.publicUrl })
       .eq('id', memberId);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      return { error: 'Kunne ikke oppdatere medlemsprofil' };
+    }
 
     return { data: urlData.publicUrl };
   } catch (error) {
     console.error('Error uploading profile image:', error);
     return { error: 'Kunne ikke laste opp profilbilde' };
   }
-}
-
-// Legacy functions for backward compatibility (will be removed)
-export async function verifyRangeOfficerPassword(password: string): Promise<boolean> {
-  // This is deprecated - use proper authentication instead
-  return password === "svpk1965";
-}
-
-export async function addManualTrainingSession(
-  sessionData: any,
-  rangeOfficerName: string
-): Promise<void> {
-  // Create session object
-  const session = {
-    id: crypto.randomUUID(),
-    memberName: sessionData.memberName, // Add member name to session
-    date: sessionData.date,
-    location: sessionData.location,
-    duration: '2 timer', // Default duration
-    activity: sessionData.activity,
-    organization: sessionData.branch, // Map branch to organization for filtering
-    notes: sessionData.notes,
-    verifiedBy: rangeOfficerName,
-    rangeOfficer: rangeOfficerName, // Also set rangeOfficer field
-    verified: true,
-    approved: true, // Set as approved since it's manually entered by admin
-    manual_entry: true,
-    created_at: new Date().toISOString()
-  };
-
-  // Save to localStorage (legacy support)
-  const existingSessions = JSON.parse(localStorage.getItem('trainingSessions') || '[]');
-  existingSessions.push(session);
-  localStorage.setItem('trainingSessions', JSON.stringify(existingSessions));
-  
-  // Trigger refresh of training log
-  localStorage.setItem('trainingLogLastUpdate', Date.now().toString());
 }
 
 export async function updateTrainingDetails(
@@ -866,7 +770,7 @@ export async function updateTrainingDetails(
 
     if (fetchError && fetchError.code !== 'PGRST116') {
       // PGRST116 is "not found" error, which is expected if no details exist yet
-      throw fetchError;
+      return { error: 'Kunne ikke hente eksisterende treningsdetaljer' };
     }
 
     let result;
@@ -884,7 +788,9 @@ export async function updateTrainingDetails(
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        return { error: 'Kunne ikke oppdatere treningsdetaljer' };
+      }
       result = data;
     } else {
       // Insert new record
@@ -899,7 +805,9 @@ export async function updateTrainingDetails(
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        return { error: 'Kunne ikke opprette treningsdetaljer' };
+      }
       result = data;
     }
 
@@ -910,12 +818,251 @@ export async function updateTrainingDetails(
   }
 }
 
-export async function getRangeLocationByQRCode(qrCodeId: string) {
-  // Legacy function - use getTrainingLocationByQR instead
-  const savedRanges = localStorage.getItem('rangeLocations');
-  if (savedRanges) {
-    const ranges = JSON.parse(savedRanges);
-    return ranges.find((r: any) => r.qr_code_id === qrCodeId);
+// Organization management functions
+export async function createOrganization(orgData: {
+  name: string;
+  slug: string;
+  description?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  address?: string;
+  primary_color?: string;
+  secondary_color?: string;
+}): Promise<ApiResponse<Organization>> {
+  try {
+    const { data, error } = await supabase
+      .from('organizations')
+      .insert({
+        ...orgData,
+        primary_color: orgData.primary_color || '#FFD700',
+        secondary_color: orgData.secondary_color || '#1F2937',
+        active: true
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return { error: 'Organisasjonsnavn eller slug er allerede i bruk' };
+      }
+      return { error: 'Kunne ikke opprette organisasjon' };
+    }
+
+    return { data };
+  } catch (error) {
+    console.error('Error creating organization:', error);
+    return { error: 'Kunne ikke opprette organisasjon' };
   }
-  return null;
+}
+
+export async function updateOrganization(
+  organizationId: string,
+  updates: Partial<Organization>
+): Promise<ApiResponse<Organization>> {
+  try {
+    const { data, error } = await supabase
+      .from('organizations')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', organizationId)
+      .select()
+      .single();
+
+    if (error) {
+      return { error: 'Kunne ikke oppdatere organisasjon' };
+    }
+
+    return { data };
+  } catch (error) {
+    console.error('Error updating organization:', error);
+    return { error: 'Kunne ikke oppdatere organisasjon' };
+  }
+}
+
+// Member management functions
+export async function getOrganizationMembers(organizationId: string): Promise<ApiResponse<OrganizationMember[]>> {
+  try {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return { error: 'Kunne ikke hente medlemmer' };
+    }
+
+    return { data: data || [] };
+  } catch (error) {
+    console.error('Error fetching organization members:', error);
+    return { error: 'Kunne ikke hente medlemmer' };
+  }
+}
+
+export async function approveMember(memberId: string): Promise<ApiResponse<OrganizationMember>> {
+  try {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .update({
+        approved: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', memberId)
+      .select()
+      .single();
+
+    if (error) {
+      return { error: 'Kunne ikke godkjenne medlem' };
+    }
+
+    return { data };
+  } catch (error) {
+    console.error('Error approving member:', error);
+    return { error: 'Kunne ikke godkjenne medlem' };
+  }
+}
+
+export async function updateMemberRole(
+  memberId: string, 
+  role: 'member' | 'admin' | 'range_officer'
+): Promise<ApiResponse<OrganizationMember>> {
+  try {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .update({
+        role,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', memberId)
+      .select()
+      .single();
+
+    if (error) {
+      return { error: 'Kunne ikke oppdatere medlemsrolle' };
+    }
+
+    return { data };
+  } catch (error) {
+    console.error('Error updating member role:', error);
+    return { error: 'Kunne ikke oppdatere medlemsrolle' };
+  }
+}
+
+// Training location management
+export async function createTrainingLocation(
+  organizationId: string,
+  locationData: {
+    name: string;
+    qr_code_id: string;
+    description?: string;
+  }
+): Promise<ApiResponse<TrainingLocation>> {
+  try {
+    const { data, error } = await supabase
+      .from('training_locations')
+      .insert({
+        organization_id: organizationId,
+        ...locationData,
+        active: true
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return { error: 'QR-kode ID er allerede i bruk' };
+      }
+      return { error: 'Kunne ikke opprette treningslokasjon' };
+    }
+
+    return { data };
+  } catch (error) {
+    console.error('Error creating training location:', error);
+    return { error: 'Kunne ikke opprette treningslokasjon' };
+  }
+}
+
+export async function updateTrainingLocation(
+  locationId: string,
+  updates: Partial<TrainingLocation>
+): Promise<ApiResponse<TrainingLocation>> {
+  try {
+    const { data, error } = await supabase
+      .from('training_locations')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', locationId)
+      .select()
+      .single();
+
+    if (error) {
+      return { error: 'Kunne ikke oppdatere treningslokasjon' };
+    }
+
+    return { data };
+  } catch (error) {
+    console.error('Error updating training location:', error);
+    return { error: 'Kunne ikke oppdatere treningslokasjon' };
+  }
+}
+
+// Utility functions for backward compatibility
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    // Check if super user
+    const { data: superUser } = await supabase
+      .from('super_users')
+      .select('*')
+      .eq('id', user.id)
+      .eq('active', true)
+      .single();
+
+    if (superUser) {
+      return {
+        id: superUser.id,
+        email: superUser.email,
+        user_type: 'super_user',
+        super_user_profile: superUser
+      };
+    }
+
+    // Check if organization member
+    const { data: member } = await supabase
+      .from('organization_members')
+      .select(`
+        *,
+        organization:organizations(*)
+      `)
+      .eq('id', user.id)
+      .eq('active', true)
+      .single();
+
+    if (member) {
+      return {
+        id: member.id,
+        email: member.email,
+        user_type: 'organization_member',
+        organization_id: member.organization_id,
+        organization: member.organization,
+        member_profile: member
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error getting current user:', error);
+    return null;
+  }
+}
+
+export async function signOut(): Promise<void> {
+  await supabase.auth.signOut();
 }
