@@ -21,6 +21,26 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Add missing import and function
+export async function getOrganizationMembers(organizationId: string): Promise<ApiResponse<OrganizationMember[]>> {
+  try {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return { error: 'Kunne ikke hente medlemmer' };
+    }
+
+    return { data: data || [] };
+  } catch (error) {
+    console.error('Error fetching organization members:', error);
+    return { error: 'Kunne ikke hente medlemmer' };
+  }
+}
+
 // Check if any super users exist
 export async function checkSuperUsersExist(): Promise<boolean> {
   try {
@@ -883,25 +903,6 @@ export async function updateOrganization(
 }
 
 // Member management functions
-export async function getOrganizationMembers(organizationId: string): Promise<ApiResponse<OrganizationMember[]>> {
-  try {
-    const { data, error } = await supabase
-      .from('organization_members')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return { error: 'Kunne ikke hente medlemmer' };
-    }
-
-    return { data: data || [] };
-  } catch (error) {
-    console.error('Error fetching organization members:', error);
-    return { error: 'Kunne ikke hente medlemmer' };
-  }
-}
-
 export async function approveMember(memberId: string): Promise<ApiResponse<OrganizationMember>> {
   try {
     const { data, error } = await supabase
