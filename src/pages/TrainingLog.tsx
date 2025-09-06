@@ -538,7 +538,7 @@ export function TrainingLog() {
       }
     };
 
-    const loadSessions = () => {
+    const loadSessions = async () => {
       try {
         const saved = localStorage.getItem('trainingSessions');
         let sessions: TrainingEntry[] = [];
