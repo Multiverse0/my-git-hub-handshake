@@ -525,7 +525,7 @@ export function TrainingLog() {
 
   // Load training sessions from localStorage
   useEffect(() => {
-    // Load organization settings
+    const loadSessions = async () => {
     const loadOrganizationSettings = () => {
       try {
         const savedOrg = localStorage.getItem('currentOrganization');
