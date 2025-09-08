@@ -227,9 +227,12 @@ export async function registerOrganizationMember(
 
     // Create user in Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
+      // Hash the password before storing
+      const passwordHash = await bcrypt.hash(memberData.password, 10);
+      
       email,
       password,
-      options: {
+        password: memberData.password, // Supabase Auth handles password hashing
         data: {
           full_name: fullName,
           user_type: 'organization_member'
@@ -246,6 +249,9 @@ export async function registerOrganizationMember(
 
     if (!authData.user) {
       return { error: 'Kunne ikke opprette bruker' };
+      
+      // Store password hash in organization_members table for demo purposes
+      // In production, you might not need this as Supabase Auth handles authentication
     }
 
     // Create organization member record
@@ -259,7 +265,8 @@ export async function registerOrganizationMember(
         member_number: memberNumber,
         approved: false // Requires admin approval
       })
-      .select()
+        active: true,
+        password_hash: memberData.password ? await bcrypt.hash(memberData.password, 10) : null
       .single();
 
     if (memberError) {
@@ -366,120 +373,6 @@ export async function updateOrganizationLogo(organizationId: string, logoFile: F
   } catch (error) {
     console.error('Error uploading logo:', error);
     return { error: 'Kunne ikke laste opp logo' };
-  }
-}
-
-// Add organization member
-export async function addOrganizationMember(
-  organizationId: string,
-  memberData: {
-    email: string;
-    full_name: string;
-    member_number?: string;
-    role?: 'member' | 'admin' | 'range_officer';
-    approved?: boolean;
-    password?: string;
-  }
-): Promise<ApiResponse<OrganizationMember>> {
-  try {
-    let userId = null;
-
-    // If password is provided, create user in Supabase Auth
-    if (memberData.password) {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: memberData.email,
-        password: memberData.password,
-        options: {
-          data: {
-            full_name: memberData.full_name,
-            user_type: 'organization_member'
-          }
-        }
-      });
-
-      if (authError) {
-        if (authError.message.includes('already registered')) {
-          return { error: 'E-post er allerede registrert' };
-        }
-        return { error: authError.message };
-      }
-
-      userId = authData.user?.id;
-    }
-
-    // Create organization member record
-    const { data: member, error: memberError } = await supabase
-      .from('organization_members')
-      .insert({
-        id: userId, // Will be null if no password provided (manual admin creation)
-        organization_id: organizationId,
-        email: memberData.email,
-        full_name: memberData.full_name,
-        member_number: memberData.member_number,
-        role: memberData.role || 'member',
-        approved: memberData.approved !== undefined ? memberData.approved : false,
-        active: true
-      })
-      .select()
-      .single();
-
-    if (memberError) {
-      if (memberError.code === '23505') {
-        return { error: 'E-post eller medlemsnummer er allerede registrert' };
-      }
-      return { error: 'Kunne ikke opprette medlem' };
-    }
-
-    return { data: member };
-  } catch (error) {
-    console.error('Error adding organization member:', error);
-    return { error: 'Kunne ikke opprette medlem' };
-  }
-}
-
-// Update organization member
-export async function updateOrganizationMember(
-  memberId: string,
-  updates: Partial<OrganizationMember>
-): Promise<ApiResponse<OrganizationMember>> {
-  try {
-    const { data, error } = await supabase
-      .from('organization_members')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', memberId)
-      .select()
-      .single();
-
-    if (error) {
-      return { error: 'Kunne ikke oppdatere medlem' };
-    }
-
-    return { data };
-  } catch (error) {
-    console.error('Error updating organization member:', error);
-    return { error: 'Kunne ikke oppdatere medlem' };
-  }
-}
-
-// Delete organization member
-export async function deleteOrganizationMember(memberId: string): Promise<ApiResponse<void>> {
-  try {
-    const { error } = await supabase
-      .from('organization_members')
-      .delete()
-      .eq('id', memberId);
-
-    if (error) {
-      return { error: 'Kunne ikke slette medlem' };
-    }
-
-    return { data: undefined };
-  } catch (error) {
-    console.error('Error deleting organization member:', error);
-    return { error: 'Kunne ikke slette medlem' };
   }
 }
 

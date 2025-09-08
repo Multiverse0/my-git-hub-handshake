@@ -1,103 +1,33 @@
 import React, { useState } from 'react';
 import { Search, ChevronUp, ChevronDown, XCircle, CheckCircle, AlertCircle, Edit2, PlusCircle, Shield, ShieldOff, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
-import { getOrganizationMembers, approveMember, updateMemberRole } from '../lib/supabase';
+import { getOrganizationMembers, approveMember, updateMemberRole, addOrganizationMember, updateOrganizationMember, deleteOrganizationMember } from '../lib/supabase';
 import { sendMemberApprovalEmail, generateLoginUrl } from '../lib/emailService';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { OrganizationMember } from '../lib/types';
 
-interface Member {
-  id: number;
-  fullName: string;
-  email: string;
-  memberNumber: string;
-  registrationDate: Date;
-  approved: boolean;
-  role: 'user' | 'admin';
-}
-
 interface MemberManagementProps {
   onMemberCountChange?: (count: number) => void;
 }
 
-// Dummy members for demo
-const dummyMembers: Member[] = [
-  {
-    id: 1001,
-    fullName: 'Astrid Bergström',
-    email: 'astrid.bergstrom@email.no',
-    memberNumber: '10001',
-    registrationDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-    approved: false,
-    role: 'user'
-  },
-  {
-    id: 1002,
-    fullName: 'Magnus Haugen',
-    email: 'magnus.haugen@email.no', 
-    memberNumber: '10002',
-    registrationDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-    approved: false,
-    role: 'user'
-  },
-  {
-    id: 1003,
-    fullName: 'Ingrid Svendsen',
-    email: 'ingrid.svendsen@email.no',
-    memberNumber: '10003', 
-    registrationDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
-    approved: true,
-    role: 'user'
-  },
-  {
-    id: 1004,
-    fullName: 'Bjørn Kristoffersen',
-    email: 'bjorn.kristoffersen@email.no',
-    memberNumber: '10004',
-    registrationDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
-    approved: true,
-    role: 'admin'
-  },
-  {
-    id: 1005,
-    fullName: 'Solveig Dahl',
-    email: 'solveig.dahl@email.no',
-    memberNumber: '10005',
-    registrationDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 1 week ago
-    approved: true,
-    role: 'user'
-  },
-  {
-    id: 1006,
-    fullName: 'Torstein Lie',
-    email: 'torstein.lie@email.no',
-    memberNumber: '10006',
-    registrationDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000), // 4 days ago
-    approved: false,
-    role: 'user'
-  }
-];
-
-const initialMembers: Member[] = [];
-
 interface AddMemberModalProps {
   onClose: () => void;
-  onAdd: (member: Omit<Member, 'id' | 'registrationDate' | 'approved'>) => void;
+  onAdd: (memberData: { full_name: string; email: string; member_number: string }) => void;
 }
 
 function AddMemberModal({ onClose, onAdd }: AddMemberModalProps) {
   const [newMember, setNewMember] = useState({
-    fullName: '',
+    full_name: '',
     email: '',
-    memberNumber: ''
+    member_number: ''
   });
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!newMember.fullName.trim() || !newMember.email.trim() || !newMember.memberNumber.trim()) {
+    if (!newMember.full_name.trim() || !newMember.email.trim() || !newMember.member_number.trim()) {
       setError('Alle felt må fylles ut');
       return;
     }
@@ -131,8 +61,8 @@ function AddMemberModal({ onClose, onAdd }: AddMemberModalProps) {
               </label>
               <input
                 type="text"
-                value={newMember.fullName}
-                onChange={(e) => setNewMember(prev => ({ ...prev, fullName: e.target.value }))}
+                value={newMember.full_name}
+                onChange={(e) => setNewMember(prev => ({ ...prev, full_name: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
                 placeholder="Fullt navn"
               />
@@ -169,8 +99,8 @@ function AddMemberModal({ onClose, onAdd }: AddMemberModalProps) {
               </div>
               <input
                 type="text"
-                value={newMember.memberNumber}
-                onChange={(e) => setNewMember(prev => ({ ...prev, memberNumber: e.target.value }))}
+                value={newMember.member_number}
+                onChange={(e) => setNewMember(prev => ({ ...prev, member_number: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
                 placeholder="12345"
               />
@@ -206,9 +136,9 @@ function AddMemberModal({ onClose, onAdd }: AddMemberModalProps) {
 }
 
 interface EditModalProps {
-  member: Member;
+  member: OrganizationMember;
   onClose: () => void;
-  onSave: (updatedMember: Member) => void;
+  onSave: (updatedMember: OrganizationMember) => void;
 }
 
 function EditModal({ member, onClose, onSave }: EditModalProps) {
@@ -240,8 +170,8 @@ function EditModal({ member, onClose, onSave }: EditModalProps) {
               </label>
               <input
                 type="text"
-                value={editedMember.fullName}
-                onChange={(e) => setEditedMember(prev => ({ ...prev, fullName: e.target.value }))}
+                value={editedMember.full_name}
+                onChange={(e) => setEditedMember(prev => ({ ...prev, full_name: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               />
             </div>
@@ -276,8 +206,8 @@ function EditModal({ member, onClose, onSave }: EditModalProps) {
               </div>
               <input
                 type="text"
-                value={editedMember.memberNumber}
-                onChange={(e) => setEditedMember(prev => ({ ...prev, memberNumber: e.target.value }))}
+                value={editedMember.member_number}
+                onChange={(e) => setEditedMember(prev => ({ ...prev, member_number: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               />
             </div>
@@ -342,6 +272,7 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
     
     const loadMembers = async () => {
       try {
+        setLoading(true);
         const result = await getOrganizationMembers(organization.id);
         if (result.error) {
           throw new Error(result.error);
@@ -350,6 +281,7 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
         setMembers(result.data || []);
       } catch (error) {
         console.error('Error loading members:', error);
+        setError('Kunne ikke laste medlemmer');
         setMembers([]);
       } finally {
         setLoading(false);
@@ -381,6 +313,7 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
     if (!member) return;
 
     try {
+      setError(null);
       const result = await approveMember(memberId);
       if (result.error) {
         throw new Error(result.error);
@@ -391,29 +324,28 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
         m.id === memberId ? { ...m, approved: true } : m
       ));
 
-      // Try to send approval email
-      const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4).toUpperCase();
-      
-      if (organization) {
-        const loginUrl = generateLoginUrl(organization.slug);
-        const adminName = user?.member_profile?.full_name || user?.super_user_profile?.full_name || 'Administrator';
-        
-        const emailResult = await sendMemberApprovalEmail(
-          member.email,
-          member.full_name,
-          organization.name,
-          organization.id,
-          tempPassword,
-          loginUrl,
-          adminName
-        );
-        
-        if (!emailResult.success) {
-          console.warn('Approval email failed (email service not configured):', emailResult.error);
-          setError(`Medlem godkjent, men e-post kunne ikke sendes. Kontakt medlemmet manuelt med innloggingsopplysninger.`);
-          setTimeout(() => setError(null), 5000);
-        }
-      }
+      // TODO: Re-enable email sending when Edge Function is configured
+      // const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4).toUpperCase();
+      // if (organization) {
+      //   const loginUrl = generateLoginUrl(organization.slug);
+      //   const adminName = user?.member_profile?.full_name || user?.super_user_profile?.full_name || 'Administrator';
+      //   
+      //   const emailResult = await sendMemberApprovalEmail(
+      //     member.email,
+      //     member.full_name,
+      //     organization.name,
+      //     organization.id,
+      //     tempPassword,
+      //     loginUrl,
+      //     adminName
+      //   );
+      //   
+      //   if (!emailResult.success) {
+      //     console.warn('Approval email failed:', emailResult.error);
+      //     setError(`Medlem godkjent, men e-post kunne ikke sendes.`);
+      //     setTimeout(() => setError(null), 5000);
+      //   }
+      // }
     } catch (error) {
       console.error('Error approving member:', error);
       setError(error instanceof Error ? error.message : 'Kunne ikke godkjenne medlem');
@@ -424,44 +356,27 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
     if (pendingMembers.length === 0) return;
     
     if (window.confirm(`Er du sikker på at du vil godkjenne alle ${pendingMembers.length} ventende medlemmer?`)) {
-      // Approve all pending members
-      setMembers(prev => prev.map(m =>
-        !m.approved ? { ...m, approved: true } : m
-      ));
-      
-      // Try to send emails to all approved members
-      let emailErrors = 0;
-      for (const member of pendingMembers) {
-        try {
-          const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4).toUpperCase();
-          const savedOrg = localStorage.getItem('currentOrganization');
-          if (savedOrg) {
-            const orgData = JSON.parse(savedOrg);
-            const loginUrl = generateLoginUrl(orgData.slug || 'svpk');
-            const adminName = user?.member_profile?.full_name || user?.super_user_profile?.full_name || 'Administrator';
-            
-            const emailResult = await sendMemberApprovalEmail(
-              member.email,
-              member.fullName,
-              orgData.name || 'Organisasjonen',
-              orgData.id || 'default-org',
-              tempPassword,
-              loginUrl,
-              adminName
-            );
-            
-            if (!emailResult.success) {
-              emailErrors++;
-            }
-          }
-        } catch (error) {
-          emailErrors++;
+      try {
+        setError(null);
+        
+        // Approve all pending members in database
+        const approvalPromises = pendingMembers.map(member => approveMember(member.id));
+        const results = await Promise.all(approvalPromises);
+        
+        // Check for errors
+        const errors = results.filter(result => result.error);
+        if (errors.length > 0) {
+          throw new Error(`Kunne ikke godkjenne ${errors.length} medlemmer`);
         }
-      }
-      
-      if (emailErrors > 0) {
-        setError(`${pendingMembers.length} medlemmer godkjent, men ${emailErrors} e-poster kunne ikke sendes. Kontakt medlemmene manuelt.`);
-        setTimeout(() => setError(null), 8000);
+        
+        // Update local state
+        setMembers(prev => prev.map(m =>
+          !m.approved ? { ...m, approved: true } : m
+        ));
+        
+      } catch (error) {
+        console.error('Error approving all members:', error);
+        setError(error instanceof Error ? error.message : 'Kunne ikke godkjenne alle medlemmer');
       }
     }
   };
@@ -469,13 +384,11 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
   const handleUnapprove = async (memberId: string) => {
     if (window.confirm('Er du sikker på at du vil fjerne godkjenningen av dette medlemmet?')) {
       try {
-        const { error } = await supabase
-          .from('organization_members')
-          .update({ approved: false })
-          .eq('id', memberId);
+        setError(null);
+        const result = await updateOrganizationMember(memberId, { approved: false });
         
-        if (error) {
-          throw new Error('Kunne ikke fjerne godkjenning');
+        if (result.error) {
+          throw new Error(result.error);
         }
         
         setMembers(prev => prev.map(member =>
@@ -488,24 +401,46 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
     }
   };
 
-  const handleSaveEdit = (updatedMember: OrganizationMember) => {
-    setMembers(prev => prev.map(member =>
-      member.id === updatedMember.id ? updatedMember : member
-    ));
-    setEditingMember(null);
+  const handleSaveEdit = async (updatedMember: OrganizationMember) => {
+    try {
+      setError(null);
+      const result = await updateOrganizationMember(updatedMember.id, updatedMember);
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      setMembers(prev => prev.map(member =>
+        member.id === updatedMember.id ? result.data! : member
+      ));
+      setEditingMember(null);
+    } catch (error) {
+      console.error('Error updating member:', error);
+      setError(error instanceof Error ? error.message : 'Kunne ikke oppdatere medlem');
+    }
   };
 
-  const handleAddMember = (memberData: Omit<Member, 'id' | 'registrationDate' | 'approved'>) => {
-    const newMember: Member = {
-      id: Date.now(),
-      ...memberData,
-      registrationDate: new Date(),
-      approved: false,
-      role: 'user'
-    };
-
-    setMembers(prev => [...prev, newMember]);
-    setShowAddModal(false);
+  const handleAddMember = async (memberData: { full_name: string; email: string; member_number: string }) => {
+    if (!organization?.id) return;
+    
+    try {
+      setError(null);
+      const result = await addOrganizationMember(organization.id, {
+        ...memberData,
+        role: 'member',
+        approved: false
+      });
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      setMembers(prev => [...prev, result.data!]);
+      setShowAddModal(false);
+    } catch (error) {
+      console.error('Error adding member:', error);
+      setError(error instanceof Error ? error.message : 'Kunne ikke legge til medlem');
+    }
   };
 
   const handleToggleAdmin = async (memberId: string) => {
@@ -519,6 +454,7 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
     
     if (window.confirm(`Er du sikker på at du vil ${action} ${member.full_name}?`)) {
       try {
+        setError(null);
         const result = await updateMemberRole(memberId, newRole);
         if (result.error) {
           throw new Error(result.error);
@@ -539,13 +475,11 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
     
     if (window.confirm(`Er du sikker på at du vil slette medlemmet "${memberName}" permanent? Denne handlingen kan ikke angres.`)) {
       try {
-        const { error } = await supabase
-          .from('organization_members')
-          .delete()
-          .eq('id', memberId);
+        setError(null);
+        const result = await deleteOrganizationMember(memberId);
         
-        if (error) {
-          throw new Error('Kunne ikke slette medlem');
+        if (result.error) {
+          throw new Error(result.error);
         }
         
         setMembers(prev => prev.filter(member => member.id !== memberId));
@@ -558,9 +492,9 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
   
   const filteredAndSortedMembers = members
     .filter(member => 
-      (member.full_name ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (member.email ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (member.member_number ?? '').includes(searchTerm)
+      member.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (member.member_number || '').includes(searchTerm)
     )
     .sort((a, b) => {
       let comparison = 0;
@@ -647,11 +581,11 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
                   <tr className="border-b border-gray-700">
                     <th 
                       className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base"
-                      onClick={() => handleSort('fullName')}
+                      onClick={() => handleSort('full_name')}
                     >
                       <div className="flex items-center gap-2">
                         {t('admin.name')}
-                        {sortField === 'fullName' && (
+                        {sortField === 'full_name' && (
                           sortDirection === 'asc' ? 
                             <ChevronUp className="w-4 h-4" /> : 
                             <ChevronDown className="w-4 h-4" />
@@ -662,11 +596,11 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
                     <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base">{t('admin.member_id')}</th>
                     <th 
                       className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base hidden md:table-cell"
-                      onClick={() => handleSort('registrationDate')}
+                      onClick={() => handleSort('created_at')}
                     >
                       <div className="flex items-center gap-2">
                         {t('admin.registered')}
-                        {sortField === 'registrationDate' && (
+                        {sortField === 'created_at' && (
                           sortDirection === 'asc' ? 
                             <ChevronUp className="w-4 h-4" /> : 
                             <ChevronDown className="w-4 h-4" />
@@ -682,14 +616,14 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
                     <tr key={member.id} className="border-b border-gray-700">
                       <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">
                         <div>
-                          <div className="font-medium">{member.fullName}</div>
+                          <div className="font-medium">{member.full_name}</div>
                           <div className="text-xs text-gray-400 sm:hidden">{member.email}</div>
                         </div>
                       </td>
                       <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden sm:table-cell">{member.email}</td>
-                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">{member.memberNumber}</td>
+                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">{member.member_number}</td>
                       <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden md:table-cell">
-                        {format(member.registrationDate, 'dd.MM.yyyy')}
+                        {format(new Date(member.created_at!), 'dd.MM.yyyy')}
                       </td>
                       {canManageAdmins && (
                         <td className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">
@@ -730,7 +664,7 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
                             <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
                           </button>
                           <button
-                            onClick={() => handleDeleteMember(member.id, member.fullName)}
+                            onClick={() => handleDeleteMember(member.id, member.full_name)}
                             className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-red-400"
                             title="Slett medlem"
                           >
@@ -758,11 +692,11 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
                 <tr className="border-b border-gray-700">
                   <th 
                     className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base"
-                    onClick={() => handleSort('fullName')}
+                    onClick={() => handleSort('full_name')}
                   >
                     <div className="flex items-center gap-2">
                       {t('admin.name')}
-                      {sortField === 'fullName' && (
+                      {sortField === 'full_name' && (
                         sortDirection === 'asc' ? 
                           <ChevronUp className="w-4 h-4" /> : 
                           <ChevronDown className="w-4 h-4" />
@@ -773,11 +707,11 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
                   <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base">{t('admin.member_id')}</th>
                   <th 
                     className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base hidden md:table-cell"
-                    onClick={() => handleSort('registrationDate')}
+                    onClick={() => handleSort('created_at')}
                   >
                     <div className="flex items-center gap-2">
                       {t('admin.registered')}
-                      {sortField === 'registrationDate' && (
+                      {sortField === 'created_at' && (
                         sortDirection === 'asc' ? 
                           <ChevronUp className="w-4 h-4" /> : 
                           <ChevronDown className="w-4 h-4" />
@@ -793,17 +727,17 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
                   <tr key={member.id} className="border-b border-gray-700">
                     <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">
                       <div>
-                        <div className="font-medium">{member.fullName}</div>
+                        <div className="font-medium">{member.full_name}</div>
                         <div className="text-xs text-gray-400 sm:hidden">{member.email}</div>
                         <div className="text-xs text-gray-400 md:hidden">
-                          {format(member.registrationDate, 'dd.MM.yyyy')}
+                          {format(new Date(member.created_at!), 'dd.MM.yyyy')}
                         </div>
                       </div>
                     </td>
                     <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden sm:table-cell">{member.email}</td>
-                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">{member.memberNumber}</td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">{member.member_number}</td>
                     <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden md:table-cell">
-                      {format(member.registrationDate, 'dd.MM.yyyy')}
+                      {format(new Date(member.created_at!), 'dd.MM.yyyy')}
                     </td>
                     {canManageAdmins && (
                       <td className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">
@@ -845,7 +779,7 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
                         </button>
                         {canManageAdmins && (
                           <button
-                            onClick={() => handleDeleteMember(member.id, member.fullName)}
+                            onClick={() => handleDeleteMember(member.id, member.full_name)}
                             className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-red-400"
                             title="Slett medlem"
                           >

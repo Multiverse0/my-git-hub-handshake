@@ -260,65 +260,35 @@ function CreateAdminModal({ organizationId, organizationName, onClose, onSuccess
     setError(null);
 
     try {
-      // Hash password
-      const passwordHash = await bcrypt.hash(formData.password, 10);
-
-      // Create admin user (in real app, this would be a Supabase call)
-      const newAdmin = {
-        id: Date.now().toString(),
-        organization_id: organizationId, // Use the current organization ID
+      // Create admin user using Supabase
+      const result = await addOrganizationMember(organizationId, {
         email: formData.email,
         full_name: formData.full_name,
         member_number: formData.member_number,
-        password_hash: passwordHash,
         role: 'admin',
         approved: true,
-        active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        registrationDate: new Date()
-      };
-
-      // Save to localStorage for demo
-      const savedMembers = localStorage.getItem('members');
-      const members = savedMembers ? JSON.parse(savedMembers) : [];
-       
-      // Check for duplicate email across all organizations
-      const existingMember = members.find((m: any) => m.email === formData.email);
-      if (existingMember) {
-        console.log('Found existing member with email:', existingMember);
-        // If it's the same organization, it's a duplicate
-        if (existingMember.organization_id === organizationId) {
-          throw new Error('E-post er allerede registrert for denne organisasjonen');
-        }
-        // If different organization, allow but update the existing member to be admin in this org too
-        console.log('Updating existing member to be admin in this organization');
-        existingMember.role = 'admin';
-        existingMember.organization_id = organizationId;
-        existingMember.password_hash = passwordHash;
-        localStorage.setItem('members', JSON.stringify(members));
-        onSuccess();
-        return;
+        password: formData.password
+      });
+      
+      if (result.error) {
+        throw new Error(result.error);
       }
-       
-      members.push(newAdmin);
-      localStorage.setItem('members', JSON.stringify(members));
 
       // Send actual welcome email
-      const loginUrl = generateLoginUrl(organizationId);
-      const emailResult = await sendAdminWelcomeEmail(
-        formData.email,
-        formData.full_name,
-        organizationName,
-        organizationId,
-        formData.password,
-        loginUrl
-      );
-
-      if (!emailResult.success) {
-        console.warn('Email sending failed:', emailResult.error);
-        // Continue with success even if email fails - admin is still created
-      }
+      // TODO: Re-enable email sending when Edge Function is configured
+      // const loginUrl = generateLoginUrl(organizationId);
+      // const emailResult = await sendAdminWelcomeEmail(
+      //   formData.email,
+      //   formData.full_name,
+      //   organizationName,
+      //   organizationId,
+      //   formData.password,
+      //   loginUrl
+      // );
+      //
+      // if (!emailResult.success) {
+      //   console.warn('Email sending failed:', emailResult.error);
+      // }
 
       setEmailSent(true);
 
@@ -597,31 +567,31 @@ export function OrganizationDashboard() {
       setOrganization(targetOrg);
 
       // Load members and calculate stats
-      const savedMembers = localStorage.getItem('members');
-      if (savedMembers) {
-        const members = JSON.parse(savedMembers);
-        console.log('All members:', members);
-        console.log('Looking for organization_id:', orgId);
-        
-        // Filter members for this organization
-        const orgMembers = members.filter((m: any) => {
-          console.log('Member org_id:', m.organization_id, 'Target org_id:', orgId);
-          return m.organization_id === orgId;
-        });
-        
-        console.log('Filtered org members:', orgMembers);
-        
-        setStats({
-          totalMembers: orgMembers.length,
-          activeMembers: orgMembers.filter((m: any) => m.approved && m.active).length,
-          pendingMembers: orgMembers.filter((m: any) => !m.approved).length,
-          totalAdmins: orgMembers.filter((m: any) => m.role === 'admin').length
-        });
+      // Load members from Supabase
+      try {
+        const { data: members, error } = await supabase
+          .from('organization_members')
+          .select('*')
+          .eq('organization_id', orgId);
 
-        // Set admins
-        const adminUsers = orgMembers.filter((m: any) => m.role === 'admin');
-        console.log('Admin users found:', adminUsers);
-        setAdmins(adminUsers);
+        if (error) {
+          console.error('Error loading members:', error);
+        } else {
+          const orgMembers = members || [];
+          
+          setStats({
+            totalMembers: orgMembers.length,
+            activeMembers: orgMembers.filter((m: any) => m.approved && m.active).length,
+            pendingMembers: orgMembers.filter((m: any) => !m.approved).length,
+            totalAdmins: orgMembers.filter((m: any) => m.role === 'admin').length
+          });
+
+          // Set admins
+          const adminUsers = orgMembers.filter((m: any) => m.role === 'admin');
+          setAdmins(adminUsers);
+        }
+      } catch (error) {
+        console.error('Error loading organization members:', error);
       }
 
     } catch (error) {
@@ -637,17 +607,15 @@ export function OrganizationDashboard() {
     }
 
     try {
-      const savedMembers = localStorage.getItem('members');
-      if (savedMembers) {
-        const members = JSON.parse(savedMembers);
-        const updatedMembers = members.map((m: any) => 
-          m.id === adminId ? { ...m, role: 'member' } : m
-        );
-        localStorage.setItem('members', JSON.stringify(updatedMembers));
-        loadOrganizationData();
+      const result = await updateMemberRole(adminId, 'member');
+      if (result.error) {
+        throw new Error(result.error);
       }
+      
+      loadOrganizationData();
     } catch (error) {
       console.error('Error removing admin:', error);
+      alert('Kunne ikke fjerne admin-tilgang');
     }
   };
 
