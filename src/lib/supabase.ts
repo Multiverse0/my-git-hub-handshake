@@ -227,12 +227,9 @@ export async function registerOrganizationMember(
 
     // Create user in Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
-      // Hash the password before storing
-      const passwordHash = await bcrypt.hash(memberData.password, 10);
-      
       email,
       password,
-        password: memberData.password, // Supabase Auth handles password hashing
+      options: {
         data: {
           full_name: fullName,
           user_type: 'organization_member'
@@ -249,9 +246,6 @@ export async function registerOrganizationMember(
 
     if (!authData.user) {
       return { error: 'Kunne ikke opprette bruker' };
-      
-      // Store password hash in organization_members table for demo purposes
-      // In production, you might not need this as Supabase Auth handles authentication
     }
 
     // Create organization member record
@@ -263,10 +257,10 @@ export async function registerOrganizationMember(
         email,
         full_name: fullName,
         member_number: memberNumber,
-        approved: false // Requires admin approval
+        approved: false, // Requires admin approval
+        active: true
       })
-        active: true,
-        password_hash: memberData.password ? await bcrypt.hash(memberData.password, 10) : null
+      .select()
       .single();
 
     if (memberError) {
