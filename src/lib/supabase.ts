@@ -184,10 +184,6 @@ export async function authenticateUser(email: string, password: string): Promise
       .single();
 
     if (member) {
-      if (!member.approved) {
-        return { error: 'Kontoen din er ikke godkjent ennå. Vennligst vent på administratorgodkjenning.' };
-      }
-
       return {
         data: {
           user: {

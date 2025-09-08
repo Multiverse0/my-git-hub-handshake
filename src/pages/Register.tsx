@@ -10,7 +10,7 @@ import { CheckCircle } from 'lucide-react';
 
 export function Register() {
   const navigate = useNavigate();
-  const { register, branding } = useAuth();
+  const { register, login, branding } = useAuth();
   const [searchParams] = useSearchParams();
   const orgSlug = searchParams.get('org') || 'svpk';
   
@@ -68,7 +68,7 @@ export function Register() {
 
     try {
       setIsLoading(true);
-      const result = await register(
+      await register(
         orgSlug,
         formData.email,
         formData.password,
@@ -93,7 +93,11 @@ export function Register() {
       //   }
       // }
       
-      setRegistrationSubmitted(true);
+      // After successful registration, log the user in automatically
+      await login(formData.email, formData.password, false, orgSlug);
+      
+      // Navigate to home page - DashboardRouter will handle appropriate redirection
+      navigate('/', { replace: true });
     } catch (error) {
       if (error instanceof Error) {
         setError(error.message);

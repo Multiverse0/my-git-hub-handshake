@@ -43,6 +43,15 @@ export function Navigation() {
                 {branding.organization_name}
               </div>
             )}
+            
+            {/* Show pending approval banner for unapproved members */}
+            {user?.member_profile && !user.member_profile.approved && (
+              <div className="ml-4 px-3 py-1 bg-orange-500/20 border border-orange-500 rounded-full">
+                <span className="text-orange-400 text-sm font-medium">
+                  ⏳ Venter på godkjenning
+                </span>
+              </div>
+            )}
           </div>
           
           {/* Desktop Navigation */}

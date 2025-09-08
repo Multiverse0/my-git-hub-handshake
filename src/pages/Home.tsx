@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { QrCode, ClipboardList, Download } from 'lucide-react';
+import { QrCode, ClipboardList, Download, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { SalesBannerCarousel } from '../components/SalesBannerCarousel';
@@ -22,6 +22,26 @@ export function Home() {
   };
   return (
     <div className="space-y-8">
+      {/* Show approval status banner for unapproved members */}
+      {profile && !profile.approved && (
+        <div className="bg-orange-900/20 border border-orange-700 rounded-lg p-6">
+          <div className="flex items-center gap-3">
+            <div className="bg-orange-500 p-2 rounded-full">
+              <Clock className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-orange-400 mb-1">
+                Kontoen din venter på godkjenning
+              </h3>
+              <p className="text-orange-200 text-sm">
+                En administrator vil gjennomgå og godkjenne medlemskapet ditt snart. 
+                Du kan allerede utforske systemet, men noen funksjoner kan være begrenset til godkjente medlemmer.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="text-center">
         <h1 className="text-4xl font-bold text-svpk-yellow mb-4">
           {t('home.welcome', { name: getFirstName() })}
