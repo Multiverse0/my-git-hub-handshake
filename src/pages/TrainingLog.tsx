@@ -240,11 +240,15 @@ export function TrainingLog() {
   const [editingEntry, setEditingEntry] = useState<MemberTrainingSession | null>(null);
   const [organizationFilter, setOrganizationFilter] = useState<'all' | 'NSF' | 'DFS' | 'DSSN'>('all');
   const [activityFilter, setActivityFilter] = useState<'all' | 'Trening' | 'Stevne' | 'Dugnad'>('all');
-
+  const [organizationSettings, setOrganizationSettings] = useState({
+    nsf_enabled: true,
+    dfs_enabled: true,
+    dssn_enabled: true
+  });
+  const [availableActivities, setAvailableActivities] = useState(['Trening', 'Stevne', 'Dugnad']);
 
   useEffect(() => {
-
-    const loadTrainingSessions = () => {
+    const loadTrainingSessions = async () => {
       if (!user?.id) return;
       
       try {
@@ -523,9 +527,12 @@ export function TrainingLog() {
     }
   };
 
+  const generateExampleSessions = () => {
+    return [];
+  };
+
   // Load training sessions from localStorage
   useEffect(() => {
-    const loadSessions = async () => {
     const loadOrganizationSettings = () => {
       try {
         const savedOrg = localStorage.getItem('currentOrganization');
