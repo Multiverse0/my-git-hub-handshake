@@ -76,21 +76,22 @@ export function Register() {
         formData.memberNumber
       );
       
-      // Send welcome email to new member
-      if (organization) {
-        const emailResult = await sendMemberWelcomeEmail(
-          formData.email,
-          formData.fullName,
-          organization.name,
-          organization.id,
-          formData.memberNumber
-        );
-        
-        if (!emailResult.success) {
-          console.warn('Welcome email failed:', emailResult.error);
-          // Continue with registration success even if email fails
-        }
-      }
+      // TODO: Re-enable email sending after Edge Function is deployed and configured
+      // // Send welcome email to new member
+      // if (organization) {
+      //   const emailResult = await sendMemberWelcomeEmail(
+      //     formData.email,
+      //     formData.fullName,
+      //     organization.name,
+      //     organization.id,
+      //     formData.memberNumber
+      //   );
+      //   
+      //   if (!emailResult.success) {
+      //     console.warn('Welcome email failed:', emailResult.error);
+      //     // Continue with registration success even if email fails
+      //   }
+      // }
       
       setRegistrationSubmitted(true);
     } catch (error) {
