@@ -60,7 +60,8 @@ export function Login() {
       setIsLoading(true);
       setError(null);
       await login(email, password, rememberMe, orgSlug);
-      navigate('/');
+      // DashboardRouter will handle the appropriate redirection based on user role
+      navigate('/', { replace: true });
     } catch (error) {
       setError('Det oppstod en feil ved innlogging');
     } finally {
