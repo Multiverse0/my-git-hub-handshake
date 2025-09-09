@@ -65,10 +65,14 @@ function App() {
     <ThemeProvider>
       <BrowserRouter>
         <Routes>
+          {/* Public routes - accessible without authentication */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/register/:orgSlug" element={<Register />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/landing" element={<LandingPage />} />
+          
+          {/* Protected routes - require authentication */}
           <Route
             path="/*"
             element={

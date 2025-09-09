@@ -246,8 +246,7 @@ export function Login() {
               type="button"
               onClick={handleForgotPassword}
               className="text-sm text-gray-400 hover:text-gray-300"
-            >
-              Glemt passord?
+              Har du ikke konto? Registrer deg her
             </button>
           </div>
         </form>
