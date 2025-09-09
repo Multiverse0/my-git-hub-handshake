@@ -290,12 +290,19 @@ export async function getOrganizationBySlug(slug: string): Promise<ApiResponse<O
   try {
     console.log('🔍 Querying organization by slug:', slug);
     
-    const { data, error } = await supabase
+    // Add timeout to prevent infinite loading
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Database query timeout')), 5000);
+    });
+    
+    const queryPromise = supabase
       .from('organizations')
       .select('*')
       .eq('slug', slug)
       .eq('active', true)
       .single();
+    
+    const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
 
     if (error) {
       console.log('❌ Supabase query error:', error.message);
@@ -312,6 +319,12 @@ export async function getOrganizationBySlug(slug: string): Promise<ApiResponse<O
     return { data };
   } catch (error) {
     console.error('Error getting organization:', error);
+    
+    // Return timeout or connection error
+    if (error instanceof Error && error.message.includes('timeout')) {
+      return { error: 'Database connection timeout' };
+    }
+    
     return { error: 'Kunne ikke hente organisasjon' };
   }
 }
