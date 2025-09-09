@@ -1,843 +1,915 @@
-import React, { useState } from 'react';
-import { Search, ChevronUp, ChevronDown, XCircle, CheckCircle, AlertCircle, Edit2, PlusCircle, Shield, ShieldOff, Trash2 } from 'lucide-react';
-import { format } from 'date-fns';
-import { getOrganizationMembers, approveMember, updateMemberRole, addOrganizationMember, updateOrganizationMember, deleteOrganizationMember } from '../lib/supabase';
-import { sendMemberApprovalEmail, generateLoginUrl } from '../lib/emailService';
-import { useAuth } from '../contexts/AuthContext';
-import { useLanguage } from '../contexts/LanguageContext';
-import type { OrganizationMember } from '../lib/types';
+import { createClient } from '@supabase/supabase-js';
+import bcrypt from 'bcryptjs';
+import type { 
+  Organization, 
+  OrganizationMember, 
+  AuthUser, 
+  OrganizationBranding, 
+  TrainingLocation,
+  MemberTrainingSession,
+  TrainingSessionDetails,
+  ApiResponse 
+} from './types';
 
-interface MemberManagementProps {
-  onMemberCountChange?: (count: number) => void;
-}
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://demo.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'demo-key';
 
-interface AddMemberModalProps {
-  onClose: () => void;
-  onAdd: (memberData: { full_name: string; email: string; member_number: string }) => void;
-}
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-function AddMemberModal({ onClose, onAdd }: AddMemberModalProps) {
-  const [newMember, setNewMember] = useState({
-    full_name: '',
-    email: '',
-    member_number: ''
-  });
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+// Authentication functions
+export async function authenticateUser(email: string, password: string): Promise<ApiResponse<{ user: AuthUser }>> {
+  try {
+    // For demo purposes, use localStorage authentication
+    const savedMembers = localStorage.getItem('members');
+    const savedSuperUsers = localStorage.getItem('superUsers');
     
-    if (!newMember.full_name.trim() || !newMember.email.trim() || !newMember.member_number.trim()) {
-      setError('Alle felt må fylles ut');
-      return;
+    // Check super users first
+    if (savedSuperUsers) {
+      const superUsers = JSON.parse(savedSuperUsers);
+      const superUser = superUsers.find((user: any) => user.email === email && user.active);
+      
+      if (superUser) {
+        // Verify password
+        const isValidPassword = await bcrypt.compare(password, superUser.password_hash);
+        if (isValidPassword) {
+          const authUser: AuthUser = {
+            id: superUser.id,
+            email: superUser.email,
+            user_type: 'super_user',
+            super_user_profile: superUser
+          };
+          
+          // Save current user to localStorage
+          localStorage.setItem('currentUser', JSON.stringify({ user: authUser }));
+          
+          return { data: { user: authUser } };
+        }
+      }
     }
-
-    if (!newMember.email.includes('@')) {
-      setError('Vennligst skriv inn en gyldig e-postadresse');
-      return;
-    }
-
-    onAdd(newMember);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-gray-800 rounded-lg max-w-md w-full">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-semibold">Legg til nytt medlem</h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white"
-            >
-              <XCircle className="w-6 h-6" />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Navn
-              </label>
-              <input
-                type="text"
-                value={newMember.full_name}
-                onChange={(e) => setNewMember(prev => ({ ...prev, full_name: e.target.value }))}
-                className="w-full bg-gray-700 rounded-md px-3 py-2"
-                placeholder="Fullt navn"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                E-post
-              </label>
-              <input
-                type="email"
-                value={newMember.email}
-                onChange={(e) => setNewMember(prev => ({ ...prev, email: e.target.value }))}
-                className="w-full bg-gray-700 rounded-md px-3 py-2"
-                placeholder="navn@example.com"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                SkytterID
-              </label>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm text-gray-400">
-                  <a
-                    href="https://app.skyting.no/user"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-svpk-yellow hover:text-yellow-400"
-                  >
-                    (Link SkytterID)
-                  </a>
-                </span>
-              </div>
-              <input
-                type="text"
-                value={newMember.member_number}
-                onChange={(e) => setNewMember(prev => ({ ...prev, member_number: e.target.value }))}
-                className="w-full bg-gray-700 rounded-md px-3 py-2"
-                placeholder="12345"
-              />
-            </div>
-
-            {error && (
-              <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg flex items-center gap-2 text-red-200">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <p className="text-sm">{error}</p>
-              </div>
-            )}
-
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="btn-secondary"
-              >
-                Avbryt
-              </button>
-              <button
-                type="submit"
-                className="btn-primary"
-              >
-                Legg til
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface EditModalProps {
-  member: OrganizationMember;
-  onClose: () => void;
-  onSave: (updatedMember: OrganizationMember) => void;
-}
-
-function EditModal({ member, onClose, onSave }: EditModalProps) {
-  const [editedMember, setEditedMember] = useState({ ...member });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave(editedMember);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-gray-800 rounded-lg max-w-md w-full">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-semibold">Rediger Medlem</h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white"
-            >
-              <XCircle className="w-6 h-6" />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Navn
-              </label>
-              <input
-                type="text"
-                value={editedMember.full_name}
-                onChange={(e) => setEditedMember(prev => ({ ...prev, full_name: e.target.value }))}
-                className="w-full bg-gray-700 rounded-md px-3 py-2"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                E-post
-              </label>
-              <input
-                type="email"
-                value={editedMember.email}
-                onChange={(e) => setEditedMember(prev => ({ ...prev, email: e.target.value }))}
-                className="w-full bg-gray-700 rounded-md px-3 py-2"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                SkytterID
-              </label>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm text-gray-400">
-                  <a
-                    href="https://app.skyting.no/user"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-svpk-yellow hover:text-yellow-400"
-                  >
-                    (Link SkytterID)
-                  </a>
-                </span>
-              </div>
-              <input
-                type="text"
-                value={editedMember.member_number}
-                onChange={(e) => setEditedMember(prev => ({ ...prev, member_number: e.target.value }))}
-                className="w-full bg-gray-700 rounded-md px-3 py-2"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Rolle
-              </label>
-              <select
-                value={editedMember.role}
-                onChange={(e) => setEditedMember(prev => ({ ...prev, role: e.target.value as 'user' | 'admin' }))}
-                className="w-full bg-gray-700 rounded-md px-3 py-2"
-              >
-                <option value="user">Bruker</option>
-                <option value="admin">Administrator</option>
-              </select>
-            </div>
-
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="btn-secondary"
-              >
-                Avbryt
-              </button>
-              <button
-                type="submit"
-                className="btn-primary"
-              >
-                Lagre endringer
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function MemberManagement({ onMemberCountChange }: MemberManagementProps) {
-  const { user, organization } = useAuth();
-  const { t } = useLanguage();
-  const [members, setMembers] = useState<OrganizationMember[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortField, setSortField] = useState<'created_at' | 'full_name'>('created_at');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [error, setError] = useState<string | null>(null);
-  const [editingMember, setEditingMember] = useState<OrganizationMember | null>(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 25;
-
-  // Check if current user can manage admin roles - only admins and super users
-  const canManageAdmins = user?.user_type === 'super_user' || 
-                          (user?.member_profile?.role === 'admin');
-
-  // Load members from database
-  React.useEffect(() => {
-    if (!organization?.id) return;
     
-    const loadMembers = async () => {
-      try {
-        setLoading(true);
-        const result = await getOrganizationMembers(organization.id);
-        if (result.error) {
-          throw new Error(result.error);
+    // Check organization members
+    if (savedMembers) {
+      const members = JSON.parse(savedMembers);
+      const member = members.find((m: any) => m.email === email && m.approved && m.active);
+      
+      if (member) {
+        // For demo, accept any password for approved members
+        const authUser: AuthUser = {
+          id: member.id,
+          email: member.email,
+          user_type: 'organization_member',
+          organization_id: member.organization_id,
+          member_profile: member
+        };
+        
+        // Load organization data
+        const savedOrgs = localStorage.getItem('organizations');
+        if (savedOrgs) {
+          const organizations = JSON.parse(savedOrgs);
+          const organization = organizations.find((org: any) => org.id === member.organization_id);
+          if (organization) {
+            authUser.organization = organization;
+          }
         }
         
-        setMembers(result.data || []);
-      } catch (error) {
-        console.error('Error loading members:', error);
-        setError('Kunne ikke laste medlemmer');
-        setMembers([]);
-      } finally {
-        setLoading(false);
+        localStorage.setItem('currentUser', JSON.stringify({ user: authUser }));
+        
+        return { data: { user: authUser } };
+      }
+    }
+    
+    // Demo mode: Allow any email/password combination for admin access
+    const demoUser: AuthUser = {
+      id: 'demo-admin',
+      email: email,
+      user_type: 'organization_member',
+      organization_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+      member_profile: {
+        id: 'demo-admin',
+        organization_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+        email: email,
+        full_name: 'Demo Administrator',
+        member_number: '99999',
+        role: 'admin',
+        approved: true,
+        active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      organization: {
+        id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+        name: 'Svolvær Pistolklubb',
+        slug: 'svpk',
+        description: 'Norges beste pistolklubb',
+        website: 'https://svpk.no',
+        email: 'post@svpk.no',
+        phone: '+47 123 45 678',
+        address: 'Svolværgata 1, 8300 Svolvær',
+        logo_url: null,
+        primary_color: '#FFD700',
+        secondary_color: '#1F2937',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        active: true
       }
     };
+    
+    localStorage.setItem('currentUser', JSON.stringify({ user: demoUser }));
+    
+    return { data: { user: demoUser } };
+    
+  } catch (error) {
+    console.error('Authentication error:', error);
+    return { error: 'Innlogging feilet' };
+  }
+}
 
-    loadMembers();
-  }, [organization?.id]);
-
-  // Update member count when members change
-  React.useEffect(() => {
-    if (onMemberCountChange) {
-      const pendingCount = members.filter(member => !member.approved).length;
-      onMemberCountChange(pendingCount);
+export async function registerOrganizationMember(
+  organizationSlug: string,
+  email: string,
+  password: string,
+  fullName: string,
+  memberNumber?: string
+): Promise<ApiResponse<{ user: AuthUser }>> {
+  try {
+    // Get organization by slug
+    const orgResult = await getOrganizationBySlug(organizationSlug);
+    if (orgResult.error || !orgResult.data) {
+      throw new Error('Organisasjon ikke funnet');
     }
-  }, [members]);
-
-  const handleSort = (field: 'created_at' | 'full_name') => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
+    
+    const organization = orgResult.data;
+    
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    // Create new member
+    const newMember = {
+      id: crypto.randomUUID(),
+      organization_id: organization.id,
+      email,
+      full_name: fullName,
+      member_number: memberNumber,
+      password_hash: passwordHash,
+      role: 'member' as const,
+      approved: false,
+      active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    // Save to localStorage
+    const savedMembers = localStorage.getItem('members');
+    const members = savedMembers ? JSON.parse(savedMembers) : [];
+    
+    // Check for duplicate email
+    if (members.some((member: any) => member.email === email && member.organization_id === organization.id)) {
+      throw new Error('E-post er allerede registrert i denne organisasjonen');
     }
-  };
+    
+    members.push(newMember);
+    localStorage.setItem('members', JSON.stringify(members));
+    
+    const authUser: AuthUser = {
+      id: newMember.id,
+      email: newMember.email,
+      user_type: 'organization_member',
+      organization_id: organization.id,
+      member_profile: newMember,
+      organization
+    };
+    
+    return { data: { user: authUser } };
+    
+  } catch (error) {
+    console.error('Registration error:', error);
+    return { error: error instanceof Error ? error.message : 'Registrering feilet' };
+  }
+}
 
-  const handleApprove = async (memberId: string) => {
-    const member = members.find(m => m.id === memberId);
-    if (!member) return;
-
-    try {
-      setError(null);
-      const result = await approveMember(memberId);
-      if (result.error) {
-        throw new Error(result.error);
+export async function getOrganizationBySlug(slug: string): Promise<ApiResponse<Organization>> {
+  try {
+    // Load from localStorage for demo
+    const savedOrgs = localStorage.getItem('organizations');
+    if (savedOrgs) {
+      const organizations = JSON.parse(savedOrgs);
+      const organization = organizations.find((org: any) => org.slug === slug);
+      if (organization) {
+        return { data: organization };
       }
+    }
+    
+    // Default SVPK organization for demo
+    if (slug === 'svpk') {
+      const defaultOrg: Organization = {
+        id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+        name: 'Svolvær Pistolklubb',
+        slug: 'svpk',
+        description: 'Norges beste pistolklubb',
+        website: 'https://svpk.no',
+        email: 'post@svpk.no',
+        phone: '+47 123 45 678',
+        address: 'Svolværgata 1, 8300 Svolvær',
+        logo_url: null,
+        primary_color: '#FFD700',
+        secondary_color: '#1F2937',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        active: true
+      };
       
-      // Update local state
-      setMembers(prev => prev.map(m =>
-        m.id === memberId ? { ...m, approved: true } : m
-      ));
-
-      // TODO: Re-enable email sending when Edge Function is configured
-      // const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4).toUpperCase();
-      // if (organization) {
-      //   const loginUrl = generateLoginUrl(organization.slug);
-      //   const adminName = user?.member_profile?.full_name || user?.super_user_profile?.full_name || 'Administrator';
-      //   
-      //   const emailResult = await sendMemberApprovalEmail(
-      //     member.email,
-      //     member.full_name,
-      //     organization.name,
-      //     organization.id,
-      //     tempPassword,
-      //     loginUrl,
-      //     adminName
-      //   );
-      //   
-      //   if (!emailResult.success) {
-      //     console.warn('Approval email failed:', emailResult.error);
-      //     setError(`Medlem godkjent, men e-post kunne ikke sendes.`);
-      //     setTimeout(() => setError(null), 5000);
-      //   }
-      // }
-    } catch (error) {
-      console.error('Error approving member:', error);
-      setError(error instanceof Error ? error.message : 'Kunne ikke godkjenne medlem');
+      return { data: defaultOrg };
     }
-  };
-
-  const handleApproveAll = async () => {
-    if (pendingMembers.length === 0) return;
     
-    if (window.confirm(`Er du sikker på at du vil godkjenne alle ${pendingMembers.length} ventende medlemmer?`)) {
-      try {
-        setError(null);
-        
-        // Approve all pending members in database
-        const approvalPromises = pendingMembers.map(member => approveMember(member.id));
-        const results = await Promise.all(approvalPromises);
-        
-        // Check for errors
-        const errors = results.filter(result => result.error);
-        if (errors.length > 0) {
-          throw new Error(`Kunne ikke godkjenne ${errors.length} medlemmer`);
-        }
-        
-        // Update local state
-        setMembers(prev => prev.map(m =>
-          !m.approved ? { ...m, approved: true } : m
-        ));
-        
-      } catch (error) {
-        console.error('Error approving all members:', error);
-        setError(error instanceof Error ? error.message : 'Kunne ikke godkjenne alle medlemmer');
+    return { error: 'Organisasjon ikke funnet' };
+  } catch (error) {
+    console.error('Error getting organization:', error);
+    return { error: 'Kunne ikke hente organisasjon' };
+  }
+}
+
+export async function setUserContext(email: string): Promise<void> {
+  // For demo purposes, this is a no-op
+  console.log('Setting user context for:', email);
+}
+
+export async function getOrganizationBranding(organizationId: string): Promise<OrganizationBranding> {
+  try {
+    const savedOrgs = localStorage.getItem('organizations');
+    if (savedOrgs) {
+      const organizations = JSON.parse(savedOrgs);
+      const organization = organizations.find((org: any) => org.id === organizationId);
+      if (organization) {
+        return {
+          organization_name: organization.name,
+          primary_color: organization.primary_color || '#FFD700',
+          secondary_color: organization.secondary_color || '#1F2937',
+          background_color: organization.background_color || '#111827',
+          logo_url: organization.logo_url
+        };
       }
     }
-  };
+    
+    // Default branding
+    return {
+      organization_name: 'Svolvær Pistolklubb',
+      primary_color: '#FFD700',
+      secondary_color: '#1F2937',
+      background_color: '#111827'
+    };
+  } catch (error) {
+    console.error('Error getting organization branding:', error);
+    return {
+      organization_name: 'Idrettsklubb',
+      primary_color: '#FFD700',
+      secondary_color: '#1F2937'
+    };
+  }
+}
 
-  const handleUnapprove = async (memberId: string) => {
-    if (window.confirm('Er du sikker på at du vil fjerne godkjenningen av dette medlemmet?')) {
-      try {
-        setError(null);
-        const result = await updateOrganizationMember(memberId, { approved: false });
-        
-        if (result.error) {
-          throw new Error(result.error);
-        }
-        
-        setMembers(prev => prev.map(member =>
-          member.id === memberId ? { ...member, approved: false } : member
-        ));
-      } catch (error) {
-        console.error('Error unapproving member:', error);
-        setError('Kunne ikke fjerne godkjenning');
-      }
+export async function checkSuperUsersExist(): Promise<boolean> {
+  try {
+    const savedSuperUsers = localStorage.getItem('superUsers');
+    if (savedSuperUsers) {
+      const superUsers = JSON.parse(savedSuperUsers);
+      return superUsers.some((user: any) => user.active);
     }
-  };
+    return false;
+  } catch (error) {
+    console.error('Error checking super users:', error);
+    return false;
+  }
+}
 
-  const handleSaveEdit = async (updatedMember: OrganizationMember) => {
-    try {
-      setError(null);
-      const result = await updateOrganizationMember(updatedMember.id, updatedMember);
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  try {
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedUser) {
+      const userData = JSON.parse(savedUser);
+      return userData.user;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting current user:', error);
+    return null;
+  }
+}
+
+export async function signOut(): Promise<void> {
+  try {
+    localStorage.removeItem('currentUser');
+    await supabase.auth.signOut();
+  } catch (error) {
+    console.error('Error signing out:', error);
+  }
+}
+
+export async function createFirstSuperUser(email: string, password: string, fullName: string): Promise<ApiResponse<any>> {
+  try {
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    const newSuperUser = {
+      id: crypto.randomUUID(),
+      email,
+      full_name: fullName,
+      password_hash: passwordHash,
+      active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    // Save to localStorage
+    const superUsers = [newSuperUser];
+    localStorage.setItem('superUsers', JSON.stringify(superUsers));
+    
+    return { data: newSuperUser };
+  } catch (error) {
+    console.error('Error creating first super user:', error);
+    return { error: 'Kunne ikke opprette super-bruker' };
+  }
+}
+
+// Organization member functions
+export async function getOrganizationMembers(organizationId: string): Promise<ApiResponse<OrganizationMember[]>> {
+  try {
+    const savedMembers = localStorage.getItem('members');
+    if (savedMembers) {
+      const members = JSON.parse(savedMembers);
+      const orgMembers = members.filter((member: any) => member.organization_id === organizationId);
+      return { data: orgMembers };
+    }
+    return { data: [] };
+  } catch (error) {
+    console.error('Error getting organization members:', error);
+    return { error: 'Kunne ikke hente medlemmer' };
+  }
+}
+
+export async function addOrganizationMember(
+  organizationId: string, 
+  memberData: Partial<OrganizationMember> & { password?: string }
+): Promise<ApiResponse<OrganizationMember>> {
+  try {
+    const newMember: OrganizationMember = {
+      id: crypto.randomUUID(),
+      organization_id: organizationId,
+      email: memberData.email!,
+      full_name: memberData.full_name!,
+      member_number: memberData.member_number,
+      role: memberData.role || 'member',
+      approved: memberData.approved || false,
+      active: memberData.active !== false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    // Hash password if provided
+    if (memberData.password) {
+      (newMember as any).password_hash = await bcrypt.hash(memberData.password, 10);
+    }
+    
+    // Save to localStorage
+    const savedMembers = localStorage.getItem('members');
+    const members = savedMembers ? JSON.parse(savedMembers) : [];
+    members.push(newMember);
+    localStorage.setItem('members', JSON.stringify(members));
+    
+    return { data: newMember };
+  } catch (error) {
+    console.error('Error adding organization member:', error);
+    return { error: 'Kunne ikke legge til medlem' };
+  }
+}
+
+export async function updateOrganizationMember(
+  memberId: string, 
+  updates: Partial<OrganizationMember>
+): Promise<ApiResponse<OrganizationMember>> {
+  try {
+    const savedMembers = localStorage.getItem('members');
+    if (savedMembers) {
+      const members = JSON.parse(savedMembers);
+      const memberIndex = members.findIndex((member: any) => member.id === memberId);
       
-      if (result.error) {
-        throw new Error(result.error);
+      if (memberIndex !== -1) {
+        members[memberIndex] = {
+          ...members[memberIndex],
+          ...updates,
+          updated_at: new Date().toISOString()
+        };
+        localStorage.setItem('members', JSON.stringify(members));
+        return { data: members[memberIndex] };
       }
-      
-      setMembers(prev => prev.map(member =>
-        member.id === updatedMember.id ? result.data! : member
-      ));
-      setEditingMember(null);
-    } catch (error) {
-      console.error('Error updating member:', error);
-      setError(error instanceof Error ? error.message : 'Kunne ikke oppdatere medlem');
     }
-  };
+    
+    return { error: 'Medlem ikke funnet' };
+  } catch (error) {
+    console.error('Error updating organization member:', error);
+    return { error: 'Kunne ikke oppdatere medlem' };
+  }
+}
 
-  const handleAddMember = async (memberData: { full_name: string; email: string; member_number: string }) => {
-    if (!organization?.id) return;
-    
-    try {
-      setError(null);
-      const result = await addOrganizationMember(organization.id, {
-        ...memberData,
-        role: 'member',
-        approved: false
-      });
-      
-      if (result.error) {
-        throw new Error(result.error);
-      }
-      
-      setMembers(prev => [...prev, result.data!]);
-      setShowAddModal(false);
-    } catch (error) {
-      console.error('Error adding member:', error);
-      setError(error instanceof Error ? error.message : 'Kunne ikke legge til medlem');
+export async function deleteOrganizationMember(memberId: string): Promise<ApiResponse<void>> {
+  try {
+    const savedMembers = localStorage.getItem('members');
+    if (savedMembers) {
+      const members = JSON.parse(savedMembers);
+      const updatedMembers = members.filter((member: any) => member.id !== memberId);
+      localStorage.setItem('members', JSON.stringify(updatedMembers));
+      return { data: undefined };
     }
-  };
+    
+    return { error: 'Medlem ikke funnet' };
+  } catch (error) {
+    console.error('Error deleting organization member:', error);
+    return { error: 'Kunne ikke slette medlem' };
+  }
+}
 
-  const handleToggleAdmin = async (memberId: string) => {
-    if (!canManageAdmins) return;
-    
-    const member = members.find(m => m.id === memberId);
-    if (!member) return;
-    
-    const newRole = member.role === 'admin' ? 'member' : 'admin';
-    const action = newRole === 'admin' ? 'gi admin-rettigheter til' : 'fjerne admin-rettigheter fra';
-    
-    if (window.confirm(`Er du sikker på at du vil ${action} ${member.full_name}?`)) {
-      try {
-        setError(null);
-        const result = await updateMemberRole(memberId, newRole);
-        if (result.error) {
-          throw new Error(result.error);
-        }
-        
-        setMembers(prev => prev.map(m =>
-          m.id === memberId ? { ...m, role: newRole } : m
-        ));
-      } catch (error) {
-        console.error('Error updating member role:', error);
-        setError('Kunne ikke oppdatere medlemsrolle');
-      }
-    }
-  };
+export async function approveMember(memberId: string): Promise<ApiResponse<OrganizationMember>> {
+  return updateOrganizationMember(memberId, { approved: true });
+}
 
-  const handleDeleteMember = async (memberId: string, memberName: string) => {
-    if (!canManageAdmins) return;
+export async function updateMemberRole(
+  memberId: string, 
+  role: 'member' | 'admin' | 'range_officer'
+): Promise<ApiResponse<OrganizationMember>> {
+  return updateOrganizationMember(memberId, { role });
+}
+
+// Training location functions
+export async function getOrganizationTrainingLocations(organizationId: string): Promise<ApiResponse<TrainingLocation[]>> {
+  try {
+    // Default locations for SVPK
+    const defaultLocations: TrainingLocation[] = [
+      {
+        id: 'loc-1',
+        organization_id: organizationId,
+        name: 'Innendørs 25m',
+        qr_code_id: 'svpk-innendors-25m',
+        description: 'Innendørs skytebane 25 meter',
+        active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      {
+        id: 'loc-2',
+        organization_id: organizationId,
+        name: 'Utendørs 25m',
+        qr_code_id: 'svpk-utendors-25m',
+        description: 'Utendørs skytebane 25 meter',
+        active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    ];
     
-    if (window.confirm(`Er du sikker på at du vil slette medlemmet "${memberName}" permanent? Denne handlingen kan ikke angres.`)) {
-      try {
-        setError(null);
-        const result = await deleteOrganizationMember(memberId);
-        
-        if (result.error) {
-          throw new Error(result.error);
-        }
-        
-        setMembers(prev => prev.filter(member => member.id !== memberId));
-      } catch (error) {
-        console.error('Error deleting member:', error);
-        setError('Kunne ikke slette medlem');
+    return { data: defaultLocations };
+  } catch (error) {
+    console.error('Error getting training locations:', error);
+    return { error: 'Kunne ikke hente treningslokasjoner' };
+  }
+}
+
+export async function createTrainingLocation(
+  organizationId: string,
+  locationData: { name: string; qr_code_id: string; description?: string }
+): Promise<ApiResponse<TrainingLocation>> {
+  try {
+    const newLocation: TrainingLocation = {
+      id: crypto.randomUUID(),
+      organization_id: organizationId,
+      name: locationData.name,
+      qr_code_id: locationData.qr_code_id,
+      description: locationData.description,
+      active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    return { data: newLocation };
+  } catch (error) {
+    console.error('Error creating training location:', error);
+    return { error: 'Kunne ikke opprette treningslokasjon' };
+  }
+}
+
+export async function updateTrainingLocation(
+  locationId: string,
+  updates: Partial<TrainingLocation>
+): Promise<ApiResponse<TrainingLocation>> {
+  try {
+    // For demo, return updated location
+    const updatedLocation: TrainingLocation = {
+      id: locationId,
+      organization_id: updates.organization_id || '',
+      name: updates.name || '',
+      qr_code_id: updates.qr_code_id || '',
+      description: updates.description,
+      active: updates.active !== false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    return { data: updatedLocation };
+  } catch (error) {
+    console.error('Error updating training location:', error);
+    return { error: 'Kunne ikke oppdatere treningslokasjon' };
+  }
+}
+
+export async function getTrainingLocationByQR(organizationId: string, qrCode: string): Promise<ApiResponse<TrainingLocation>> {
+  try {
+    const locationsResult = await getOrganizationTrainingLocations(organizationId);
+    if (locationsResult.data) {
+      const location = locationsResult.data.find(loc => loc.qr_code_id === qrCode);
+      if (location) {
+        return { data: location };
       }
     }
-  };
-  
-  const filteredAndSortedMembers = members
-    .filter(member => 
-      member.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (member.member_number || '').includes(searchTerm)
-    )
-    .sort((a, b) => {
-      let comparison = 0;
-      if (sortField === 'created_at') {
-        comparison = new Date(a.created_at!).getTime() - new Date(b.created_at!).getTime();
-      } else if (sortField === 'full_name') {
-        comparison = a.full_name.localeCompare(b.full_name);
+    
+    return { error: `Treningslokasjon ikke funnet for QR-kode: ${qrCode}` };
+  } catch (error) {
+    console.error('Error getting training location by QR:', error);
+    return { error: 'Kunne ikke finne treningslokasjon' };
+  }
+}
+
+// Training session functions
+export async function startTrainingSession(
+  organizationId: string,
+  memberId: string,
+  locationId: string
+): Promise<ApiResponse<MemberTrainingSession>> {
+  try {
+    // Check for existing session today
+    const today = new Date().toDateString();
+    const savedSessions = localStorage.getItem('trainingSessions');
+    
+    if (savedSessions) {
+      const sessions = JSON.parse(savedSessions);
+      const existingToday = sessions.find((session: any) => 
+        session.user_id === memberId && 
+        new Date(session.date).toDateString() === today
+      );
+      
+      if (existingToday) {
+        return { error: 'Du har allerede registrert trening i dag' };
       }
-      return sortDirection === 'asc' ? comparison : -comparison;
+    }
+    
+    // Create new training session
+    const newSession = {
+      id: crypto.randomUUID(),
+      user_id: memberId,
+      organization_id: organizationId,
+      location_id: locationId,
+      date: new Date().toISOString(),
+      start_time: new Date().toISOString(),
+      verified: false,
+      approved: false,
+      manual_entry: false,
+      memberName: 'Medlem',
+      location: 'Skytebane',
+      duration: '2 timer',
+      activity: 'Trening'
+    };
+    
+    // Save to localStorage
+    const sessions = savedSessions ? JSON.parse(savedSessions) : [];
+    sessions.push(newSession);
+    localStorage.setItem('trainingSessions', JSON.stringify(sessions));
+    
+    return { data: newSession as any };
+  } catch (error) {
+    console.error('Error starting training session:', error);
+    return { error: 'Kunne ikke starte treningsøkt' };
+  }
+}
+
+export async function getMemberTrainingSessions(memberId: string): Promise<ApiResponse<MemberTrainingSession[]>> {
+  try {
+    const savedSessions = localStorage.getItem('trainingSessions');
+    if (savedSessions) {
+      const sessions = JSON.parse(savedSessions);
+      const memberSessions = sessions
+        .filter((session: any) => session.user_id === memberId)
+        .map((session: any) => ({
+          id: session.id,
+          organization_id: session.organization_id || '',
+          member_id: memberId,
+          location_id: session.location_id || '',
+          start_time: session.date || session.start_time,
+          end_time: session.end_time,
+          duration_minutes: session.duration_minutes,
+          verified: session.verified || session.approved || false,
+          verified_by: session.verifiedBy || session.rangeOfficer,
+          verification_time: session.verification_time,
+          manual_entry: session.manual_entry || false,
+          notes: session.notes,
+          created_at: session.created_at || session.date,
+          updated_at: session.updated_at || session.date,
+          details: session.details || {
+            training_type: session.training_type,
+            results: session.results,
+            notes: session.notes
+          },
+          target_images: session.target_images || []
+        }));
+      
+      return { data: memberSessions };
+    }
+    
+    return { data: [] };
+  } catch (error) {
+    console.error('Error getting member training sessions:', error);
+    return { error: 'Kunne ikke hente treningsøkter' };
+  }
+}
+
+export async function getOrganizationTrainingSessions(organizationId: string): Promise<ApiResponse<MemberTrainingSession[]>> {
+  try {
+    const savedSessions = localStorage.getItem('trainingSessions');
+    if (savedSessions) {
+      const sessions = JSON.parse(savedSessions);
+      const orgSessions = sessions
+        .filter((session: any) => session.organization_id === organizationId)
+        .map((session: any) => ({
+          id: session.id,
+          organization_id: organizationId,
+          member_id: session.user_id || session.member_id,
+          location_id: session.location_id || '',
+          start_time: session.date || session.start_time,
+          end_time: session.end_time,
+          duration_minutes: session.duration_minutes,
+          verified: session.verified || session.approved || false,
+          verified_by: session.verifiedBy || session.rangeOfficer,
+          verification_time: session.verification_time,
+          manual_entry: session.manual_entry || false,
+          notes: session.notes,
+          created_at: session.created_at || session.date,
+          updated_at: session.updated_at || session.date,
+          member: {
+            id: session.user_id || session.member_id,
+            full_name: session.memberName || 'Ukjent medlem',
+            member_number: session.memberNumber || '',
+            email: '',
+            organization_id: organizationId,
+            role: 'member',
+            approved: true,
+            active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          },
+          location: {
+            id: session.location_id || '',
+            name: session.location || session.rangeName || 'Ukjent lokasjon',
+            qr_code_id: '',
+            organization_id: organizationId,
+            active: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+        }));
+      
+      return { data: orgSessions };
+    }
+    
+    return { data: [] };
+  } catch (error) {
+    console.error('Error getting organization training sessions:', error);
+    return { error: 'Kunne ikke hente treningsøkter' };
+  }
+}
+
+export async function verifyTrainingSession(sessionId: string, verifiedBy: string): Promise<ApiResponse<void>> {
+  try {
+    const savedSessions = localStorage.getItem('trainingSessions');
+    if (savedSessions) {
+      const sessions = JSON.parse(savedSessions);
+      const updatedSessions = sessions.map((session: any) =>
+        session.id === sessionId ? {
+          ...session,
+          verified: true,
+          approved: true,
+          verifiedBy,
+          rangeOfficer: verifiedBy,
+          verification_time: new Date().toISOString()
+        } : session
+      );
+      localStorage.setItem('trainingSessions', JSON.stringify(updatedSessions));
+    }
+    
+    return { data: undefined };
+  } catch (error) {
+    console.error('Error verifying training session:', error);
+    return { error: 'Kunne ikke verifisere treningsøkt' };
+  }
+}
+
+export async function addManualTrainingSession(
+  organizationId: string,
+  memberId: string,
+  locationId: string,
+  sessionData: { date: string; activity: string; notes?: string },
+  verifiedBy: string
+): Promise<ApiResponse<MemberTrainingSession>> {
+  try {
+    const newSession = {
+      id: crypto.randomUUID(),
+      user_id: memberId,
+      member_id: memberId,
+      organization_id: organizationId,
+      location_id: locationId,
+      date: sessionData.date,
+      start_time: sessionData.date,
+      activity: sessionData.activity,
+      notes: sessionData.notes,
+      verified: true,
+      approved: true,
+      verifiedBy,
+      rangeOfficer: verifiedBy,
+      manual_entry: true,
+      duration: '2 timer',
+      location: 'Manuell registrering',
+      memberName: 'Medlem',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    // Save to localStorage
+    const savedSessions = localStorage.getItem('trainingSessions');
+    const sessions = savedSessions ? JSON.parse(savedSessions) : [];
+    sessions.push(newSession);
+    localStorage.setItem('trainingSessions', JSON.stringify(sessions));
+    
+    return { data: newSession as any };
+  } catch (error) {
+    console.error('Error adding manual training session:', error);
+    return { error: 'Kunne ikke legge til manuell treningsøkt' };
+  }
+}
+
+export async function updateTrainingDetails(
+  sessionId: string,
+  details: TrainingSessionDetails
+): Promise<ApiResponse<void>> {
+  try {
+    const savedSessions = localStorage.getItem('trainingSessions');
+    if (savedSessions) {
+      const sessions = JSON.parse(savedSessions);
+      const updatedSessions = sessions.map((session: any) =>
+        session.id === sessionId ? {
+          ...session,
+          details,
+          training_type: details.training_type,
+          results: details.results,
+          notes: details.notes,
+          updated_at: new Date().toISOString()
+        } : session
+      );
+      localStorage.setItem('trainingSessions', JSON.stringify(updatedSessions));
+    }
+    
+    return { data: undefined };
+  } catch (error) {
+    console.error('Error updating training details:', error);
+    return { error: 'Kunne ikke oppdatere treningsdetaljer' };
+  }
+}
+
+// File upload functions
+export async function uploadProfileImage(file: File, userId: string): Promise<string> {
+  try {
+    // Convert to base64 for localStorage demo
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const imageUrl = e.target?.result as string;
+        resolve(imageUrl);
+      };
+      reader.onerror = () => reject(new Error('Kunne ikke lese filen'));
+      reader.readAsDataURL(file);
     });
+  } catch (error) {
+    console.error('Error uploading profile image:', error);
+    throw new Error('Kunne ikke laste opp profilbilde');
+  }
+}
 
-  const pendingMembers = filteredAndSortedMembers.filter(member => !member.approved);
-  const approvedMembers = filteredAndSortedMembers.filter(member => member.approved);
+export async function uploadStartkortPDF(file: File, userId: string): Promise<string> {
+  try {
+    // Convert to base64 for localStorage demo
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const fileUrl = e.target?.result as string;
+        resolve(fileUrl);
+      };
+      reader.onerror = () => reject(new Error('Kunne ikke lese filen'));
+      reader.readAsDataURL(file);
+    });
+  } catch (error) {
+    console.error('Error uploading startkort PDF:', error);
+    throw new Error('Kunne ikke laste opp startkort');
+  }
+}
 
-  const totalPages = Math.ceil(approvedMembers.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentApprovedMembers = approvedMembers.slice(startIndex, endIndex);
+export async function uploadDiplomaPDF(file: File, userId: string): Promise<string> {
+  try {
+    // Convert to base64 for localStorage demo
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const fileUrl = e.target?.result as string;
+        resolve(fileUrl);
+      };
+      reader.onerror = () => reject(new Error('Kunne ikke lese filen'));
+      reader.readAsDataURL(file);
+    });
+  } catch (error) {
+    console.error('Error uploading diploma PDF:', error);
+    throw new Error('Kunne ikke laste opp diplom');
+  }
+}
 
-  return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-svpk-yellow">{t('admin.member_management')}</h2>
-          <p className="text-gray-400">
-            {t('admin.description')}
-          </p>
-        </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="btn-primary"
-        >
-          <PlusCircle className="w-5 h-5" />
-          {t('admin.add_member')}
-        </button>
-      </div>
+export async function uploadTargetImage(file: File, sessionId: string): Promise<string> {
+  try {
+    // Convert to base64 for localStorage demo
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const imageUrl = e.target?.result as string;
+        resolve(imageUrl);
+      };
+      reader.onerror = () => reject(new Error('Kunne ikke lese filen'));
+      reader.readAsDataURL(file);
+    });
+  } catch (error) {
+    console.error('Error uploading target image:', error);
+    throw new Error('Kunne ikke laste opp målbilde');
+  }
+}
 
-      <div className="card space-y-6">
-        <div className="flex items-center gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder={t('admin.search_members')}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-gray-700 rounded-lg pl-10 pr-4 py-2"
-              />
-            </div>
-          </div>
-        </div>
+export async function updateOrganizationLogo(organizationId: string, file: File): Promise<ApiResponse<string>> {
+  try {
+    // Convert to base64 for localStorage demo
+    const logoUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const imageUrl = e.target?.result as string;
+        resolve(imageUrl);
+      };
+      reader.onerror = () => reject(new Error('Kunne ikke lese filen'));
+      reader.readAsDataURL(file);
+    });
+    
+    // Update organization in localStorage
+    const savedOrgs = localStorage.getItem('organizations');
+    if (savedOrgs) {
+      const organizations = JSON.parse(savedOrgs);
+      const updatedOrganizations = organizations.map((org: any) =>
+        org.id === organizationId ? { ...org, logo_url: logoUrl, updated_at: new Date().toISOString() } : org
+      );
+      localStorage.setItem('organizations', JSON.stringify(updatedOrganizations));
+    }
+    
+    return { data: logoUrl };
+  } catch (error) {
+    console.error('Error updating organization logo:', error);
+    return { error: 'Kunne ikke oppdatere logo' };
+  }
+}
 
-        {error && (
-          <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg flex items-center gap-2 text-red-200">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <p className="text-sm">{error}</p>
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-svpk-yellow">
-            {t('admin.pending_approvals')} ({pendingMembers.length})
-          </h3>
-          
-          {pendingMembers.length === 0 ? (
-            <p className="text-gray-400 text-center py-4">
-              {t('admin.no_pending_members')}
-            </p>
-          ) : (
-            <>
-              <div className="flex justify-end mb-4">
-                <button
-                  onClick={handleApproveAll}
-                  className="btn-primary flex items-center gap-2"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  {t('admin.approve_all')} ({pendingMembers.length})
-                </button>
-              </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-700">
-                    <th 
-                      className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base"
-                      onClick={() => handleSort('full_name')}
-                    >
-                      <div className="flex items-center gap-2">
-                        {t('admin.name')}
-                        {sortField === 'full_name' && (
-                          sortDirection === 'asc' ? 
-                            <ChevronUp className="w-4 h-4" /> : 
-                            <ChevronDown className="w-4 h-4" />
-                        )}
-                      </div>
-                    </th>
-                    <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base hidden sm:table-cell">{t('admin.email')}</th>
-                    <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base">{t('admin.member_id')}</th>
-                    <th 
-                      className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base hidden md:table-cell"
-                      onClick={() => handleSort('created_at')}
-                    >
-                      <div className="flex items-center gap-2">
-                        {t('admin.registered')}
-                        {sortField === 'created_at' && (
-                          sortDirection === 'asc' ? 
-                            <ChevronUp className="w-4 h-4" /> : 
-                            <ChevronDown className="w-4 h-4" />
-                        )}
-                      </div>
-                    </th>
-                    {canManageAdmins && <th className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">{t('admin.role')}</th>}
-                    }
-                    <th className="py-2 px-2 sm:py-3 sm:px-4 text-right text-sm sm:text-base">{t('admin.actions')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingMembers.map((member) => (
-                    <tr key={member.id} className="border-b border-gray-700">
-                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">
-                        <div>
-                          <div className="font-medium">{member.full_name}</div>
-                          <div className="text-xs text-gray-400 sm:hidden">{member.email}</div>
-                        </div>
-                      </td>
-                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden sm:table-cell">{member.email}</td>
-                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">{member.member_number}</td>
-                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden md:table-cell">
-                        {format(new Date(member.created_at!), 'dd.MM.yyyy')}
-                      </td>
-                      {canManageAdmins && (
-                        <td className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            member.role === 'admin' 
-                              ? 'bg-svpk-yellow text-black' 
-                              : 'bg-gray-600 text-gray-300'
-                          }`}>
-                            {member.role === 'admin' ? t('admin.admin_role') : t('admin.user_role')}
-                          </span>
-                        </td>
-                      )}
-                      <td className="py-2 px-2 sm:py-3 sm:px-4">
-                        <div className="flex justify-end items-center gap-1 sm:gap-2">
-                          <button
-                            onClick={() => handleApprove(member.id)}
-                            className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-green-400"
-                            title={t('admin.approve_member')}
-                          >
-                            <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </button>
-                          {canManageAdmins && (
-                            <button
-                              onClick={() => handleToggleAdmin(member.id)}
-                              className={`p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors ${
-                                member.role === 'admin' ? 'text-svpk-yellow' : 'text-gray-400'
-                              }`}
-                              title={t('admin.toggle_admin')}
-                            >
-                              {member.role === 'admin' ? <Shield className="w-4 h-4 sm:w-5 sm:h-5" /> : <ShieldOff className="w-4 h-4 sm:w-5 sm:h-5" />}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setEditingMember(member)}
-                            className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors"
-                            title={t('admin.edit_member')}
-                          >
-                            <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteMember(member.id, member.full_name)}
-                            className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-red-400"
-                            title="Slett medlem"
-                          >
-                            <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            </>
-          )}
-        </div>
-
-        <div>
-          <h3 className="text-lg font-semibold">
-            Godkjente medlemmer ({approvedMembers.length})
-          </h3>
-          
-          <div>
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-700">
-                  <th 
-                    className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base"
-                    onClick={() => handleSort('full_name')}
-                  >
-                    <div className="flex items-center gap-2">
-                      {t('admin.name')}
-                      {sortField === 'full_name' && (
-                        sortDirection === 'asc' ? 
-                          <ChevronUp className="w-4 h-4" /> : 
-                          <ChevronDown className="w-4 h-4" />
-                      )}
-                    </div>
-                  </th>
-                  <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base hidden sm:table-cell">{t('admin.email')}</th>
-                  <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base">{t('admin.member_id')}</th>
-                  <th 
-                    className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base hidden md:table-cell"
-                    onClick={() => handleSort('created_at')}
-                  >
-                    <div className="flex items-center gap-2">
-                      {t('admin.registered')}
-                      {sortField === 'created_at' && (
-                        sortDirection === 'asc' ? 
-                          <ChevronUp className="w-4 h-4" /> : 
-                          <ChevronDown className="w-4 h-4" />
-                      )}
-                    </div>
-                  </th>
-                  {canManageAdmins && <th className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">{t('admin.role')}</th>}
-                  }
-                  <th className="py-2 px-2 sm:py-3 sm:px-4 text-right text-sm sm:text-base">{t('admin.actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentApprovedMembers.map((member) => (
-                  <tr key={member.id} className="border-b border-gray-700">
-                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">
-                      <div>
-                        <div className="font-medium">{member.full_name}</div>
-                        <div className="text-xs text-gray-400 sm:hidden">{member.email}</div>
-                        <div className="text-xs text-gray-400 md:hidden">
-                          {format(new Date(member.created_at!), 'dd.MM.yyyy')}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden sm:table-cell">{member.email}</td>
-                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">{member.member_number}</td>
-                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden md:table-cell">
-                      {format(new Date(member.created_at!), 'dd.MM.yyyy')}
-                    </td>
-                    {canManageAdmins && (
-                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          member.role === 'admin' 
-                            ? 'bg-svpk-yellow text-black' 
-                            : 'bg-gray-600 text-gray-300'
-                        }`}>
-                          {member.role === 'admin' ? t('admin.admin_role') : t('admin.user_role')}
-                        </span>
-                      </td>
-                    )}
-                    <td className="py-2 px-2 sm:py-3 sm:px-4">
-                      <div className="flex justify-end items-center gap-1 sm:gap-2">
-                        <button
-                          onClick={() => handleUnapprove(member.id)}
-                          className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-green-400"
-                          title={t('admin.unapprove_member')}
-                        >
-                          <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </button>
-                        {canManageAdmins && (
-                          <button
-                            onClick={() => handleToggleAdmin(member.id)}
-                            className={`p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors ${
-                              member.role === 'admin' ? 'text-svpk-yellow' : 'text-gray-400'
-                            }`}
-                            title={t('admin.toggle_admin')}
-                          >
-                            {member.role === 'admin' ? <Shield className="w-4 h-4 sm:w-5 sm:h-5" /> : <ShieldOff className="w-4 h-4 sm:w-5 sm:h-5" />}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setEditingMember(member)}
-                          className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors"
-                          title={t('admin.edit_member')}
-                        >
-                          <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                        </button>
-                        {canManageAdmins && (
-                          <button
-                            onClick={() => handleDeleteMember(member.id, member.full_name)}
-                            className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-red-400"
-                            title="Slett medlem"
-                          >
-                            <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex justify-between items-center pt-4">
-            <div className="text-sm text-gray-400">
-              {t('admin.showing_members', { 
-                start: startIndex + 1, 
-                end: Math.min(endIndex, approvedMembers.length), 
-                total: approvedMembers.length 
-              })}
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="btn-secondary"
-              >
-                {t('admin.previous')}
-              </button>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-                className="btn-secondary"
-              >
-                {t('admin.next')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {showAddModal && (
-        <AddMemberModal
-          onClose={() => setShowAddModal(false)}
-          onAdd={handleAddMember}
-        />
-      )}
-
-      {editingMember && (
-        <EditModal
-          member={editingMember}
-          onClose={() => setEditingMember(null)}
-          onSave={handleSaveEdit}
-        />
-      )}
-    </div>
-  );
+export async function createOrganization(orgData: any): Promise<ApiResponse<Organization>> {
+  try {
+    const newOrganization: Organization = {
+      id: crypto.randomUUID(),
+      name: orgData.name,
+      slug: orgData.slug,
+      description: orgData.description,
+      website: orgData.website,
+      email: orgData.email,
+      phone: orgData.phone,
+      address: orgData.address,
+      logo_url: null,
+      primary_color: orgData.primary_color || '#FFD700',
+      secondary_color: orgData.secondary_color || '#1F2937',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      active: true
+    };
+    
+    // Save to localStorage
+    const savedOrgs = localStorage.getItem('organizations');
+    const organizations = savedOrgs ? JSON.parse(savedOrgs) : [];
+    organizations.push(newOrganization);
+    localStorage.setItem('organizations', JSON.stringify(organizations));
+    
+    return { data: newOrganization };
+  } catch (error) {
+    console.error('Error creating organization:', error);
+    return { error: 'Kunne ikke opprette organisasjon' };
+  }
 }
