@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Search, ChevronUp, ChevronDown, XCircle, CheckCircle, AlertCircle, Edit2, PlusCircle, Shield, ShieldOff, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
-import { getOrganizationMembers, approveMember, updateMemberRole, addOrganizationMember, updateOrganizationMember, deleteOrganizationMember, supabase } from '../lib/supabase';
+import { getOrganizationMembers, approveMember, updateMemberRole, addOrganizationMember, updateOrganizationMember, deleteOrganizationMember } from '../lib/supabase';
 import { sendMemberApprovalEmail, generateLoginUrl } from '../lib/emailService';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { isAdmin, canManageMembers } from '../lib/authHelpers';
 import type { OrganizationMember } from '../lib/types';
 
 interface MemberManagementProps {
@@ -263,8 +264,7 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
   const itemsPerPage = 25;
 
   // Check if current user can manage admin roles - only admins and super users
-  const canManageAdmins = user?.user_type === 'super_user' || 
-                          (user?.member_profile?.role === 'admin');
+  const canManageAdmins = canManageMembers(user);
 
   // Load members from database
   React.useEffect(() => {
@@ -279,6 +279,12 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
         }
         
         setMembers(result.data || []);
+        
+        // Update member count for parent component
+        if (onMemberCountChange && result.data) {
+          const pendingCount = result.data.filter(member => !member.approved).length;
+          onMemberCountChange(pendingCount);
+        }
       } catch (error) {
         console.error('Error loading members:', error);
         setError('Kunne ikke laste medlemmer');
@@ -289,15 +295,12 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
     };
 
     loadMembers();
+    
+    // Refresh every 30 seconds
+    const interval = setInterval(loadMembers, 30000);
+    
+    return () => clearInterval(interval);
   }, [organization?.id]);
-
-  // Update member count when members change
-  React.useEffect(() => {
-    if (onMemberCountChange) {
-      const pendingCount = members.filter(member => !member.approved).length;
-      onMemberCountChange(pendingCount);
-    }
-  }, [members]);
 
   const handleSort = (field: 'created_at' | 'full_name') => {
     if (sortField === field) {
@@ -324,28 +327,32 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
         m.id === memberId ? { ...m, approved: true } : m
       ));
 
-      // TODO: Re-enable email sending when Edge Function is configured
-      // const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4).toUpperCase();
-      // if (organization) {
-      //   const loginUrl = generateLoginUrl(organization.slug);
-      //   const adminName = user?.member_profile?.full_name || user?.super_user_profile?.full_name || 'Administrator';
-      //   
-      //   const emailResult = await sendMemberApprovalEmail(
-      //     member.email,
-      //     member.full_name,
-      //     organization.name,
-      //     organization.id,
-      //     tempPassword,
-      //     loginUrl,
-      //     adminName
-      //   );
-      //   
-      //   if (!emailResult.success) {
-      //     console.warn('Approval email failed:', emailResult.error);
-      //     setError(`Medlem godkjent, men e-post kunne ikke sendes.`);
-      //     setTimeout(() => setError(null), 5000);
-      //   }
-      // }
+      // Send approval email
+      try {
+        if (organization) {
+          const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4).toUpperCase();
+          const loginUrl = generateLoginUrl(organization.slug);
+          const adminName = user?.member_profile?.full_name || user?.super_user_profile?.full_name || 'Administrator';
+          
+          const emailResult = await sendMemberApprovalEmail(
+            member.email,
+            member.full_name,
+            organization.name,
+            organization.id,
+            tempPassword,
+            loginUrl,
+            adminName
+          );
+          
+          if (!emailResult.success) {
+            console.warn('Approval email failed:', emailResult.error);
+            setError(`Medlem godkjent, men e-post kunne ikke sendes: ${emailResult.error}`);
+            setTimeout(() => setError(null), 5000);
+          }
+        }
+      } catch (emailError) {
+        console.warn('Email service error:', emailError);
+      }
     } catch (error) {
       console.error('Error approving member:', error);
       setError(error instanceof Error ? error.message : 'Kunne ikke godkjenne medlem');

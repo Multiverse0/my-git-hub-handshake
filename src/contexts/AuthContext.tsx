@@ -139,6 +139,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       
+      // If organizationSlug is provided, set organization context first
+      if (organizationSlug) {
+        try {
+          await setOrganizationContext(organizationSlug);
+        } catch (orgError) {
+          console.warn('Could not set organization context:', orgError);
+        }
+      }
+      
       const result = await authenticateUser(email, password);
       
       if (result.error) {
@@ -160,6 +169,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Load branding
           const brandingData = await getOrganizationBranding(user.organization.id);
           setBranding(brandingData);
+        } else if (organizationSlug && user.user_type === 'super_user') {
+          // Super users can access any organization
+          try {
+            const orgResult = await getOrganizationBySlug(organizationSlug);
+            if (orgResult.data) {
+              setOrganization(orgResult.data);
+              const brandingData = await getOrganizationBranding(orgResult.data.id);
+              setBranding(brandingData);
+            }
+          } catch (error) {
+            console.warn('Could not load organization for super user:', error);
+          }
         }
         
         // Handle remember me
@@ -187,7 +208,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(result.error);
       }
 
-      // Registration successful - user is created but needs admin approval
+      // Registration successful - member is created but needs admin approval
+      // Don't automatically log them in, they need approval first
       
     } catch (error) {
       console.error('Registration error:', error);

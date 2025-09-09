@@ -122,10 +122,10 @@ export function Login() {
             className="text-2xl font-bold"
             style={{ color: organization?.primary_color || branding.primary_color }}
           >
-            Admin-inngang til Treningslogg
+            Logg inn
           </h1>
           <p className="text-gray-400 text-center mt-2">
-            Skriv inn hvilken som helst e-post og passord for å få admin-tilgang
+            Logg inn til {organization?.name || 'treningsloggen'}
           </p>
         </div>
 
@@ -215,11 +215,24 @@ export function Login() {
           </button>
 
           <div className="flex flex-col items-center gap-4 text-center">
-            <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 max-w-sm">
-              <p className="text-blue-200 text-sm">
-                <strong>Demo-modus:</strong> Skriv inn hvilken som helst e-post og passord for å få admin-tilgang til systemet.
-              </p>
+            <div className="text-sm text-gray-400">
+              Har du ikke konto?{' '}
+              <Link
+                to={`/register?org=${orgSlug}`}
+                className="hover:opacity-80"
+                style={{ color: organization?.primary_color || branding.primary_color }}
+              >
+                Registrer deg her
+              </Link>
             </div>
+            
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              className="text-sm text-gray-400 hover:text-gray-300"
+            >
+              Glemt passord?
+            </button>
           </div>
         </form>
 

@@ -48,16 +48,19 @@ function App() {
   const { needsSetup, checkSetupStatus } = useAuth();
 
   const handleSetupComplete = async () => {
+    console.log('🎉 Setup completed, checking status...');
     await checkSetupStatus();
   };
 
   // Show setup page if no super users exist
   if (needsSetup) {
+    console.log('🔧 Showing setup page - no super users exist');
     return (
       <SuperUserSetup onSetupComplete={handleSetupComplete} />
     );
   }
 
+  console.log('✅ Setup complete, showing main app');
   return (
     <ThemeProvider>
       <BrowserRouter>

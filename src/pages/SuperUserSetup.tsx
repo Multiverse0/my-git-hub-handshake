@@ -38,6 +38,8 @@ export function SuperUserSetup({ onSetupComplete }: SuperUserSetupProps) {
       setIsLoading(true);
       setError(null);
 
+      console.log('🔧 Creating first super user...');
+      
       const result = await createFirstSuperUser(email, password, fullName);
       
       if (result.error) {
@@ -45,8 +47,11 @@ export function SuperUserSetup({ onSetupComplete }: SuperUserSetupProps) {
         return;
       }
 
+      console.log('✅ Super user created successfully');
+      
       // Auto-login the new super user
       try {
+        console.log('🔐 Auto-logging in super user...');
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password
@@ -54,6 +59,8 @@ export function SuperUserSetup({ onSetupComplete }: SuperUserSetupProps) {
         
         if (signInError) {
           console.warn('Auto-login failed:', signInError);
+        } else {
+          console.log('✅ Auto-login successful');
         }
       } catch (autoLoginError) {
         console.warn('Auto-login error:', autoLoginError);
@@ -62,6 +69,7 @@ export function SuperUserSetup({ onSetupComplete }: SuperUserSetupProps) {
       // Setup complete
       onSetupComplete();
     } catch (error) {
+      console.error('❌ Super user creation failed:', error);
       setError('Det oppstod en feil ved opprettelse av super-bruker');
     } finally {
       setIsLoading(false);

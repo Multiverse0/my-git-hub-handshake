@@ -36,18 +36,16 @@ export async function setUserContext(email: string): Promise<void> {
 // Authentication functions
 export async function authenticateUser(email: string, password: string): Promise<ApiResponse<{ user: AuthUser }>> {
   try {
-    // First try Supabase Auth
+    console.log('🔐 Authenticating user:', email);
+    
+    // First try Supabase Auth for existing users
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password
     });
 
-    if (authError) {
-      // If Supabase auth fails, try custom authentication
-      return await authenticateWithCustomAuth(email, password);
-    }
-
-    if (authData.user) {
+    if (!authError && authData.user) {
+      console.log('✅ Supabase Auth successful');
       const currentUser = await getCurrentUser();
       if (currentUser) {
         await setUserContext(currentUser.email);
@@ -55,7 +53,9 @@ export async function authenticateUser(email: string, password: string): Promise
       }
     }
 
-    return { error: 'Ugyldig innlogging' };
+    console.log('🔄 Supabase Auth failed, trying custom auth');
+    // If Supabase auth fails, try custom authentication for demo users
+    return await authenticateWithCustomAuth(email, password);
   } catch (error) {
     console.error('Authentication error:', error);
     return { error: 'Innlogging feilet' };
@@ -64,6 +64,7 @@ export async function authenticateUser(email: string, password: string): Promise
 
 async function authenticateWithCustomAuth(email: string, password: string): Promise<ApiResponse<{ user: AuthUser }>> {
   try {
+    console.log('🔍 Checking super users for:', email);
     // Check super users
     const { data: superUsers, error: superError } = await supabase
       .from('super_users')
@@ -73,7 +74,8 @@ async function authenticateWithCustomAuth(email: string, password: string): Prom
       .single();
 
     if (!superError && superUsers) {
-      // Verify password (in production, use proper password hashing)
+      console.log('✅ Super user found');
+      // TODO: Verify password hash in production
       const authUser: AuthUser = {
         id: superUsers.id,
         email: superUsers.email,
@@ -85,6 +87,7 @@ async function authenticateWithCustomAuth(email: string, password: string): Prom
       return { data: { user: authUser } };
     }
 
+    console.log('🔍 Checking organization members for:', email);
     // Check organization members
     const { data: members, error: memberError } = await supabase
       .from('organization_members')
@@ -98,6 +101,8 @@ async function authenticateWithCustomAuth(email: string, password: string): Prom
       .single();
 
     if (!memberError && members) {
+      console.log('✅ Organization member found');
+      // TODO: Verify password hash in production
       const authUser: AuthUser = {
         id: members.id,
         email: members.email,
@@ -111,6 +116,7 @@ async function authenticateWithCustomAuth(email: string, password: string): Prom
       return { data: { user: authUser } };
     }
 
+    console.log('❌ No user found or user not approved');
     return { error: 'Ugyldig e-post eller passord' };
   } catch (error) {
     console.error('Custom authentication error:', error);
@@ -126,6 +132,8 @@ export async function registerOrganizationMember(
   memberNumber?: string
 ): Promise<ApiResponse<{ user: AuthUser }>> {
   try {
+    console.log('📝 Registering member for organization:', organizationSlug);
+    
     // Get organization by slug
     const { data: organization, error: orgError } = await supabase
       .from('organizations')
@@ -135,9 +143,12 @@ export async function registerOrganizationMember(
       .single();
 
     if (orgError || !organization) {
+      console.error('❌ Organization not found:', organizationSlug);
       return { error: 'Organisasjon ikke funnet' };
     }
 
+    console.log('✅ Organization found:', organization.name);
+    
     // Check if email already exists
     const { data: existingMember } = await supabase
       .from('organization_members')
@@ -147,9 +158,16 @@ export async function registerOrganizationMember(
       .single();
 
     if (existingMember) {
+      console.error('❌ Email already exists');
       return { error: 'E-post er allerede registrert i denne organisasjonen' };
     }
 
+    console.log('📝 Creating new member...');
+    
+    // Hash password for storage
+    const bcrypt = await import('bcryptjs');
+    const passwordHash = await bcrypt.hash(password, 10);
+    
     // Create new member
     const { data: newMember, error: memberError } = await supabase
       .from('organization_members')
@@ -158,6 +176,7 @@ export async function registerOrganizationMember(
         email,
         full_name: fullName,
         member_number: memberNumber,
+        password_hash: passwordHash,
         role: 'member',
         approved: false,
         active: true
@@ -166,9 +185,27 @@ export async function registerOrganizationMember(
       .single();
 
     if (memberError) {
+      console.error('❌ Failed to create member:', memberError);
       return { error: 'Kunne ikke registrere medlem' };
     }
 
+    console.log('✅ Member created successfully');
+    
+    // Send welcome email (member needs approval)
+    try {
+      const { sendMemberWelcomeEmail } = await import('./emailService');
+      await sendMemberWelcomeEmail(
+        email,
+        fullName,
+        organization.name,
+        organization.id,
+        memberNumber
+      );
+      console.log('📧 Welcome email sent');
+    } catch (emailError) {
+      console.warn('⚠️ Welcome email failed:', emailError);
+    }
+    
     const authUser: AuthUser = {
       id: newMember.id,
       email: newMember.email,

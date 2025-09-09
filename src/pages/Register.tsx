@@ -1,16 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { Shield, Mail, Lock, User, Hash, Loader2, AlertCircle, ArrowLeft, ExternalLink } from 'lucide-react';
+import { Shield, Mail, Lock, User, Hash, Loader2, AlertCircle, ArrowLeft, ExternalLink, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getOrganizationBySlug } from '../lib/supabase';
-import { sendMemberWelcomeEmail } from '../lib/emailService';
 import type { Organization } from '../lib/types';
-
-import { CheckCircle } from 'lucide-react';
 
 export function Register() {
   const navigate = useNavigate();
-  const { register, login, branding } = useAuth();
+  const { register, branding } = useAuth();
   const [searchParams] = useSearchParams();
   const orgSlug = searchParams.get('org') || 'svpk';
   
@@ -34,9 +31,12 @@ export function Register() {
         const result = await getOrganizationBySlug(orgSlug);
         if (result.data) {
           setOrganization(result.data);
+        } else {
+          setError('Organisasjon ikke funnet. Sjekk at URL-en er korrekt.');
         }
       } catch (error) {
         console.error('Error loading organization:', error);
+        setError('Kunne ikke laste organisasjonsinformasjon');
       } finally {
         setLoadingOrg(false);
       }
@@ -66,6 +66,11 @@ export function Register() {
       return;
     }
 
+    if (!organization) {
+      setError('Organisasjon ikke funnet');
+      return;
+    }
+
     try {
       setIsLoading(true);
       await register(
@@ -89,6 +94,40 @@ export function Register() {
     }
   };
 
+  if (loadingOrg) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 text-yellow-500 animate-spin mx-auto mb-4" />
+          <p className="text-gray-400">Laster organisasjonsinformasjon...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!organization) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+        <div className="bg-gray-800 rounded-lg p-8 max-w-md w-full text-center">
+          <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-red-400 mb-4">
+            Organisasjon ikke funnet
+          </h1>
+          <p className="text-gray-300 mb-6">
+            Organisasjonen med kode "{orgSlug}" eksisterer ikke eller er ikke aktiv.
+          </p>
+          <Link
+            to="/login"
+            className="btn-primary inline-flex items-center justify-center"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Tilbake til innlogging
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (registrationSubmitted) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
@@ -98,14 +137,22 @@ export function Register() {
           </div>
           <h1 
             className="text-2xl font-bold mb-4"
-            style={{ color: organization?.primary_color || branding.primary_color }}
+            style={{ color: organization.primary_color }}
           >
             Registrering Mottatt
           </h1>
           <p className="text-gray-300 mb-6">
-            Din registrering er nå sendt til godkjenning. Du vil motta en e-post når 
-            kontoen din er aktivert av en administrator.
+            Din registrering som medlem i <strong>{organization.name}</strong> er nå sendt til godkjenning. 
+            Du vil motta en e-post når kontoen din er aktivert av en administrator.
           </p>
+          <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 mb-6">
+            <h3 className="font-medium text-blue-400 mb-2">Hva skjer nå?</h3>
+            <ol className="text-sm text-blue-200 space-y-1 text-left">
+              <li>1. En administrator vil gjennomgå din registrering</li>
+              <li>2. Du får e-post når medlemskapet er godkjent</li>
+              <li>3. Du kan da logge inn og begynne å bruke systemet</li>
+            </ol>
+          </div>
           <Link
             to={`/login?org=${orgSlug}`}
             className="btn-primary inline-flex items-center justify-center"
@@ -122,40 +169,39 @@ export function Register() {
     <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
       <div className="bg-gray-800 rounded-lg p-8 max-w-md w-full">
         <div className="flex flex-col items-center mb-8">
-          {loadingOrg ? (
-            <div className="h-16 w-32 bg-gray-700 animate-pulse rounded mb-6"></div>
-          ) : organization?.logo_url ? (
+          {organization.logo_url ? (
             <img 
               src={organization.logo_url} 
               alt={`${organization.name} Logo`} 
               className="h-16 max-w-[200px] object-contain mb-6"
+              crossOrigin="anonymous"
             />
           ) : (
             <div 
               className="h-16 px-6 flex items-center rounded font-bold text-2xl mb-6"
               style={{ 
-                backgroundColor: organization?.primary_color || branding.primary_color, 
-                color: organization?.secondary_color || branding.secondary_color 
+                backgroundColor: organization.primary_color, 
+                color: organization.secondary_color 
               }}
             >
-              {(organization?.name || branding.organization_name).split(' ').map(word => word[0]).join('').toUpperCase()}
+              {organization.name.split(' ').map(word => word[0]).join('').toUpperCase()}
             </div>
           )}
           <h1 
             className="text-2xl font-bold"
-            style={{ color: organization?.primary_color || branding.primary_color }}
+            style={{ color: organization.primary_color }}
           >
-            Registrer ny bruker
+            Bli medlem av {organization.name}
           </h1>
           <p className="text-gray-400 text-center mt-2">
-            Opprett en konto hos {organization?.name || 'organisasjonen'}
+            Registrer deg som nytt medlem
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
-              Fullt navn
+              Fullt navn *
             </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -166,13 +212,14 @@ export function Register() {
                 className="w-full bg-gray-700 rounded-lg pl-10 pr-4 py-2"
                 placeholder="Ola Nordmann"
                 disabled={isLoading}
+                required
               />
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
-              E-post
+              E-post *
             </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -183,6 +230,7 @@ export function Register() {
                 className="w-full bg-gray-700 rounded-lg pl-10 pr-4 py-2"
                 placeholder="navn@example.com"
                 disabled={isLoading}
+                required
               />
             </div>
           </div>
@@ -190,14 +238,14 @@ export function Register() {
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-sm font-medium text-gray-300">
-                Skytter ID
+                Skytter ID *
               </label>
               <a
                 href="https://app.skyting.no/user"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sm hover:opacity-80 flex items-center gap-1"
-                style={{ color: organization?.primary_color || branding.primary_color }}
+                style={{ color: organization.primary_color }}
               >
                 <span>Finn din ID</span>
                 <ExternalLink className="w-3 h-3" />
@@ -212,13 +260,17 @@ export function Register() {
                 className="w-full bg-gray-700 rounded-lg pl-10 pr-4 py-2"
                 placeholder="12345"
                 disabled={isLoading}
+                required
               />
             </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Finn din Skytter ID på skyting.no under "Min profil"
+            </p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
-              Passord
+              Passord *
             </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -227,15 +279,17 @@ export function Register() {
                 value={formData.password}
                 onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
                 className="w-full bg-gray-700 rounded-lg pl-10 pr-4 py-2"
-                placeholder="••••••••"
+                placeholder="Minst 8 tegn"
                 disabled={isLoading}
+                required
+                minLength={8}
               />
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
-              Bekreft passord
+              Bekreft passord *
             </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -244,8 +298,9 @@ export function Register() {
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
                 className="w-full bg-gray-700 rounded-lg pl-10 pr-4 py-2"
-                placeholder="••••••••"
+                placeholder="Gjenta passordet"
                 disabled={isLoading}
+                required
               />
             </div>
           </div>
@@ -255,7 +310,8 @@ export function Register() {
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <p className="text-sm">{error}</p>
             </div>
-          )} ```
+          )}
+
           <button
             type="submit"
             className="btn-primary w-full"
@@ -267,26 +323,34 @@ export function Register() {
                 Registrerer...
               </>
             ) : (
-              'Registrer'
+              'Registrer som medlem'
             )}
           </button>
 
-          <Link
-            to={`/login?org=${orgSlug}`}
-            className="flex items-center justify-center gap-2 text-svpk-yellow hover:text-yellow-400"
-            style={{ color: organization?.primary_color || branding.primary_color }}
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Tilbake til innlogging
-          </Link>
+          <div className="text-center">
+            <Link
+              to={`/login?org=${orgSlug}`}
+              className="flex items-center justify-center gap-2 hover:opacity-80"
+              style={{ color: organization.primary_color }}
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Tilbake til innlogging
+            </Link>
+          </div>
         </form>
 
         <div className="mt-8 pt-6 border-t border-gray-700">
-          <div className="flex items-center gap-3 text-sm text-gray-400">
-            <Shield className="w-5 h-5" />
-            <p>
-              Kun for medlemmer av {organization?.name || 'denne organisasjonen'}
-            </p>
+          <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <Shield className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-blue-200">
+                <p className="font-medium mb-1">Kun for medlemmer</p>
+                <p>
+                  Denne registreringen er kun for medlemmer av {organization.name}. 
+                  Etter registrering må en administrator godkjenne medlemskapet ditt.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </div>

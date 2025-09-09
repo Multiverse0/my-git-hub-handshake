@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Navigation } from './Navigation';
+import { ProtectedRoute } from './ProtectedRoute';
 import { Home } from '../pages/Home';
 import { Scanner } from '../pages/Scanner';
 import { TrainingLog } from '../pages/TrainingLog';
@@ -22,18 +23,23 @@ export function DashboardRouter() {
     // Don't redirect if user is already on a specific page (avoid redirect loops)
     if (location.pathname !== '/') return;
 
+    console.log('🧭 Determining dashboard route for user:', user.user_type, user.member_profile?.role);
+    
     // Determine the appropriate dashboard based on user role
     const redirectToDashboard = () => {
       if (user.user_type === 'super_user') {
+        console.log('👑 Redirecting super user to super admin dashboard');
         // Super users go to super admin dashboard
         navigate('/super-admin', { replace: true });
       } else if (user.user_type === 'organization_member') {
         const memberRole = user.member_profile?.role;
         
         if (memberRole === 'admin' || memberRole === 'range_officer') {
+          console.log('🛡️ Redirecting admin/range officer to admin dashboard');
           // Admins and range officers go to admin dashboard
           navigate('/admin', { replace: true });
         } else {
+          console.log('👤 Regular member stays on home page');
           // Regular members stay on home page (already at '/')
           // No navigation needed
         }
@@ -60,13 +66,41 @@ export function DashboardRouter() {
       <Navigation />
       <main className="container mx-auto px-4 py-8">
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/scanner" element={<Scanner />} />
-          <Route path="/log" element={<TrainingLog />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/super-admin" element={<SuperAdmin />} />
-          <Route path="/organization/:orgId" element={<OrganizationDashboard />} />
+          <Route path="/" element={
+            <ProtectedRoute allowUnapproved={true}>
+              <Home />
+            </ProtectedRoute>
+          } />
+          <Route path="/scanner" element={
+            <ProtectedRoute>
+              <Scanner />
+            </ProtectedRoute>
+          } />
+          <Route path="/log" element={
+            <ProtectedRoute>
+              <TrainingLog />
+            </ProtectedRoute>
+          } />
+          <Route path="/profile" element={
+            <ProtectedRoute allowUnapproved={true}>
+              <Profile />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin" element={
+            <ProtectedRoute requireAdmin={true}>
+              <Admin />
+            </ProtectedRoute>
+          } />
+          <Route path="/super-admin" element={
+            <ProtectedRoute requireSuperUser={true}>
+              <SuperAdmin />
+            </ProtectedRoute>
+          } />
+          <Route path="/organization/:orgId" element={
+            <ProtectedRoute requireSuperUser={true}>
+              <OrganizationDashboard />
+            </ProtectedRoute>
+          } />
         </Routes>
       </main>
     </div>
