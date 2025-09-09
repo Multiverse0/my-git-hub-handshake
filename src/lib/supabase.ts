@@ -608,6 +608,7 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
                       </div>
                     </th>
                     {canManageAdmins && <th className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">{t('admin.role')}</th>}
+                    }
                     <th className="py-2 px-2 sm:py-3 sm:px-4 text-right text-sm sm:text-base">{t('admin.actions')}</th>
                   </tr>
                 </thead>
@@ -719,6 +720,7 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
                     </div>
                   </th>
                   {canManageAdmins && <th className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">{t('admin.role')}</th>}
+                  }
                   <th className="py-2 px-2 sm:py-3 sm:px-4 text-right text-sm sm:text-base">{t('admin.actions')}</th>
                 </tr>
               </thead>
