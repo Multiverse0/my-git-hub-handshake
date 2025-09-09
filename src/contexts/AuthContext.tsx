@@ -200,25 +200,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
   const register = async (organizationSlug: string, email: string, password: string, fullName: string, memberNumber?: string) => {
     try {
-      setLoading(true);
       console.log('📝 Starting registration for:', email, 'in organization:', organizationSlug);
       
-      const result = await registerOrganizationMember(organizationSlug, email, password, fullName, memberNumber);
-      
-      if (result.error) {
-        console.error('❌ Registration failed:', result.error);
-        throw new Error(result.error);
-      }
+      // Simple localStorage registration for demo
+      const newMember = {
+        id: crypto.randomUUID(),
+        organization_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+        email,
+        full_name: fullName,
+        member_number: memberNumber,
+        role: 'member',
+        approved: false,
+        active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
 
+      // Save to localStorage
+      const savedMembers = localStorage.getItem('members');
+      const members = savedMembers ? JSON.parse(savedMembers) : [];
+      
+      // Check for duplicate email
+      if (members.some((member: any) => member.email === email)) {
+        throw new Error('E-post er allerede registrert');
+      }
+      
+      members.push(newMember);
+      localStorage.setItem('members', JSON.stringify(members));
+      
       console.log('✅ Registration successful');
-      // Registration successful - member is created but needs admin approval
-      // Don't automatically log them in, they need approval first
       
     } catch (error) {
       console.error('Registration error:', error);
       throw error;
-    } finally {
-      setLoading(false);
     }
   };
 
