@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Users, Settings, Plus, Edit2, Trash2, Shield, ShieldOff, UserPlus, AlertCircle, CheckCircle, X, Loader2, Eye, EyeOff, Copy, Save, Package, Download, Globe } from 'lucide-react';
 import { supabase, createOrganization } from '../lib/supabase';
+import bcrypt from 'bcryptjs';
 import { useAuth } from '../contexts/AuthContext';
 import type { Organization, OrganizationMember } from '../lib/types';
 import { ThemeToggle } from '../components/ThemeToggle';

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search, ChevronUp, ChevronDown, XCircle, CheckCircle, AlertCircle, Edit2, PlusCircle, Shield, ShieldOff, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
-import { getOrganizationMembers, approveMember, updateMemberRole, addOrganizationMember, updateOrganizationMember, deleteOrganizationMember } from '../lib/supabase';
+import { getOrganizationMembers, approveMember, updateMemberRole, addOrganizationMember, updateOrganizationMember, deleteOrganizationMember, supabase } from '../lib/supabase';
 import { sendMemberApprovalEmail, generateLoginUrl } from '../lib/emailService';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';

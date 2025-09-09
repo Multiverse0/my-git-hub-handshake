@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { QrCode, Plus, Edit2, Trash2, Eye, EyeOff, X, Save, Loader2, AlertCircle, CheckCircle, Copy } from 'lucide-react';
-import { getOrganizationTrainingLocations, createTrainingLocation, updateTrainingLocation } from '../lib/supabase';
+import { getOrganizationTrainingLocations, createTrainingLocation, updateTrainingLocation, supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { TrainingLocation } from '../lib/types';
 

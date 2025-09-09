@@ -1,1271 +1,841 @@
-import { createClient } from '@supabase/supabase-js';
-import type { 
-  Organization, 
-  OrganizationMember, 
-  SuperUser, 
-  TrainingLocation, 
-  MemberTrainingSession,
-  TrainingSessionDetails,
-  SessionTargetImage,
-  AuthUser,
-  ApiResponse,
-  OrganizationBranding
-} from './types';
+import React, { useState } from 'react';
+import { Search, ChevronUp, ChevronDown, XCircle, CheckCircle, AlertCircle, Edit2, PlusCircle, Shield, ShieldOff, Trash2 } from 'lucide-react';
+import { format } from 'date-fns';
+import { getOrganizationMembers, approveMember, updateMemberRole, addOrganizationMember, updateOrganizationMember, deleteOrganizationMember } from '../lib/supabase';
+import { sendMemberApprovalEmail, generateLoginUrl } from '../lib/emailService';
+import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import type { OrganizationMember } from '../lib/types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables. Please check your .env file.');
+interface MemberManagementProps {
+  onMemberCountChange?: (count: number) => void;
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// Add missing import and function
-export async function getOrganizationMembers(organizationId: string): Promise<ApiResponse<OrganizationMember[]>> {
-  try {
-    const { data, error } = await supabase
-      .from('organization_members')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return { error: 'Kunne ikke hente medlemmer' };
-    }
-
-    return { data: data || [] };
-  } catch (error) {
-    console.error('Error fetching organization members:', error);
-    return { error: 'Kunne ikke hente medlemmer' };
-  }
+interface AddMemberModalProps {
+  onClose: () => void;
+  onAdd: (memberData: { full_name: string; email: string; member_number: string }) => void;
 }
 
-// Check if any super users exist
-export async function checkSuperUsersExist(): Promise<boolean> {
-  try {
-    const { data, error } = await supabase
-      .from('super_users')
-      .select('id')
-      .eq('active', true)
-      .limit(1);
+function AddMemberModal({ onClose, onAdd }: AddMemberModalProps) {
+  const [newMember, setNewMember] = useState({
+    full_name: '',
+    email: '',
+    member_number: ''
+  });
+  const [error, setError] = useState<string | null>(null);
 
-    if (error) {
-      console.error('Error checking super users:', error);
-      return false;
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!newMember.full_name.trim() || !newMember.email.trim() || !newMember.member_number.trim()) {
+      setError('Alle felt må fylles ut');
+      return;
     }
 
-    return (data && data.length > 0);
-  } catch (error) {
-    console.error('Error checking super users:', error);
-    return false;
-  }
+    if (!newMember.email.includes('@')) {
+      setError('Vennligst skriv inn en gyldig e-postadresse');
+      return;
+    }
+
+    onAdd(newMember);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-gray-800 rounded-lg max-w-md w-full">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-xl font-semibold">Legg til nytt medlem</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white"
+            >
+              <XCircle className="w-6 h-6" />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Navn
+              </label>
+              <input
+                type="text"
+                value={newMember.full_name}
+                onChange={(e) => setNewMember(prev => ({ ...prev, full_name: e.target.value }))}
+                className="w-full bg-gray-700 rounded-md px-3 py-2"
+                placeholder="Fullt navn"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                E-post
+              </label>
+              <input
+                type="email"
+                value={newMember.email}
+                onChange={(e) => setNewMember(prev => ({ ...prev, email: e.target.value }))}
+                className="w-full bg-gray-700 rounded-md px-3 py-2"
+                placeholder="navn@example.com"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                SkytterID
+              </label>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm text-gray-400">
+                  <a
+                    href="https://app.skyting.no/user"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-svpk-yellow hover:text-yellow-400"
+                  >
+                    (Link SkytterID)
+                  </a>
+                </span>
+              </div>
+              <input
+                type="text"
+                value={newMember.member_number}
+                onChange={(e) => setNewMember(prev => ({ ...prev, member_number: e.target.value }))}
+                className="w-full bg-gray-700 rounded-md px-3 py-2"
+                placeholder="12345"
+              />
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg flex items-center gap-2 text-red-200">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <p className="text-sm">{error}</p>
+              </div>
+            )}
+
+            <div className="flex gap-3 justify-end pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="btn-secondary"
+              >
+                Avbryt
+              </button>
+              <button
+                type="submit"
+                className="btn-primary"
+              >
+                Legg til
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-// Create the first super user (only works if no super users exist)
-export async function createFirstSuperUser(
-  email: string,
-  password: string,
-  fullName: string
-): Promise<ApiResponse<SuperUser>> {
-  try {
-    // First check if any super users exist
-    const superUsersExist = await checkSuperUsersExist();
-    if (superUsersExist) {
-      return { error: 'Super-brukere eksisterer allerede i systemet' };
-    }
+interface EditModalProps {
+  member: OrganizationMember;
+  onClose: () => void;
+  onSave: (updatedMember: OrganizationMember) => void;
+}
 
-    // Create user in Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          user_type: 'super_user'
+function EditModal({ member, onClose, onSave }: EditModalProps) {
+  const [editedMember, setEditedMember] = useState({ ...member });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(editedMember);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-gray-800 rounded-lg max-w-md w-full">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-xl font-semibold">Rediger Medlem</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white"
+            >
+              <XCircle className="w-6 h-6" />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Navn
+              </label>
+              <input
+                type="text"
+                value={editedMember.full_name}
+                onChange={(e) => setEditedMember(prev => ({ ...prev, full_name: e.target.value }))}
+                className="w-full bg-gray-700 rounded-md px-3 py-2"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                E-post
+              </label>
+              <input
+                type="email"
+                value={editedMember.email}
+                onChange={(e) => setEditedMember(prev => ({ ...prev, email: e.target.value }))}
+                className="w-full bg-gray-700 rounded-md px-3 py-2"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                SkytterID
+              </label>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm text-gray-400">
+                  <a
+                    href="https://app.skyting.no/user"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-svpk-yellow hover:text-yellow-400"
+                  >
+                    (Link SkytterID)
+                  </a>
+                </span>
+              </div>
+              <input
+                type="text"
+                value={editedMember.member_number}
+                onChange={(e) => setEditedMember(prev => ({ ...prev, member_number: e.target.value }))}
+                className="w-full bg-gray-700 rounded-md px-3 py-2"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Rolle
+              </label>
+              <select
+                value={editedMember.role}
+                onChange={(e) => setEditedMember(prev => ({ ...prev, role: e.target.value as 'user' | 'admin' }))}
+                className="w-full bg-gray-700 rounded-md px-3 py-2"
+              >
+                <option value="user">Bruker</option>
+                <option value="admin">Administrator</option>
+              </select>
+            </div>
+
+            <div className="flex gap-3 justify-end pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="btn-secondary"
+              >
+                Avbryt
+              </button>
+              <button
+                type="submit"
+                className="btn-primary"
+              >
+                Lagre endringer
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function MemberManagement({ onMemberCountChange }: MemberManagementProps) {
+  const { user, organization } = useAuth();
+  const { t } = useLanguage();
+  const [members, setMembers] = useState<OrganizationMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortField, setSortField] = useState<'created_at' | 'full_name'>('created_at');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [error, setError] = useState<string | null>(null);
+  const [editingMember, setEditingMember] = useState<OrganizationMember | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 25;
+
+  // Check if current user can manage admin roles - only admins and super users
+  const canManageAdmins = user?.user_type === 'super_user' || 
+                          (user?.member_profile?.role === 'admin');
+
+  // Load members from database
+  React.useEffect(() => {
+    if (!organization?.id) return;
+    
+    const loadMembers = async () => {
+      try {
+        setLoading(true);
+        const result = await getOrganizationMembers(organization.id);
+        if (result.error) {
+          throw new Error(result.error);
         }
+        
+        setMembers(result.data || []);
+      } catch (error) {
+        console.error('Error loading members:', error);
+        setError('Kunne ikke laste medlemmer');
+        setMembers([]);
+      } finally {
+        setLoading(false);
       }
-    });
-
-    if (authError) {
-      return { error: authError.message };
-    }
-
-    if (!authData.user) {
-      return { error: 'Kunne ikke opprette bruker' };
-    }
-
-    // Create super user record
-    const { data: superUser, error: superUserError } = await supabase
-      .from('super_users')
-      .insert({
-        id: authData.user.id,
-        email,
-        full_name: fullName,
-        active: true
-      })
-      .select()
-      .single();
-
-    if (superUserError) {
-      return { error: 'Kunne ikke opprette super-bruker profil' };
-    }
-
-    return { data: superUser };
-  } catch (error) {
-    console.error('Error creating first super user:', error);
-    return { error: 'Det oppstod en feil ved opprettelse av super-bruker' };
-  }
-}
-
-// Set user context for RLS
-export async function setUserContext(email: string) {
-  try {
-    await supabase.rpc('set_config', {
-      setting_name: 'app.current_user_email',
-      setting_value: email,
-      is_local: false
-    });
-  } catch (error) {
-    console.warn('Failed to set user context:', error);
-  }
-}
-
-// Authentication functions
-export async function authenticateUser(email: string, password: string): Promise<ApiResponse<{ user: AuthUser }>> {
-  try {
-    // Sign in with Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
-    if (authError) {
-      return { error: 'Ugyldig e-post eller passord' };
-    }
-
-    if (!authData.user) {
-      return { error: 'Innlogging feilet' };
-    }
-
-    // Set user context for RLS
-    await setUserContext(email);
-
-    // Check if user is a super user
-    const { data: superUser } = await supabase
-      .from('super_users')
-      .select('*')
-      .eq('id', authData.user.id)
-      .eq('active', true)
-      .single();
-
-    if (superUser) {
-      return {
-        data: {
-          user: {
-            id: superUser.id,
-            email: superUser.email,
-            user_type: 'super_user',
-            super_user_profile: superUser
-          }
-        }
-      };
-    }
-
-    // Check if user is an organization member
-    const { data: member } = await supabase
-      .from('organization_members')
-      .select(`
-        *,
-        organization:organizations(*)
-      `)
-      .eq('email', email)
-      .eq('active', true)
-      .single();
-
-    if (member) {
-      return {
-        data: {
-          user: {
-            id: member.id,
-            email: member.email,
-            user_type: 'organization_member',
-            organization_id: member.organization_id,
-            organization: member.organization,
-            member_profile: member
-          }
-        }
-      };
-    }
-
-    return { error: 'Bruker ikke funnet eller ikke aktivert' };
-  } catch (error) {
-    console.error('Authentication error:', error);
-    return { error: 'Det oppstod en feil ved innlogging' };
-  }
-}
-
-export async function registerOrganizationMember(
-  organizationSlug: string,
-  email: string,
-  password: string,
-  fullName: string,
-  memberNumber?: string
-): Promise<ApiResponse<OrganizationMember>> {
-  try {
-    // Get organization by slug
-    const { data: organization, error: orgError } = await supabase
-      .from('organizations')
-      .select('id')
-      .eq('slug', organizationSlug)
-      .eq('active', true)
-      .single();
-
-    if (orgError || !organization) {
-      return { error: 'Organisasjon ikke funnet' };
-    }
-
-    // Create user in Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          user_type: 'organization_member'
-        }
-      }
-    });
-
-    if (authError) {
-      if (authError.message.includes('already registered')) {
-        return { error: 'E-post er allerede registrert' };
-      }
-      return { error: authError.message };
-    }
-
-    if (!authData.user) {
-      return { error: 'Kunne ikke opprette bruker' };
-    }
-
-    // Create organization member record
-    const { data: member, error: memberError } = await supabase
-      .from('organization_members')
-      .insert({
-        id: authData.user.id,
-        organization_id: organization.id,
-        email,
-        full_name: fullName,
-        member_number: memberNumber,
-        approved: false, // Requires admin approval
-        active: true
-      })
-      .select()
-      .single();
-
-    if (memberError) {
-      if (memberError.code === '23505') {
-        return { error: 'E-post eller medlemsnummer er allerede registrert' };
-      }
-      return { error: 'Kunne ikke registrere medlem' };
-    }
-
-    return { data: member };
-  } catch (error) {
-    console.error('Registration error:', error);
-    return { error: 'Det oppstod en feil ved registrering' };
-  }
-}
-
-// Organization functions
-export async function getOrganizationBySlug(slug: string): Promise<ApiResponse<Organization>> {
-  try {
-    const { data, error } = await supabase
-      .from('organizations')
-      .select('*')
-      .eq('slug', slug)
-      .eq('active', true)
-      .single();
-
-    if (error) {
-      return { error: 'Organisasjon ikke funnet' };
-    }
-
-    return { data };
-  } catch (error) {
-    console.error('Error fetching organization:', error);
-    return { error: 'Kunne ikke hente organisasjon' };
-  }
-}
-
-export async function getOrganizationBranding(organizationId: string): Promise<OrganizationBranding> {
-  try {
-    const { data: org } = await supabase
-      .from('organizations')
-      .select('name, primary_color, secondary_color, logo_url')
-      .eq('id', organizationId)
-      .single();
-
-    return {
-      organization_name: org?.name || 'Idrettsklubb',
-      primary_color: org?.primary_color || '#FFD700',
-      secondary_color: org?.secondary_color || '#1F2937',
-      logo_url: org?.logo_url
     };
-  } catch (error) {
-    console.error('Error fetching branding:', error);
-    return {
-      organization_name: 'Idrettsklubb',
-      primary_color: '#FFD700',
-      secondary_color: '#1F2937'
-    };
-  }
-}
 
-export async function updateOrganizationLogo(organizationId: string, logoFile: File): Promise<ApiResponse<string>> {
-  try {
-    const fileExt = logoFile.name.split('.').pop()?.toLowerCase();
-    const allowedTypes = ['svg', 'png', 'jpg', 'jpeg'];
-    
-    if (!fileExt || !allowedTypes.includes(fileExt)) {
-      return { error: 'Ugyldig filtype. Kun SVG, PNG og JPG er tillatt.' };
+    loadMembers();
+  }, [organization?.id]);
+
+  // Update member count when members change
+  React.useEffect(() => {
+    if (onMemberCountChange) {
+      const pendingCount = members.filter(member => !member.approved).length;
+      onMemberCountChange(pendingCount);
     }
-
-    if (logoFile.size > 2 * 1024 * 1024) { // 2MB limit
-      return { error: 'Filen er for stor. Maksimal størrelse er 2MB.' };
-    }
-
-    const fileName = `${organizationId}-logo-${Date.now()}.${fileExt}`;
-    const filePath = `organization-logos/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('logos')
-      .upload(filePath, logoFile, {
-        cacheControl: '3600',
-        upsert: true
-      });
-
-    if (uploadError) {
-      return { error: 'Kunne ikke laste opp logo' };
-    }
-
-    const { data: urlData } = supabase.storage
-      .from('logos')
-      .getPublicUrl(filePath);
-
-    // Update organization
-    const { error: updateError } = await supabase
-      .from('organizations')
-      .update({ logo_url: urlData.publicUrl })
-      .eq('id', organizationId);
-
-    if (updateError) {
-      return { error: 'Kunne ikke oppdatere organisasjon med ny logo' };
-    }
-
-    return { data: urlData.publicUrl };
-  } catch (error) {
-    console.error('Error uploading logo:', error);
-    return { error: 'Kunne ikke laste opp logo' };
-  }
-}
-
-// Training location functions
-export async function getTrainingLocationByQR(organizationId: string, qrCodeId: string): Promise<ApiResponse<TrainingLocation>> {
-  try {
-    const { data, error } = await supabase
-      .from('training_locations')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .eq('qr_code_id', qrCodeId)
-      .eq('active', true)
-      .single();
-
-    if (error) {
-      return { error: 'Ugyldig QR-kode eller lokasjon ikke funnet' };
-    }
-
-    return { data };
-  } catch (error) {
-    console.error('Error fetching training location:', error);
-    return { error: 'Kunne ikke finne treningslokasjon' };
-  }
-}
-
-export async function getOrganizationTrainingLocations(organizationId: string): Promise<ApiResponse<TrainingLocation[]>> {
-  try {
-    const { data, error } = await supabase
-      .from('training_locations')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .eq('active', true)
-      .order('name');
-
-    if (error) {
-      return { error: 'Kunne ikke hente treningslokasjoner' };
-    }
-
-    return { data: data || [] };
-  } catch (error) {
-    console.error('Error fetching training locations:', error);
-    return { error: 'Kunne ikke hente treningslokasjoner' };
-  }
-}
-
-// Training session functions
-export async function startTrainingSession(
-  organizationId: string,
-  memberId: string,
-  locationId: string
-): Promise<ApiResponse<MemberTrainingSession>> {
-  try {
-    // Check if member already has a session today
-    const today = new Date().toISOString().split('T')[0];
-    const { data: existingSession } = await supabase
-      .from('member_training_sessions')
-      .select('id')
-      .eq('member_id', memberId)
-      .gte('start_time', `${today}T00:00:00Z`)
-      .lt('start_time', `${today}T23:59:59Z`)
-      .single();
-
-    if (existingSession) {
-      return { error: 'Du har allerede registrert trening i dag' };
-    }
-
-    const { data, error } = await supabase
-      .from('member_training_sessions')
-      .insert({
-        organization_id: organizationId,
-        member_id: memberId,
-        location_id: locationId,
-        start_time: new Date().toISOString(),
-        verified: false,
-        manual_entry: false
-      })
-      .select(`
-        *,
-        member:organization_members(*),
-        location:training_locations(*),
-        details:training_session_details(*),
-        target_images:session_target_images(*)
-      `)
-      .single();
-
-    if (error) {
-      return { error: 'Kunne ikke starte treningsøkt' };
-    }
-
-    return { data };
-  } catch (error) {
-    console.error('Error starting training session:', error);
-    return { error: 'Kunne ikke starte treningsøkt' };
-  }
-}
-
-export async function getMemberTrainingSessions(
-  memberId: string,
-  limit?: number
-): Promise<ApiResponse<MemberTrainingSession[]>> {
-  try {
-    let query = supabase
-      .from('member_training_sessions')
-      .select(`
-        *,
-        member:organization_members(*),
-        location:training_locations(*),
-        details:training_session_details(*),
-        target_images:session_target_images(*)
-      `)
-      .eq('member_id', memberId)
-      .order('start_time', { ascending: false });
-
-    if (limit) {
-      query = query.limit(limit);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      return { error: 'Kunne ikke hente treningsøkter' };
-    }
-
-    return { data: data || [] };
-  } catch (error) {
-    console.error('Error fetching training sessions:', error);
-    return { error: 'Kunne ikke hente treningsøkter' };
-  }
-}
-
-export async function getOrganizationTrainingSessions(
-  organizationId: string,
-  limit?: number
-): Promise<ApiResponse<MemberTrainingSession[]>> {
-  try {
-    let query = supabase
-      .from('member_training_sessions')
-      .select(`
-        *,
-        member:organization_members(*),
-        location:training_locations(*),
-        details:training_session_details(*),
-        target_images:session_target_images(*)
-      `)
-      .eq('organization_id', organizationId)
-      .order('start_time', { ascending: false });
-
-    if (limit) {
-      query = query.limit(limit);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      return { error: 'Kunne ikke hente treningsøkter' };
-    }
-
-    return { data: data || [] };
-  } catch (error) {
-    console.error('Error fetching organization training sessions:', error);
-    return { error: 'Kunne ikke hente treningsøkter' };
-  }
-}
-
-export async function verifyTrainingSession(
-  sessionId: string,
-  verifiedBy: string
-): Promise<ApiResponse<MemberTrainingSession>> {
-  try {
-    const { data, error } = await supabase
-      .from('member_training_sessions')
-      .update({
-        verified: true,
-        verified_by: verifiedBy,
-        verification_time: new Date().toISOString()
-      })
-      .eq('id', sessionId)
-      .select()
-      .single();
-
-    if (error) {
-      return { error: 'Kunne ikke verifisere treningsøkt' };
-    }
-
-    return { data };
-  } catch (error) {
-    console.error('Error verifying training session:', error);
-    return { error: 'Kunne ikke verifisere treningsøkt' };
-  }
-}
-
-export async function addManualTrainingSession(
-  organizationId: string,
-  memberId: string,
-  locationId: string,
-  sessionData: {
-    date: string;
-    activity: string;
-    notes?: string;
-  },
-  verifiedBy: string
-): Promise<ApiResponse<MemberTrainingSession>> {
-  try {
-    const { data, error } = await supabase
-      .from('member_training_sessions')
-      .insert({
-        organization_id: organizationId,
-        member_id: memberId,
-        location_id: locationId,
-        start_time: new Date(sessionData.date).toISOString(),
-        end_time: new Date(new Date(sessionData.date).getTime() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours later
-        duration_minutes: 120,
-        verified: true,
-        verified_by: verifiedBy,
-        verification_time: new Date().toISOString(),
-        manual_entry: true,
-        notes: sessionData.notes
-      })
-      .select(`
-        *,
-        member:organization_members(*),
-        location:training_locations(*),
-        details:training_session_details(*),
-        target_images:session_target_images(*)
-      `)
-      .single();
-
-    if (error) {
-      return { error: 'Kunne ikke opprette manuell treningsøkt' };
-    }
-
-    // Add training details if activity is specified
-    if (sessionData.activity) {
-      await supabase
-        .from('training_session_details')
-        .insert({
-          session_id: data.id,
-          training_type: sessionData.activity,
-          notes: sessionData.notes
-        });
-    }
-
-    return { data };
-  } catch (error) {
-    console.error('Error adding manual training session:', error);
-    return { error: 'Kunne ikke opprette manuell treningsøkt' };
-  }
-}
-
-// File upload functions
-export async function uploadTargetImage(file: File, sessionId: string): Promise<ApiResponse<string>> {
-  try {
-    const fileExt = file.name.split('.').pop()?.toLowerCase();
-    const allowedTypes = ['jpg', 'jpeg', 'png', 'gif'];
-    
-    if (!fileExt || !allowedTypes.includes(fileExt)) {
-      return { error: 'Ugyldig filtype. Kun JPG, PNG og GIF er tillatt.' };
-    }
-
-    if (file.size > 5 * 1024 * 1024) { // 5MB limit
-      return { error: 'Bildet er for stort. Maksimal størrelse er 5MB.' };
-    }
-
-    const fileName = `${sessionId}-${Date.now()}.${fileExt}`;
-    const filePath = `target-images/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('targets')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
-
-    if (uploadError) {
-      return { error: 'Kunne ikke laste opp målbilde' };
-    }
-
-    const { data: urlData } = supabase.storage
-      .from('targets')
-      .getPublicUrl(filePath);
-
-    // Create target image record
-    const { error: insertError } = await supabase
-      .from('session_target_images')
-      .insert({
-        session_id: sessionId,
-        image_url: urlData.publicUrl,
-        filename: file.name
-      });
-
-    if (insertError) {
-      return { error: 'Kunne ikke lagre målbilde referanse' };
-    }
-
-    return { data: urlData.publicUrl };
-  } catch (error) {
-    console.error('Error uploading target image:', error);
-    return { error: 'Kunne ikke laste opp målbilde' };
-  }
-}
-
-export async function uploadMemberDocument(
-  file: File, 
-  memberId: string, 
-  documentType: 'startkort' | 'diploma'
-): Promise<ApiResponse<string>> {
-  try {
-    const fileExt = file.name.split('.').pop()?.toLowerCase();
-    const allowedTypes = ['pdf', 'jpg', 'jpeg', 'png'];
-    
-    if (!fileExt || !allowedTypes.includes(fileExt)) {
-      return { error: 'Ugyldig filtype. Kun PDF og bildefiler er tillatt.' };
-    }
-
-    if (file.size > 5 * 1024 * 1024) { // 5MB limit
-      return { error: 'Filen er for stor. Maksimal størrelse er 5MB.' };
-    }
-
-    const fileName = `${memberId}-${documentType}-${Date.now()}.${fileExt}`;
-    const filePath = `member-documents/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: true
-      });
-
-    if (uploadError) {
-      return { error: 'Kunne ikke laste opp dokument' };
-    }
-
-    const { data: urlData } = supabase.storage
-      .from('documents')
-      .getPublicUrl(filePath);
-
-    // Update member record
-    const updateField = documentType === 'startkort' ? 'startkort_url' : 'diploma_url';
-    const { error: updateError } = await supabase
-      .from('organization_members')
-      .update({ [updateField]: urlData.publicUrl })
-      .eq('id', memberId);
-
-    if (updateError) {
-      return { error: 'Kunne ikke oppdatere medlemsprofil' };
-    }
-
-    return { data: urlData.publicUrl };
-  } catch (error) {
-    console.error('Error uploading member document:', error);
-    return { error: 'Kunne ikke laste opp dokument' };
-  }
-}
-
-export async function uploadProfileImage(file: File, memberId: string): Promise<ApiResponse<string>> {
-  try {
-    const fileExt = file.name.split('.').pop()?.toLowerCase();
-    const allowedTypes = ['jpg', 'jpeg', 'png', 'gif'];
-    
-    if (!fileExt || !allowedTypes.includes(fileExt)) {
-      return { error: 'Ugyldig filtype. Kun JPG, PNG og GIF er tillatt.' };
-    }
-
-    if (file.size > 2 * 1024 * 1024) { // 2MB limit
-      return { error: 'Bildet er for stort. Maksimal størrelse er 2MB.' };
-    }
-
-    const fileName = `${memberId}-avatar-${Date.now()}.${fileExt}`;
-    const filePath = `avatars/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: true
-      });
-
-    if (uploadError) {
-      return { error: 'Kunne ikke laste opp profilbilde' };
-    }
-
-    const { data: urlData } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(filePath);
-
-    // Update member record
-    const { error: updateError } = await supabase
-      .from('organization_members')
-      .update({ avatar_url: urlData.publicUrl })
-      .eq('id', memberId);
-
-    if (updateError) {
-      return { error: 'Kunne ikke oppdatere medlemsprofil' };
-    }
-
-    return { data: urlData.publicUrl };
-  } catch (error) {
-    console.error('Error uploading profile image:', error);
-    return { error: 'Kunne ikke laste opp profilbilde' };
-  }
-}
-
-export async function updateTrainingDetails(
-  sessionId: string,
-  details: {
-    training_type?: string;
-    results?: string;
-    notes?: string;
-  }
-): Promise<ApiResponse<TrainingSessionDetails>> {
-  try {
-    // Check if training details already exist for this session
-    const { data: existingDetails, error: fetchError } = await supabase
-      .from('training_session_details')
-      .select('*')
-      .eq('session_id', sessionId)
-      .single();
-
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      // PGRST116 is "not found" error, which is expected if no details exist yet
-      return { error: 'Kunne ikke hente eksisterende treningsdetaljer' };
-    }
-
-    let result;
-    if (existingDetails) {
-      // Update existing record
-      const { data, error } = await supabase
-        .from('training_session_details')
-        .update({
-          training_type: details.training_type,
-          results: details.results,
-          notes: details.notes,
-          updated_at: new Date().toISOString()
-        })
-        .eq('session_id', sessionId)
-        .select()
-        .single();
-
-      if (error) {
-        return { error: 'Kunne ikke oppdatere treningsdetaljer' };
-      }
-      result = data;
+  }, [members]);
+
+  const handleSort = (field: 'created_at' | 'full_name') => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
-      // Insert new record
-      const { data, error } = await supabase
-        .from('training_session_details')
-        .insert({
-          session_id: sessionId,
-          training_type: details.training_type,
-          results: details.results,
-          notes: details.notes
-        })
-        .select()
-        .single();
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
 
-      if (error) {
-        return { error: 'Kunne ikke opprette treningsdetaljer' };
+  const handleApprove = async (memberId: string) => {
+    const member = members.find(m => m.id === memberId);
+    if (!member) return;
+
+    try {
+      setError(null);
+      const result = await approveMember(memberId);
+      if (result.error) {
+        throw new Error(result.error);
       }
-      result = data;
+      
+      // Update local state
+      setMembers(prev => prev.map(m =>
+        m.id === memberId ? { ...m, approved: true } : m
+      ));
+
+      // TODO: Re-enable email sending when Edge Function is configured
+      // const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-4).toUpperCase();
+      // if (organization) {
+      //   const loginUrl = generateLoginUrl(organization.slug);
+      //   const adminName = user?.member_profile?.full_name || user?.super_user_profile?.full_name || 'Administrator';
+      //   
+      //   const emailResult = await sendMemberApprovalEmail(
+      //     member.email,
+      //     member.full_name,
+      //     organization.name,
+      //     organization.id,
+      //     tempPassword,
+      //     loginUrl,
+      //     adminName
+      //   );
+      //   
+      //   if (!emailResult.success) {
+      //     console.warn('Approval email failed:', emailResult.error);
+      //     setError(`Medlem godkjent, men e-post kunne ikke sendes.`);
+      //     setTimeout(() => setError(null), 5000);
+      //   }
+      // }
+    } catch (error) {
+      console.error('Error approving member:', error);
+      setError(error instanceof Error ? error.message : 'Kunne ikke godkjenne medlem');
     }
+  };
 
-    return { data: result };
-  } catch (error) {
-    console.error('Error updating training details:', error);
-    return { error: 'Kunne ikke oppdatere treningsdetaljer' };
-  }
-}
-
-// Organization management functions
-export async function createOrganization(orgData: {
-  name: string;
-  slug: string;
-  description?: string;
-  email?: string;
-  phone?: string;
-  website?: string;
-  address?: string;
-  primary_color?: string;
-  secondary_color?: string;
-}): Promise<ApiResponse<Organization>> {
-  try {
-    const { data, error } = await supabase
-      .from('organizations')
-      .insert({
-        ...orgData,
-        primary_color: orgData.primary_color || '#FFD700',
-        secondary_color: orgData.secondary_color || '#1F2937',
-        active: true
-      })
-      .select()
-      .single();
-
-    if (error) {
-      if (error.code === '23505') {
-        return { error: 'Organisasjonsnavn eller slug er allerede i bruk' };
-      }
-      return { error: 'Kunne ikke opprette organisasjon' };
-    }
-
-    return { data };
-  } catch (error) {
-    console.error('Error creating organization:', error);
-    return { error: 'Kunne ikke opprette organisasjon' };
-  }
-}
-
-export async function updateOrganization(
-  organizationId: string,
-  updates: Partial<Organization>
-): Promise<ApiResponse<Organization>> {
-  try {
-    const { data, error } = await supabase
-      .from('organizations')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', organizationId)
-      .select()
-      .single();
-
-    if (error) {
-      return { error: 'Kunne ikke oppdatere organisasjon' };
-    }
-
-    return { data };
-  } catch (error) {
-    console.error('Error updating organization:', error);
-    return { error: 'Kunne ikke oppdatere organisasjon' };
-  }
-}
-
-// Member management functions
-export async function approveMember(memberId: string): Promise<ApiResponse<OrganizationMember>> {
-  try {
-    const { data, error } = await supabase
-      .from('organization_members')
-      .update({
-        approved: true,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', memberId)
-      .select()
-      .single();
-
-    if (error) {
-      return { error: 'Kunne ikke godkjenne medlem' };
-    }
-
-    return { data };
-  } catch (error) {
-    console.error('Error approving member:', error);
-    return { error: 'Kunne ikke godkjenne medlem' };
-  }
-}
-
-export async function updateMemberRole(
-  memberId: string, 
-  role: 'member' | 'admin' | 'range_officer'
-): Promise<ApiResponse<OrganizationMember>> {
-  try {
-    const { data, error } = await supabase
-      .from('organization_members')
-      .update({
-        role,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', memberId)
-      .select()
-      .single();
-
-    if (error) {
-      return { error: 'Kunne ikke oppdatere medlemsrolle' };
-    }
-
-    return { data };
-  } catch (error) {
-    console.error('Error updating member role:', error);
-    return { error: 'Kunne ikke oppdatere medlemsrolle' };
-  }
-}
-
-// Add missing organization member management functions
-export async function addOrganizationMember(
-  organizationId: string,
-  memberData: {
-    email: string;
-    full_name: string;
-    member_number?: string;
-    role: 'member' | 'admin' | 'range_officer';
-    approved: boolean;
-    password?: string;
-  }
-): Promise<ApiResponse<OrganizationMember>> {
-  try {
-    // Create user in Supabase Auth if password is provided
-    if (memberData.password) {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: memberData.email,
-        password: memberData.password,
-        options: {
-          data: {
-            full_name: memberData.full_name,
-            user_type: 'organization_member'
-          }
+  const handleApproveAll = async () => {
+    if (pendingMembers.length === 0) return;
+    
+    if (window.confirm(`Er du sikker på at du vil godkjenne alle ${pendingMembers.length} ventende medlemmer?`)) {
+      try {
+        setError(null);
+        
+        // Approve all pending members in database
+        const approvalPromises = pendingMembers.map(member => approveMember(member.id));
+        const results = await Promise.all(approvalPromises);
+        
+        // Check for errors
+        const errors = results.filter(result => result.error);
+        if (errors.length > 0) {
+          throw new Error(`Kunne ikke godkjenne ${errors.length} medlemmer`);
         }
-      });
-
-      if (authError) {
-        return { error: authError.message };
+        
+        // Update local state
+        setMembers(prev => prev.map(m =>
+          !m.approved ? { ...m, approved: true } : m
+        ));
+        
+      } catch (error) {
+        console.error('Error approving all members:', error);
+        setError(error instanceof Error ? error.message : 'Kunne ikke godkjenne alle medlemmer');
       }
-
-      if (!authData.user) {
-        return { error: 'Kunne ikke opprette bruker' };
-      }
-
-      // Create organization member record with auth user ID
-      const { data, error } = await supabase
-        .from('organization_members')
-        .insert({
-          id: authData.user.id,
-          organization_id: organizationId,
-          email: memberData.email,
-          full_name: memberData.full_name,
-          member_number: memberData.member_number,
-          role: memberData.role,
-          approved: memberData.approved,
-          active: true
-        })
-        .select()
-        .single();
-
-      if (error) {
-        return { error: 'Kunne ikke opprette medlemsprofil' };
-      }
-
-      return { data };
-    } else {
-      // Create member without auth user (manual entry)
-      const { data, error } = await supabase
-        .from('organization_members')
-        .insert({
-          organization_id: organizationId,
-          email: memberData.email,
-          full_name: memberData.full_name,
-          member_number: memberData.member_number,
-          role: memberData.role,
-          approved: memberData.approved,
-          active: true
-        })
-        .select()
-        .single();
-
-      if (error) {
-        return { error: 'Kunne ikke opprette medlem' };
-      }
-
-      return { data };
     }
-  } catch (error) {
-    console.error('Error adding organization member:', error);
-    return { error: 'Kunne ikke legge til medlem' };
-  }
-}
+  };
 
-export async function updateOrganizationMember(
-  memberId: string,
-  updates: Partial<OrganizationMember>
-): Promise<ApiResponse<OrganizationMember>> {
-  try {
-    const { data, error } = await supabase
-      .from('organization_members')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', memberId)
-      .select()
-      .single();
-
-    if (error) {
-      return { error: 'Kunne ikke oppdatere medlem' };
+  const handleUnapprove = async (memberId: string) => {
+    if (window.confirm('Er du sikker på at du vil fjerne godkjenningen av dette medlemmet?')) {
+      try {
+        setError(null);
+        const result = await updateOrganizationMember(memberId, { approved: false });
+        
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        
+        setMembers(prev => prev.map(member =>
+          member.id === memberId ? { ...member, approved: false } : member
+        ));
+      } catch (error) {
+        console.error('Error unapproving member:', error);
+        setError('Kunne ikke fjerne godkjenning');
+      }
     }
+  };
 
-    return { data };
-  } catch (error) {
-    console.error('Error updating organization member:', error);
-    return { error: 'Kunne ikke oppdatere medlem' };
-  }
-}
-
-export async function deleteOrganizationMember(
-  memberId: string
-): Promise<ApiResponse<void>> {
-  try {
-    const { error } = await supabase
-      .from('organization_members')
-      .delete()
-      .eq('id', memberId);
-
-    if (error) {
-      return { error: 'Kunne ikke slette medlem' };
+  const handleSaveEdit = async (updatedMember: OrganizationMember) => {
+    try {
+      setError(null);
+      const result = await updateOrganizationMember(updatedMember.id, updatedMember);
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      setMembers(prev => prev.map(member =>
+        member.id === updatedMember.id ? result.data! : member
+      ));
+      setEditingMember(null);
+    } catch (error) {
+      console.error('Error updating member:', error);
+      setError(error instanceof Error ? error.message : 'Kunne ikke oppdatere medlem');
     }
+  };
 
-    return { data: undefined };
-  } catch (error) {
-    console.error('Error deleting organization member:', error);
-    return { error: 'Kunne ikke slette medlem' };
-  }
-}
-
-// Add missing file upload functions
-export async function uploadStartkortPDF(file: File, userId: string): Promise<string> {
-  try {
-    const fileExt = file.name.split('.').pop()?.toLowerCase();
-    const allowedTypes = ['pdf', 'jpg', 'jpeg', 'png'];
+  const handleAddMember = async (memberData: { full_name: string; email: string; member_number: string }) => {
+    if (!organization?.id) return;
     
-    if (!fileExt || !allowedTypes.includes(fileExt)) {
-      throw new Error('Ugyldig filtype. Kun PDF og bildefiler er tillatt.');
-    }
-
-    if (file.size > 5 * 1024 * 1024) { // 5MB limit
-      throw new Error('Filen er for stor. Maksimal størrelse er 5MB.');
-    }
-
-    const fileName = `${userId}-startkort-${Date.now()}.${fileExt}`;
-    const filePath = `startkort/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: true
+    try {
+      setError(null);
+      const result = await addOrganizationMember(organization.id, {
+        ...memberData,
+        role: 'member',
+        approved: false
       });
-
-    if (uploadError) {
-      throw new Error('Kunne ikke laste opp startkort');
-    }
-
-    const { data: urlData } = supabase.storage
-      .from('documents')
-      .getPublicUrl(filePath);
-
-    return urlData.publicUrl;
-  } catch (error) {
-    console.error('Error uploading startkort:', error);
-    throw error;
-  }
-}
-
-export async function uploadDiplomaPDF(file: File, userId: string): Promise<string> {
-  try {
-    const fileExt = file.name.split('.').pop()?.toLowerCase();
-    const allowedTypes = ['pdf', 'jpg', 'jpeg', 'png'];
-    
-    if (!fileExt || !allowedTypes.includes(fileExt)) {
-      throw new Error('Ugyldig filtype. Kun PDF og bildefiler er tillatt.');
-    }
-
-    if (file.size > 5 * 1024 * 1024) { // 5MB limit
-      throw new Error('Filen er for stor. Maksimal størrelse er 5MB.');
-    }
-
-    const fileName = `${userId}-diploma-${Date.now()}.${fileExt}`;
-    const filePath = `diplomas/${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: true
-      });
-
-    if (uploadError) {
-      throw new Error('Kunne ikke laste opp diplom');
-    }
-
-    const { data: urlData } = supabase.storage
-      .from('documents')
-      .getPublicUrl(filePath);
-
-    return urlData.publicUrl;
-  } catch (error) {
-    console.error('Error uploading diploma:', error);
-    throw error;
-  }
-}
-// Training location management
-export async function createTrainingLocation(
-  organizationId: string,
-  locationData: {
-    name: string;
-    qr_code_id: string;
-    description?: string;
-  }
-): Promise<ApiResponse<TrainingLocation>> {
-  try {
-    const { data, error } = await supabase
-      .from('training_locations')
-      .insert({
-        organization_id: organizationId,
-        ...locationData,
-        active: true
-      })
-      .select()
-      .single();
-
-    if (error) {
-      if (error.code === '23505') {
-        return { error: 'QR-kode ID er allerede i bruk' };
+      
+      if (result.error) {
+        throw new Error(result.error);
       }
-      return { error: 'Kunne ikke opprette treningslokasjon' };
+      
+      setMembers(prev => [...prev, result.data!]);
+      setShowAddModal(false);
+    } catch (error) {
+      console.error('Error adding member:', error);
+      setError(error instanceof Error ? error.message : 'Kunne ikke legge til medlem');
     }
+  };
 
-    return { data };
-  } catch (error) {
-    console.error('Error creating training location:', error);
-    return { error: 'Kunne ikke opprette treningslokasjon' };
-  }
-}
-
-export async function updateTrainingLocation(
-  locationId: string,
-  updates: Partial<TrainingLocation>
-): Promise<ApiResponse<TrainingLocation>> {
-  try {
-    const { data, error } = await supabase
-      .from('training_locations')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', locationId)
-      .select()
-      .single();
-
-    if (error) {
-      return { error: 'Kunne ikke oppdatere treningslokasjon' };
+  const handleToggleAdmin = async (memberId: string) => {
+    if (!canManageAdmins) return;
+    
+    const member = members.find(m => m.id === memberId);
+    if (!member) return;
+    
+    const newRole = member.role === 'admin' ? 'member' : 'admin';
+    const action = newRole === 'admin' ? 'gi admin-rettigheter til' : 'fjerne admin-rettigheter fra';
+    
+    if (window.confirm(`Er du sikker på at du vil ${action} ${member.full_name}?`)) {
+      try {
+        setError(null);
+        const result = await updateMemberRole(memberId, newRole);
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        
+        setMembers(prev => prev.map(m =>
+          m.id === memberId ? { ...m, role: newRole } : m
+        ));
+      } catch (error) {
+        console.error('Error updating member role:', error);
+        setError('Kunne ikke oppdatere medlemsrolle');
+      }
     }
+  };
 
-    return { data };
-  } catch (error) {
-    console.error('Error updating training location:', error);
-    return { error: 'Kunne ikke oppdatere treningslokasjon' };
-  }
-}
-
-// Utility functions for backward compatibility
-export async function getCurrentUser(): Promise<AuthUser | null> {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    // Check if super user
-    const { data: superUser } = await supabase
-      .from('super_users')
-      .select('*')
-      .eq('id', user.id)
-      .eq('active', true)
-      .single();
-
-    if (superUser) {
-      return {
-        id: superUser.id,
-        email: superUser.email,
-        user_type: 'super_user',
-        super_user_profile: superUser
-      };
+  const handleDeleteMember = async (memberId: string, memberName: string) => {
+    if (!canManageAdmins) return;
+    
+    if (window.confirm(`Er du sikker på at du vil slette medlemmet "${memberName}" permanent? Denne handlingen kan ikke angres.`)) {
+      try {
+        setError(null);
+        const result = await deleteOrganizationMember(memberId);
+        
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        
+        setMembers(prev => prev.filter(member => member.id !== memberId));
+      } catch (error) {
+        console.error('Error deleting member:', error);
+        setError('Kunne ikke slette medlem');
+      }
     }
+  };
+  
+  const filteredAndSortedMembers = members
+    .filter(member => 
+      member.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (member.member_number || '').includes(searchTerm)
+    )
+    .sort((a, b) => {
+      let comparison = 0;
+      if (sortField === 'created_at') {
+        comparison = new Date(a.created_at!).getTime() - new Date(b.created_at!).getTime();
+      } else if (sortField === 'full_name') {
+        comparison = a.full_name.localeCompare(b.full_name);
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
 
-    // Check if organization member
-    const { data: member } = await supabase
-      .from('organization_members')
-      .select(`
-        *,
-        organization:organizations(*)
-      `)
-      .eq('id', user.id)
-      .eq('active', true)
-      .single();
+  const pendingMembers = filteredAndSortedMembers.filter(member => !member.approved);
+  const approvedMembers = filteredAndSortedMembers.filter(member => member.approved);
 
-    if (member) {
-      return {
-        id: member.id,
-        email: member.email,
-        user_type: 'organization_member',
-        organization_id: member.organization_id,
-        organization: member.organization,
-        member_profile: member
-      };
-    }
+  const totalPages = Math.ceil(approvedMembers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentApprovedMembers = approvedMembers.slice(startIndex, endIndex);
 
-    return null;
-  } catch (error) {
-    console.error('Error getting current user:', error);
-    return null;
-  }
-}
+  return (
+    <div className="space-y-8">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-svpk-yellow">{t('admin.member_management')}</h2>
+          <p className="text-gray-400">
+            {t('admin.description')}
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="btn-primary"
+        >
+          <PlusCircle className="w-5 h-5" />
+          {t('admin.add_member')}
+        </button>
+      </div>
 
-export async function signOut(): Promise<void> {
-  await supabase.auth.signOut();
+      <div className="card space-y-6">
+        <div className="flex items-center gap-4">
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder={t('admin.search_members')}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-gray-700 rounded-lg pl-10 pr-4 py-2"
+              />
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg flex items-center gap-2 text-red-200">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <p className="text-sm">{error}</p>
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-svpk-yellow">
+            {t('admin.pending_approvals')} ({pendingMembers.length})
+          </h3>
+          
+          {pendingMembers.length === 0 ? (
+            <p className="text-gray-400 text-center py-4">
+              {t('admin.no_pending_members')}
+            </p>
+          ) : (
+            <>
+              <div className="flex justify-end mb-4">
+                <button
+                  onClick={handleApproveAll}
+                  className="btn-primary flex items-center gap-2"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  {t('admin.approve_all')} ({pendingMembers.length})
+                </button>
+              </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-700">
+                    <th 
+                      className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base"
+                      onClick={() => handleSort('full_name')}
+                    >
+                      <div className="flex items-center gap-2">
+                        {t('admin.name')}
+                        {sortField === 'full_name' && (
+                          sortDirection === 'asc' ? 
+                            <ChevronUp className="w-4 h-4" /> : 
+                            <ChevronDown className="w-4 h-4" />
+                        )}
+                      </div>
+                    </th>
+                    <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base hidden sm:table-cell">{t('admin.email')}</th>
+                    <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base">{t('admin.member_id')}</th>
+                    <th 
+                      className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base hidden md:table-cell"
+                      onClick={() => handleSort('created_at')}
+                    >
+                      <div className="flex items-center gap-2">
+                        {t('admin.registered')}
+                        {sortField === 'created_at' && (
+                          sortDirection === 'asc' ? 
+                            <ChevronUp className="w-4 h-4" /> : 
+                            <ChevronDown className="w-4 h-4" />
+                        )}
+                      </div>
+                    </th>
+                    {canManageAdmins && <th className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">{t('admin.role')}</th>}
+                    <th className="py-2 px-2 sm:py-3 sm:px-4 text-right text-sm sm:text-base">{t('admin.actions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingMembers.map((member) => (
+                    <tr key={member.id} className="border-b border-gray-700">
+                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">
+                        <div>
+                          <div className="font-medium">{member.full_name}</div>
+                          <div className="text-xs text-gray-400 sm:hidden">{member.email}</div>
+                        </div>
+                      </td>
+                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden sm:table-cell">{member.email}</td>
+                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">{member.member_number}</td>
+                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden md:table-cell">
+                        {format(new Date(member.created_at!), 'dd.MM.yyyy')}
+                      </td>
+                      {canManageAdmins && (
+                        <td className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            member.role === 'admin' 
+                              ? 'bg-svpk-yellow text-black' 
+                              : 'bg-gray-600 text-gray-300'
+                          }`}>
+                            {member.role === 'admin' ? t('admin.admin_role') : t('admin.user_role')}
+                          </span>
+                        </td>
+                      )}
+                      <td className="py-2 px-2 sm:py-3 sm:px-4">
+                        <div className="flex justify-end items-center gap-1 sm:gap-2">
+                          <button
+                            onClick={() => handleApprove(member.id)}
+                            className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-green-400"
+                            title={t('admin.approve_member')}
+                          >
+                            <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+                          </button>
+                          {canManageAdmins && (
+                            <button
+                              onClick={() => handleToggleAdmin(member.id)}
+                              className={`p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors ${
+                                member.role === 'admin' ? 'text-svpk-yellow' : 'text-gray-400'
+                              }`}
+                              title={t('admin.toggle_admin')}
+                            >
+                              {member.role === 'admin' ? <Shield className="w-4 h-4 sm:w-5 sm:h-5" /> : <ShieldOff className="w-4 h-4 sm:w-5 sm:h-5" />}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setEditingMember(member)}
+                            className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors"
+                            title={t('admin.edit_member')}
+                          >
+                            <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMember(member.id, member.full_name)}
+                            className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-red-400"
+                            title="Slett medlem"
+                          >
+                            <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            </>
+          )}
+        </div>
+
+        <div>
+          <h3 className="text-lg font-semibold">
+            Godkjente medlemmer ({approvedMembers.length})
+          </h3>
+          
+          <div>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-700">
+                  <th 
+                    className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base"
+                    onClick={() => handleSort('full_name')}
+                  >
+                    <div className="flex items-center gap-2">
+                      {t('admin.name')}
+                      {sortField === 'full_name' && (
+                        sortDirection === 'asc' ? 
+                          <ChevronUp className="w-4 h-4" /> : 
+                          <ChevronDown className="w-4 h-4" />
+                      )}
+                    </div>
+                  </th>
+                  <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base hidden sm:table-cell">{t('admin.email')}</th>
+                  <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base">{t('admin.member_id')}</th>
+                  <th 
+                    className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base hidden md:table-cell"
+                    onClick={() => handleSort('created_at')}
+                  >
+                    <div className="flex items-center gap-2">
+                      {t('admin.registered')}
+                      {sortField === 'created_at' && (
+                        sortDirection === 'asc' ? 
+                          <ChevronUp className="w-4 h-4" /> : 
+                          <ChevronDown className="w-4 h-4" />
+                      )}
+                    </div>
+                  </th>
+                  {canManageAdmins && <th className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">{t('admin.role')}</th>}
+                  <th className="py-2 px-2 sm:py-3 sm:px-4 text-right text-sm sm:text-base">{t('admin.actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentApprovedMembers.map((member) => (
+                  <tr key={member.id} className="border-b border-gray-700">
+                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">
+                      <div>
+                        <div className="font-medium">{member.full_name}</div>
+                        <div className="text-xs text-gray-400 sm:hidden">{member.email}</div>
+                        <div className="text-xs text-gray-400 md:hidden">
+                          {format(new Date(member.created_at!), 'dd.MM.yyyy')}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden sm:table-cell">{member.email}</td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">{member.member_number}</td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden md:table-cell">
+                      {format(new Date(member.created_at!), 'dd.MM.yyyy')}
+                    </td>
+                    {canManageAdmins && (
+                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          member.role === 'admin' 
+                            ? 'bg-svpk-yellow text-black' 
+                            : 'bg-gray-600 text-gray-300'
+                        }`}>
+                          {member.role === 'admin' ? t('admin.admin_role') : t('admin.user_role')}
+                        </span>
+                      </td>
+                    )}
+                    <td className="py-2 px-2 sm:py-3 sm:px-4">
+                      <div className="flex justify-end items-center gap-1 sm:gap-2">
+                        <button
+                          onClick={() => handleUnapprove(member.id)}
+                          className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-green-400"
+                          title={t('admin.unapprove_member')}
+                        >
+                          <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+                        </button>
+                        {canManageAdmins && (
+                          <button
+                            onClick={() => handleToggleAdmin(member.id)}
+                            className={`p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors ${
+                              member.role === 'admin' ? 'text-svpk-yellow' : 'text-gray-400'
+                            }`}
+                            title={t('admin.toggle_admin')}
+                          >
+                            {member.role === 'admin' ? <Shield className="w-4 h-4 sm:w-5 sm:h-5" /> : <ShieldOff className="w-4 h-4 sm:w-5 sm:h-5" />}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setEditingMember(member)}
+                          className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors"
+                          title={t('admin.edit_member')}
+                        >
+                          <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                        </button>
+                        {canManageAdmins && (
+                          <button
+                            onClick={() => handleDeleteMember(member.id, member.full_name)}
+                            className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-red-400"
+                            title="Slett medlem"
+                          >
+                            <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex justify-between items-center pt-4">
+            <div className="text-sm text-gray-400">
+              {t('admin.showing_members', { 
+                start: startIndex + 1, 
+                end: Math.min(endIndex, approvedMembers.length), 
+                total: approvedMembers.length 
+              })}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="btn-secondary"
+              >
+                {t('admin.previous')}
+              </button>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="btn-secondary"
+              >
+                {t('admin.next')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {showAddModal && (
+        <AddMemberModal
+          onClose={() => setShowAddModal(false)}
+          onAdd={handleAddMember}
+        />
+      )}
+
+      {editingMember && (
+        <EditModal
+          member={editingMember}
+          onClose={() => setEditingMember(null)}
+          onSave={handleSaveEdit}
+        />
+      )}
+    </div>
+  );
 }

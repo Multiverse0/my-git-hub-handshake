@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Clock, User, MapPin, Calendar, AlertCircle, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
-import { getOrganizationTrainingSessions, verifyTrainingSession } from '../lib/supabase';
+import { getOrganizationTrainingSessions, verifyTrainingSession, supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { MemberTrainingSession } from '../lib/types';
 
