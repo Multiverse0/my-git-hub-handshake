@@ -201,13 +201,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = async (organizationSlug: string, email: string, password: string, fullName: string, memberNumber?: string) => {
     try {
       setLoading(true);
+      console.log('📝 Starting registration for:', email, 'in organization:', organizationSlug);
       
       const result = await registerOrganizationMember(organizationSlug, email, password, fullName, memberNumber);
       
       if (result.error) {
+        console.error('❌ Registration failed:', result.error);
         throw new Error(result.error);
       }
 
+      console.log('✅ Registration successful');
       // Registration successful - member is created but needs admin approval
       // Don't automatically log them in, they need approval first
       

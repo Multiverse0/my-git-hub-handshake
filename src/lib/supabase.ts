@@ -288,6 +288,8 @@ export async function signOut(): Promise<void> {
 // Organization functions
 export async function getOrganizationBySlug(slug: string): Promise<ApiResponse<Organization>> {
   try {
+    console.log('🔍 Querying organization by slug:', slug);
+    
     const { data, error } = await supabase
       .from('organizations')
       .select('*')
@@ -296,9 +298,17 @@ export async function getOrganizationBySlug(slug: string): Promise<ApiResponse<O
       .single();
 
     if (error) {
+      console.log('❌ Supabase query error:', error.message);
+      
+      // If it's a "not found" error, return specific message
+      if (error.code === 'PGRST116') {
+        return { error: 'Organisasjon ikke funnet' };
+      }
+      
       return { error: 'Organisasjon ikke funnet' };
     }
 
+    console.log('✅ Organization found:', data.name);
     return { data };
   } catch (error) {
     console.error('Error getting organization:', error);

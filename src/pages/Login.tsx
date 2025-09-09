@@ -198,6 +198,22 @@ export function Login() {
               <p className="text-sm">{error}</p>
             </div>
           )}
+          
+          {/* Demo Login Credentials */}
+          <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4">
+            <h4 className="font-medium text-blue-400 mb-2">🎯 Demo-innlogging</h4>
+            <div className="space-y-2 text-sm text-blue-200">
+              <div>
+                <p className="font-medium">Admin (SVPK):</p>
+                <p>E-post: <code className="bg-gray-700 px-1 rounded">post@svpk.no</code></p>
+                <p>Passord: <code className="bg-gray-700 px-1 rounded">12345678</code></p>
+              </div>
+              <div className="mt-3">
+                <p className="font-medium">Super User:</p>
+                <p>Opprett ved første besøk eller bruk eksisterende</p>
+              </div>
+            </div>
+          </div>
 
           <button
             type="submit"
