@@ -290,26 +290,31 @@ export async function getOrganizationBySlug(slug: string): Promise<ApiResponse<O
   try {
     console.log('🔍 Querying organization by slug:', slug);
     
-    // Add timeout to prevent infinite loading
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Database query timeout')), 5000);
-    });
+    // Quick timeout for registration page
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
     
-    const queryPromise = supabase
+    const { data, error } = await supabase
       .from('organizations')
       .select('*')
       .eq('slug', slug)
       .eq('active', true)
+      .abortSignal(controller.signal)
       .single();
     
-    const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
+    clearTimeout(timeoutId);
 
     if (error) {
-      console.log('❌ Supabase query error:', error.message);
+      console.log('❌ Supabase query error:', error.message || error.code);
       
       // If it's a "not found" error, return specific message
       if (error.code === 'PGRST116') {
         return { error: 'Organisasjon ikke funnet' };
+      }
+      
+      // If it's an abort error (timeout), return timeout message
+      if (error.name === 'AbortError') {
+        return { error: 'Database connection timeout' };
       }
       
       return { error: 'Organisasjon ikke funnet' };
@@ -320,9 +325,14 @@ export async function getOrganizationBySlug(slug: string): Promise<ApiResponse<O
   } catch (error) {
     console.error('Error getting organization:', error);
     
-    // Return timeout or connection error
-    if (error instanceof Error && error.message.includes('timeout')) {
+    // Handle different error types
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        return { error: 'Database connection timeout' };
+      }
+      if (error.message.includes('timeout')) {
       return { error: 'Database connection timeout' };
+      }
     }
     
     return { error: 'Kunne ikke hente organisasjon' };

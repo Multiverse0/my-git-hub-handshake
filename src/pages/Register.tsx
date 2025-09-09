@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams, useParams } from 'react-router-dom';
 import { Shield, Mail, Lock, User, Hash, Loader2, AlertCircle, ArrowLeft, ExternalLink, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getOrganizationBySlug } from '../lib/supabase';
@@ -33,7 +33,7 @@ export function Register() {
         setError(null);
         console.log('🔍 Loading organization for slug:', orgSlug);
         
-        // Always use fallback SVPK organization for demo
+        // Use fallback SVPK organization immediately to prevent loading
         const fallbackOrg: Organization = {
           id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
           name: 'Svolvær Pistolklubb',
@@ -51,23 +51,43 @@ export function Register() {
           active: true
         };
         
-        console.log('✅ Using SVPK organization for registration');
+        // Set fallback immediately
         setOrganization(fallbackOrg);
+        setLoadingOrg(false);
+        console.log('✅ Using SVPK organization for registration');
         
-        // Try to get from Supabase in background (non-blocking)
-        try {
-          const result = await getOrganizationBySlug(orgSlug);
-          if (result.data) {
-            console.log('✅ Organization found in database:', result.data.name);
-            setOrganization(result.data);
+        // Try to get from Supabase in background (non-blocking) - only if different from fallback
+        if (orgSlug !== 'svpk') {
+          try {
+            const result = await getOrganizationBySlug(orgSlug);
+            if (result.data) {
+              console.log('✅ Organization found in database:', result.data.name);
+              setOrganization(result.data);
+            }
+          } catch (dbError) {
+            console.log('⚠️ Database lookup failed, using fallback');
           }
-        } catch (dbError) {
-          console.log('⚠️ Database lookup failed, using fallback');
         }
       } catch (error) {
         console.error('Error loading organization:', error);
-        setError('Kunne ikke laste organisasjonsinformasjon');
-      } finally {
+        // Even on error, use fallback
+        const fallbackOrg: Organization = {
+          id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+          name: 'Svolvær Pistolklubb',
+          slug: 'svpk',
+          description: 'Norges beste pistolklubb',
+          website: 'https://svpk.no',
+          email: 'post@svpk.no',
+          phone: '+47 123 45 678',
+          address: 'Svolværgata 1, 8300 Svolvær',
+          logo_url: 'https://medlem.svpk.no/wp-content/uploads/2025/01/Logo-SVPK-orginal.png',
+          primary_color: '#FFD700',
+          secondary_color: '#1F2937',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+          active: true
+        };
+        setOrganization(fallbackOrg);
         setLoadingOrg(false);
       }
     };
