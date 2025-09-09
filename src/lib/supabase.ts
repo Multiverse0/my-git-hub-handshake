@@ -949,6 +949,211 @@ export async function updateMemberRole(
   }
 }
 
+// Add missing organization member management functions
+export async function addOrganizationMember(
+  organizationId: string,
+  memberData: {
+    email: string;
+    full_name: string;
+    member_number?: string;
+    role: 'member' | 'admin' | 'range_officer';
+    approved: boolean;
+    password?: string;
+  }
+): Promise<ApiResponse<OrganizationMember>> {
+  try {
+    // Create user in Supabase Auth if password is provided
+    if (memberData.password) {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: memberData.email,
+        password: memberData.password,
+        options: {
+          data: {
+            full_name: memberData.full_name,
+            user_type: 'organization_member'
+          }
+        }
+      });
+
+      if (authError) {
+        return { error: authError.message };
+      }
+
+      if (!authData.user) {
+        return { error: 'Kunne ikke opprette bruker' };
+      }
+
+      // Create organization member record with auth user ID
+      const { data, error } = await supabase
+        .from('organization_members')
+        .insert({
+          id: authData.user.id,
+          organization_id: organizationId,
+          email: memberData.email,
+          full_name: memberData.full_name,
+          member_number: memberData.member_number,
+          role: memberData.role,
+          approved: memberData.approved,
+          active: true
+        })
+        .select()
+        .single();
+
+      if (error) {
+        return { error: 'Kunne ikke opprette medlemsprofil' };
+      }
+
+      return { data };
+    } else {
+      // Create member without auth user (manual entry)
+      const { data, error } = await supabase
+        .from('organization_members')
+        .insert({
+          organization_id: organizationId,
+          email: memberData.email,
+          full_name: memberData.full_name,
+          member_number: memberData.member_number,
+          role: memberData.role,
+          approved: memberData.approved,
+          active: true
+        })
+        .select()
+        .single();
+
+      if (error) {
+        return { error: 'Kunne ikke opprette medlem' };
+      }
+
+      return { data };
+    }
+  } catch (error) {
+    console.error('Error adding organization member:', error);
+    return { error: 'Kunne ikke legge til medlem' };
+  }
+}
+
+export async function updateOrganizationMember(
+  memberId: string,
+  updates: Partial<OrganizationMember>
+): Promise<ApiResponse<OrganizationMember>> {
+  try {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', memberId)
+      .select()
+      .single();
+
+    if (error) {
+      return { error: 'Kunne ikke oppdatere medlem' };
+    }
+
+    return { data };
+  } catch (error) {
+    console.error('Error updating organization member:', error);
+    return { error: 'Kunne ikke oppdatere medlem' };
+  }
+}
+
+export async function deleteOrganizationMember(
+  memberId: string
+): Promise<ApiResponse<void>> {
+  try {
+    const { error } = await supabase
+      .from('organization_members')
+      .delete()
+      .eq('id', memberId);
+
+    if (error) {
+      return { error: 'Kunne ikke slette medlem' };
+    }
+
+    return { data: undefined };
+  } catch (error) {
+    console.error('Error deleting organization member:', error);
+    return { error: 'Kunne ikke slette medlem' };
+  }
+}
+
+// Add missing file upload functions
+export async function uploadStartkortPDF(file: File, userId: string): Promise<string> {
+  try {
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    const allowedTypes = ['pdf', 'jpg', 'jpeg', 'png'];
+    
+    if (!fileExt || !allowedTypes.includes(fileExt)) {
+      throw new Error('Ugyldig filtype. Kun PDF og bildefiler er tillatt.');
+    }
+
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      throw new Error('Filen er for stor. Maksimal størrelse er 5MB.');
+    }
+
+    const fileName = `${userId}-startkort-${Date.now()}.${fileExt}`;
+    const filePath = `startkort/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('documents')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true
+      });
+
+    if (uploadError) {
+      throw new Error('Kunne ikke laste opp startkort');
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('documents')
+      .getPublicUrl(filePath);
+
+    return urlData.publicUrl;
+  } catch (error) {
+    console.error('Error uploading startkort:', error);
+    throw error;
+  }
+}
+
+export async function uploadDiplomaPDF(file: File, userId: string): Promise<string> {
+  try {
+    const fileExt = file.name.split('.').pop()?.toLowerCase();
+    const allowedTypes = ['pdf', 'jpg', 'jpeg', 'png'];
+    
+    if (!fileExt || !allowedTypes.includes(fileExt)) {
+      throw new Error('Ugyldig filtype. Kun PDF og bildefiler er tillatt.');
+    }
+
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      throw new Error('Filen er for stor. Maksimal størrelse er 5MB.');
+    }
+
+    const fileName = `${userId}-diploma-${Date.now()}.${fileExt}`;
+    const filePath = `diplomas/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('documents')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true
+      });
+
+    if (uploadError) {
+      throw new Error('Kunne ikke laste opp diplom');
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('documents')
+      .getPublicUrl(filePath);
+
+    return urlData.publicUrl;
+  } catch (error) {
+    console.error('Error uploading diploma:', error);
+    throw error;
+  }
+}
 // Training location management
 export async function createTrainingLocation(
   organizationId: string,
