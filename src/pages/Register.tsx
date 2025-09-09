@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link, useSearchParams, useParams } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Shield, Mail, Lock, User, Hash, Loader2, AlertCircle, ArrowLeft, ExternalLink, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getOrganizationBySlug } from '../lib/supabase';
@@ -9,8 +9,7 @@ export function Register() {
   const navigate = useNavigate();
   const { register, branding } = useAuth();
   const [searchParams] = useSearchParams();
-  const { orgSlug: paramOrgSlug } = useParams();
-  const orgSlug = paramOrgSlug || searchParams.get('org') || 'svpk';
+  const orgSlug = searchParams.get('org') || 'svpk';
   
   const [formData, setFormData] = useState({
     email: '',
@@ -43,7 +42,7 @@ export function Register() {
           email: 'post@svpk.no',
           phone: '+47 123 45 678',
           address: 'Svolværgata 1, 8300 Svolvær',
-          logo_url: 'https://medlem.svpk.no/wp-content/uploads/2025/01/Logo-SVPK-orginal.png',
+          logo_url: null, // Remove CORS-problematic logo
           primary_color: '#FFD700',
           secondary_color: '#1F2937',
           created_at: '2024-01-01T00:00:00Z',
@@ -80,7 +79,7 @@ export function Register() {
           email: 'post@svpk.no',
           phone: '+47 123 45 678',
           address: 'Svolværgata 1, 8300 Svolvær',
-          logo_url: 'https://medlem.svpk.no/wp-content/uploads/2025/01/Logo-SVPK-orginal.png',
+          logo_url: null,
           primary_color: '#FFD700',
           secondary_color: '#1F2937',
           created_at: '2024-01-01T00:00:00Z',
@@ -123,6 +122,8 @@ export function Register() {
 
     try {
       setIsLoading(true);
+      console.log('📝 Submitting registration for:', formData.email);
+      
       await register(
         orgSlug,
         formData.email,
@@ -131,9 +132,11 @@ export function Register() {
         formData.memberNumber
       );
       
+      console.log('✅ Registration successful, showing success message');
       // Show registration success - user needs admin approval
       setRegistrationSubmitted(true);
     } catch (error) {
+      console.error('❌ Registration failed:', error);
       if (error instanceof Error) {
         setError(error.message);
       } else {
@@ -219,29 +222,32 @@ export function Register() {
     <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
       <div className="bg-gray-800 rounded-lg p-8 max-w-md w-full">
         <div className="flex flex-col items-center mb-8">
-          {organization.logo_url ? (
+          {organization?.logo_url ? (
             <img 
               src={organization.logo_url} 
               alt={`${organization.name} Logo`} 
               className="h-16 max-w-[200px] object-contain mb-6"
-              crossOrigin="anonymous"
+              onError={(e) => {
+                console.log('Logo failed to load, hiding image');
+                e.currentTarget.style.display = 'none';
+              }}
             />
           ) : (
             <div 
               className="h-16 px-6 flex items-center rounded font-bold text-2xl mb-6"
               style={{ 
-                backgroundColor: organization.primary_color, 
-                color: organization.secondary_color 
+                backgroundColor: organization?.primary_color || '#FFD700', 
+                color: organization?.secondary_color || '#1F2937'
               }}
             >
-              {organization.name.split(' ').map(word => word[0]).join('').toUpperCase()}
+              {(organization?.name || 'SVPK').split(' ').map(word => word[0]).join('').toUpperCase()}
             </div>
           )}
           <h1 
             className="text-2xl font-bold"
-            style={{ color: organization.primary_color }}
+            style={{ color: organization?.primary_color || '#FFD700' }}
           >
-            Bli medlem av {organization.name}
+            Bli medlem av {organization?.name || 'Svolvær Pistolklubb'}
           </h1>
           <p className="text-gray-400 text-center mt-2">
             Registrer deg som nytt medlem
@@ -295,7 +301,7 @@ export function Register() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sm hover:opacity-80 flex items-center gap-1"
-                style={{ color: organization.primary_color }}
+                style={{ color: organization?.primary_color || '#FFD700' }}
               >
                 <span>Finn din ID</span>
                 <ExternalLink className="w-3 h-3" />
@@ -381,7 +387,7 @@ export function Register() {
             <Link
               to={`/login?org=${orgSlug}`}
               className="flex items-center justify-center gap-2 hover:opacity-80"
-              style={{ color: organization.primary_color }}
+              style={{ color: organization?.primary_color || '#FFD700' }}
             >
               <ArrowLeft className="w-4 h-4" />
               Tilbake til innlogging
@@ -396,7 +402,7 @@ export function Register() {
               <div className="text-sm text-blue-200">
                 <p className="font-medium mb-1">Kun for medlemmer</p>
                 <p>
-                  Denne registreringen er kun for medlemmer av {organization.name}. 
+                  Denne registreringen er kun for medlemmer av {organization?.name || 'Svolvær Pistolklubb'}. 
                   Etter registrering må en administrator godkjenne medlemskapet ditt.
                 </p>
               </div>
