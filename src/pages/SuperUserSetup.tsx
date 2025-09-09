@@ -45,6 +45,20 @@ export function SuperUserSetup({ onSetupComplete }: SuperUserSetupProps) {
         return;
       }
 
+      // Auto-login the new super user
+      try {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        
+        if (signInError) {
+          console.warn('Auto-login failed:', signInError);
+        }
+      } catch (autoLoginError) {
+        console.warn('Auto-login error:', autoLoginError);
+      }
+
       // Setup complete
       onSetupComplete();
     } catch (error) {

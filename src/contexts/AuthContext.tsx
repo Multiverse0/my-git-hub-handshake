@@ -67,9 +67,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Initialize auth state
   useEffect(() => {
     const initializeAuth = async () => {
-      await checkSetupStatus();
-      
       try {
+        await checkSetupStatus();
+        
         // Check if user is already authenticated with Supabase
         const { data: { session } } = await supabase.auth.getSession();
         
@@ -109,6 +109,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(currentUser);
           setIsAuthenticated(true);
           await setUserContext(currentUser.email);
+          
+          // Load organization data
+          if (currentUser.user_type === 'organization_member' && currentUser.organization) {
+            setOrganization(currentUser.organization);
+            const brandingData = await getOrganizationBranding(currentUser.organization.id);
+            setBranding(brandingData);
+          }
         }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
@@ -126,6 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe();
     };
   }, []);
+      
 
   const login = async (email: string, password: string, rememberMe: boolean, organizationSlug?: string) => {
     try {
@@ -153,6 +161,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const brandingData = await getOrganizationBranding(user.organization.id);
           setBranding(brandingData);
         }
+        
+        // Handle remember me
+        if (rememberMe) {
+          localStorage.setItem('rememberedUser', JSON.stringify({ email }));
+        } else {
+          localStorage.removeItem('rememberedUser');
+        }
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -172,8 +187,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(result.error);
       }
 
-      // Registration successful - user needs admin approval
-      // Don't auto-login, show success message instead
+      // Registration successful - user is created but needs admin approval
       
     } catch (error) {
       console.error('Registration error:', error);

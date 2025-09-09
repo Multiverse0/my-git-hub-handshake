@@ -76,28 +76,8 @@ export function Register() {
         formData.memberNumber
       );
       
-      // TODO: Re-enable email sending after Edge Function is deployed and configured
-      // // Send welcome email to new member
-      // if (organization) {
-      //   const emailResult = await sendMemberWelcomeEmail(
-      //     formData.email,
-      //     formData.fullName,
-      //     organization.name,
-      //     organization.id,
-      //     formData.memberNumber
-      //   );
-      //   
-      //   if (!emailResult.success) {
-      //     console.warn('Welcome email failed:', emailResult.error);
-      //     // Continue with registration success even if email fails
-      //   }
-      // }
-      
-      // After successful registration, log the user in automatically
-      await login(formData.email, formData.password, false, orgSlug);
-      
-      // Navigate to home page - DashboardRouter will handle appropriate redirection
-      navigate('/', { replace: true });
+      // Show registration success - user needs admin approval
+      setRegistrationSubmitted(true);
     } catch (error) {
       if (error instanceof Error) {
         setError(error.message);

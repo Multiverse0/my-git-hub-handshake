@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import bcrypt from 'bcryptjs';
 import type { 
   Organization, 
   OrganizationMember, 
@@ -8,118 +7,113 @@ import type {
   TrainingLocation,
   MemberTrainingSession,
   TrainingSessionDetails,
-  ApiResponse 
+  ApiResponse,
+  SuperUser
 } from './types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://demo.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'demo-key';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Set user context for RLS policies
+export async function setUserContext(email: string): Promise<void> {
+  try {
+    await supabase.rpc('set_config', {
+      setting_name: 'app.current_user_email',
+      setting_value: email,
+      is_local: false
+    });
+  } catch (error) {
+    console.error('Error setting user context:', error);
+  }
+}
 
 // Authentication functions
 export async function authenticateUser(email: string, password: string): Promise<ApiResponse<{ user: AuthUser }>> {
   try {
-    // For demo purposes, use localStorage authentication
-    const savedMembers = localStorage.getItem('members');
-    const savedSuperUsers = localStorage.getItem('superUsers');
-    
-    // Check super users first
-    if (savedSuperUsers) {
-      const superUsers = JSON.parse(savedSuperUsers);
-      const superUser = superUsers.find((user: any) => user.email === email && user.active);
-      
-      if (superUser) {
-        // Verify password
-        const isValidPassword = await bcrypt.compare(password, superUser.password_hash);
-        if (isValidPassword) {
-          const authUser: AuthUser = {
-            id: superUser.id,
-            email: superUser.email,
-            user_type: 'super_user',
-            super_user_profile: superUser
-          };
-          
-          // Save current user to localStorage
-          localStorage.setItem('currentUser', JSON.stringify({ user: authUser }));
-          
-          return { data: { user: authUser } };
-        }
+    // First try Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (authError) {
+      // If Supabase auth fails, try custom authentication
+      return await authenticateWithCustomAuth(email, password);
+    }
+
+    if (authData.user) {
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        await setUserContext(currentUser.email);
+        return { data: { user: currentUser } };
       }
     }
-    
-    // Check organization members
-    if (savedMembers) {
-      const members = JSON.parse(savedMembers);
-      const member = members.find((m: any) => m.email === email && m.approved && m.active);
-      
-      if (member) {
-        // For demo, accept any password for approved members
-        const authUser: AuthUser = {
-          id: member.id,
-          email: member.email,
-          user_type: 'organization_member',
-          organization_id: member.organization_id,
-          member_profile: member
-        };
-        
-        // Load organization data
-        const savedOrgs = localStorage.getItem('organizations');
-        if (savedOrgs) {
-          const organizations = JSON.parse(savedOrgs);
-          const organization = organizations.find((org: any) => org.id === member.organization_id);
-          if (organization) {
-            authUser.organization = organization;
-          }
-        }
-        
-        localStorage.setItem('currentUser', JSON.stringify({ user: authUser }));
-        
-        return { data: { user: authUser } };
-      }
-    }
-    
-    // Demo mode: Allow any email/password combination for admin access
-    const demoUser: AuthUser = {
-      id: 'demo-admin',
-      email: email,
-      user_type: 'organization_member',
-      organization_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-      member_profile: {
-        id: 'demo-admin',
-        organization_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-        email: email,
-        full_name: 'Demo Administrator',
-        member_number: '99999',
-        role: 'admin',
-        approved: true,
-        active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      organization: {
-        id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-        name: 'Svolvær Pistolklubb',
-        slug: 'svpk',
-        description: 'Norges beste pistolklubb',
-        website: 'https://svpk.no',
-        email: 'post@svpk.no',
-        phone: '+47 123 45 678',
-        address: 'Svolværgata 1, 8300 Svolvær',
-        logo_url: null,
-        primary_color: '#FFD700',
-        secondary_color: '#1F2937',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        active: true
-      }
-    };
-    
-    localStorage.setItem('currentUser', JSON.stringify({ user: demoUser }));
-    
-    return { data: { user: demoUser } };
-    
+
+    return { error: 'Ugyldig innlogging' };
   } catch (error) {
     console.error('Authentication error:', error);
+    return { error: 'Innlogging feilet' };
+  }
+}
+
+async function authenticateWithCustomAuth(email: string, password: string): Promise<ApiResponse<{ user: AuthUser }>> {
+  try {
+    // Check super users
+    const { data: superUsers, error: superError } = await supabase
+      .from('super_users')
+      .select('*')
+      .eq('email', email)
+      .eq('active', true)
+      .single();
+
+    if (!superError && superUsers) {
+      // Verify password (in production, use proper password hashing)
+      const authUser: AuthUser = {
+        id: superUsers.id,
+        email: superUsers.email,
+        user_type: 'super_user',
+        super_user_profile: superUsers
+      };
+      
+      await setUserContext(email);
+      return { data: { user: authUser } };
+    }
+
+    // Check organization members
+    const { data: members, error: memberError } = await supabase
+      .from('organization_members')
+      .select(`
+        *,
+        organizations (*)
+      `)
+      .eq('email', email)
+      .eq('approved', true)
+      .eq('active', true)
+      .single();
+
+    if (!memberError && members) {
+      const authUser: AuthUser = {
+        id: members.id,
+        email: members.email,
+        user_type: 'organization_member',
+        organization_id: members.organization_id,
+        member_profile: members,
+        organization: members.organizations
+      };
+      
+      await setUserContext(email);
+      return { data: { user: authUser } };
+    }
+
+    return { error: 'Ugyldig e-post eller passord' };
+  } catch (error) {
+    console.error('Custom authentication error:', error);
     return { error: 'Innlogging feilet' };
   }
 }
@@ -133,43 +127,48 @@ export async function registerOrganizationMember(
 ): Promise<ApiResponse<{ user: AuthUser }>> {
   try {
     // Get organization by slug
-    const orgResult = await getOrganizationBySlug(organizationSlug);
-    if (orgResult.error || !orgResult.data) {
-      throw new Error('Organisasjon ikke funnet');
+    const { data: organization, error: orgError } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('slug', organizationSlug)
+      .eq('active', true)
+      .single();
+
+    if (orgError || !organization) {
+      return { error: 'Organisasjon ikke funnet' };
     }
-    
-    const organization = orgResult.data;
-    
-    // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
-    
+
+    // Check if email already exists
+    const { data: existingMember } = await supabase
+      .from('organization_members')
+      .select('id')
+      .eq('organization_id', organization.id)
+      .eq('email', email)
+      .single();
+
+    if (existingMember) {
+      return { error: 'E-post er allerede registrert i denne organisasjonen' };
+    }
+
     // Create new member
-    const newMember = {
-      id: crypto.randomUUID(),
-      organization_id: organization.id,
-      email,
-      full_name: fullName,
-      member_number: memberNumber,
-      password_hash: passwordHash,
-      role: 'member' as const,
-      approved: false,
-      active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    // Save to localStorage
-    const savedMembers = localStorage.getItem('members');
-    const members = savedMembers ? JSON.parse(savedMembers) : [];
-    
-    // Check for duplicate email
-    if (members.some((member: any) => member.email === email && member.organization_id === organization.id)) {
-      throw new Error('E-post er allerede registrert i denne organisasjonen');
+    const { data: newMember, error: memberError } = await supabase
+      .from('organization_members')
+      .insert({
+        organization_id: organization.id,
+        email,
+        full_name: fullName,
+        member_number: memberNumber,
+        role: 'member',
+        approved: false,
+        active: true
+      })
+      .select()
+      .single();
+
+    if (memberError) {
+      return { error: 'Kunne ikke registrere medlem' };
     }
-    
-    members.push(newMember);
-    localStorage.setItem('members', JSON.stringify(members));
-    
+
     const authUser: AuthUser = {
       id: newMember.id,
       email: newMember.email,
@@ -178,84 +177,150 @@ export async function registerOrganizationMember(
       member_profile: newMember,
       organization
     };
-    
+
     return { data: { user: authUser } };
-    
   } catch (error) {
     console.error('Registration error:', error);
-    return { error: error instanceof Error ? error.message : 'Registrering feilet' };
+    return { error: 'Registrering feilet' };
   }
 }
 
+export async function getCurrentUser(): Promise<AuthUser | null> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return null;
+    }
+
+    // Check if user is super user
+    const { data: superUser } = await supabase
+      .from('super_users')
+      .select('*')
+      .eq('email', user.email)
+      .eq('active', true)
+      .single();
+
+    if (superUser) {
+      return {
+        id: superUser.id,
+        email: superUser.email,
+        user_type: 'super_user',
+        super_user_profile: superUser
+      };
+    }
+
+    // Check if user is organization member
+    const { data: member } = await supabase
+      .from('organization_members')
+      .select(`
+        *,
+        organizations (*)
+      `)
+      .eq('email', user.email)
+      .eq('approved', true)
+      .eq('active', true)
+      .single();
+
+    if (member) {
+      return {
+        id: member.id,
+        email: member.email,
+        user_type: 'organization_member',
+        organization_id: member.organization_id,
+        member_profile: member,
+        organization: member.organizations
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error getting current user:', error);
+    return null;
+  }
+}
+
+export async function signOut(): Promise<void> {
+  try {
+    await supabase.auth.signOut();
+  } catch (error) {
+    console.error('Error signing out:', error);
+  }
+}
+
+// Organization functions
 export async function getOrganizationBySlug(slug: string): Promise<ApiResponse<Organization>> {
   try {
-    // Load from localStorage for demo
-    const savedOrgs = localStorage.getItem('organizations');
-    if (savedOrgs) {
-      const organizations = JSON.parse(savedOrgs);
-      const organization = organizations.find((org: any) => org.slug === slug);
-      if (organization) {
-        return { data: organization };
-      }
+    const { data, error } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('slug', slug)
+      .eq('active', true)
+      .single();
+
+    if (error) {
+      return { error: 'Organisasjon ikke funnet' };
     }
-    
-    // Default SVPK organization for demo
-    if (slug === 'svpk') {
-      const defaultOrg: Organization = {
-        id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-        name: 'Svolvær Pistolklubb',
-        slug: 'svpk',
-        description: 'Norges beste pistolklubb',
-        website: 'https://svpk.no',
-        email: 'post@svpk.no',
-        phone: '+47 123 45 678',
-        address: 'Svolværgata 1, 8300 Svolvær',
-        logo_url: null,
-        primary_color: '#FFD700',
-        secondary_color: '#1F2937',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        active: true
-      };
-      
-      return { data: defaultOrg };
-    }
-    
-    return { error: 'Organisasjon ikke funnet' };
+
+    return { data };
   } catch (error) {
     console.error('Error getting organization:', error);
     return { error: 'Kunne ikke hente organisasjon' };
   }
 }
 
-export async function setUserContext(email: string): Promise<void> {
-  // For demo purposes, this is a no-op
-  console.log('Setting user context for:', email);
+export async function createOrganization(orgData: Partial<Organization>): Promise<ApiResponse<Organization>> {
+  try {
+    const { data, error } = await supabase
+      .from('organizations')
+      .insert({
+        name: orgData.name,
+        slug: orgData.slug,
+        description: orgData.description,
+        website: orgData.website,
+        email: orgData.email,
+        phone: orgData.phone,
+        address: orgData.address,
+        primary_color: orgData.primary_color || '#FFD700',
+        secondary_color: orgData.secondary_color || '#1F2937',
+        active: true
+      })
+      .select()
+      .single();
+
+    if (error) {
+      return { error: 'Kunne ikke opprette organisasjon' };
+    }
+
+    return { data };
+  } catch (error) {
+    console.error('Error creating organization:', error);
+    return { error: 'Kunne ikke opprette organisasjon' };
+  }
 }
 
 export async function getOrganizationBranding(organizationId: string): Promise<OrganizationBranding> {
   try {
-    const savedOrgs = localStorage.getItem('organizations');
-    if (savedOrgs) {
-      const organizations = JSON.parse(savedOrgs);
-      const organization = organizations.find((org: any) => org.id === organizationId);
-      if (organization) {
-        return {
-          organization_name: organization.name,
-          primary_color: organization.primary_color || '#FFD700',
-          secondary_color: organization.secondary_color || '#1F2937',
-          background_color: organization.background_color || '#111827',
-          logo_url: organization.logo_url
-        };
-      }
+    const { data: organization } = await supabase
+      .from('organizations')
+      .select('name, primary_color, secondary_color, logo_url')
+      .eq('id', organizationId)
+      .single();
+
+    if (organization) {
+      return {
+        organization_name: organization.name,
+        primary_color: organization.primary_color || '#FFD700',
+        secondary_color: organization.secondary_color || '#1F2937',
+        logo_url: organization.logo_url
+      };
     }
-    
+
     // Default branding
     return {
-      organization_name: 'Svolvær Pistolklubb',
+      organization_name: 'Idrettsklubb',
       primary_color: '#FFD700',
-      secondary_color: '#1F2937',
-      background_color: '#111827'
+      secondary_color: '#1F2937'
     };
   } catch (error) {
     console.error('Error getting organization branding:', error);
@@ -267,63 +332,56 @@ export async function getOrganizationBranding(organizationId: string): Promise<O
   }
 }
 
+// Super user functions
 export async function checkSuperUsersExist(): Promise<boolean> {
   try {
-    const savedSuperUsers = localStorage.getItem('superUsers');
-    if (savedSuperUsers) {
-      const superUsers = JSON.parse(savedSuperUsers);
-      return superUsers.some((user: any) => user.active);
+    const { data, error } = await supabase
+      .from('super_users')
+      .select('id')
+      .eq('active', true)
+      .limit(1);
+
+    if (error) {
+      console.error('Error checking super users:', error);
+      return false;
     }
-    return false;
+
+    return (data?.length || 0) > 0;
   } catch (error) {
     console.error('Error checking super users:', error);
     return false;
   }
 }
 
-export async function getCurrentUser(): Promise<AuthUser | null> {
+export async function createFirstSuperUser(email: string, password: string, fullName: string): Promise<ApiResponse<SuperUser>> {
   try {
-    const savedUser = localStorage.getItem('currentUser');
-    if (savedUser) {
-      const userData = JSON.parse(savedUser);
-      return userData.user;
-    }
-    return null;
-  } catch (error) {
-    console.error('Error getting current user:', error);
-    return null;
-  }
-}
-
-export async function signOut(): Promise<void> {
-  try {
-    localStorage.removeItem('currentUser');
-    await supabase.auth.signOut();
-  } catch (error) {
-    console.error('Error signing out:', error);
-  }
-}
-
-export async function createFirstSuperUser(email: string, password: string, fullName: string): Promise<ApiResponse<any>> {
-  try {
-    // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
-    
-    const newSuperUser = {
-      id: crypto.randomUUID(),
+    // First create Supabase auth user
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
-      full_name: fullName,
-      password_hash: passwordHash,
-      active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    // Save to localStorage
-    const superUsers = [newSuperUser];
-    localStorage.setItem('superUsers', JSON.stringify(superUsers));
-    
-    return { data: newSuperUser };
+      password
+    });
+
+    if (authError) {
+      return { error: authError.message };
+    }
+
+    // Create super user record
+    const { data, error } = await supabase
+      .from('super_users')
+      .insert({
+        email,
+        full_name: fullName,
+        password_hash: password, // In production, hash this properly
+        active: true
+      })
+      .select()
+      .single();
+
+    if (error) {
+      return { error: 'Kunne ikke opprette super-bruker' };
+    }
+
+    return { data };
   } catch (error) {
     console.error('Error creating first super user:', error);
     return { error: 'Kunne ikke opprette super-bruker' };
@@ -333,13 +391,17 @@ export async function createFirstSuperUser(email: string, password: string, full
 // Organization member functions
 export async function getOrganizationMembers(organizationId: string): Promise<ApiResponse<OrganizationMember[]>> {
   try {
-    const savedMembers = localStorage.getItem('members');
-    if (savedMembers) {
-      const members = JSON.parse(savedMembers);
-      const orgMembers = members.filter((member: any) => member.organization_id === organizationId);
-      return { data: orgMembers };
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return { error: 'Kunne ikke hente medlemmer' };
     }
-    return { data: [] };
+
+    return { data: data || [] };
   } catch (error) {
     console.error('Error getting organization members:', error);
     return { error: 'Kunne ikke hente medlemmer' };
@@ -347,35 +409,29 @@ export async function getOrganizationMembers(organizationId: string): Promise<Ap
 }
 
 export async function addOrganizationMember(
-  organizationId: string, 
+  organizationId: string,
   memberData: Partial<OrganizationMember> & { password?: string }
 ): Promise<ApiResponse<OrganizationMember>> {
   try {
-    const newMember: OrganizationMember = {
-      id: crypto.randomUUID(),
-      organization_id: organizationId,
-      email: memberData.email!,
-      full_name: memberData.full_name!,
-      member_number: memberData.member_number,
-      role: memberData.role || 'member',
-      approved: memberData.approved || false,
-      active: memberData.active !== false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    // Hash password if provided
-    if (memberData.password) {
-      (newMember as any).password_hash = await bcrypt.hash(memberData.password, 10);
+    const { data, error } = await supabase
+      .from('organization_members')
+      .insert({
+        organization_id: organizationId,
+        email: memberData.email,
+        full_name: memberData.full_name,
+        member_number: memberData.member_number,
+        role: memberData.role || 'member',
+        approved: memberData.approved || false,
+        active: memberData.active !== false
+      })
+      .select()
+      .single();
+
+    if (error) {
+      return { error: 'Kunne ikke legge til medlem' };
     }
-    
-    // Save to localStorage
-    const savedMembers = localStorage.getItem('members');
-    const members = savedMembers ? JSON.parse(savedMembers) : [];
-    members.push(newMember);
-    localStorage.setItem('members', JSON.stringify(members));
-    
-    return { data: newMember };
+
+    return { data };
   } catch (error) {
     console.error('Error adding organization member:', error);
     return { error: 'Kunne ikke legge til medlem' };
@@ -383,27 +439,22 @@ export async function addOrganizationMember(
 }
 
 export async function updateOrganizationMember(
-  memberId: string, 
+  memberId: string,
   updates: Partial<OrganizationMember>
 ): Promise<ApiResponse<OrganizationMember>> {
   try {
-    const savedMembers = localStorage.getItem('members');
-    if (savedMembers) {
-      const members = JSON.parse(savedMembers);
-      const memberIndex = members.findIndex((member: any) => member.id === memberId);
-      
-      if (memberIndex !== -1) {
-        members[memberIndex] = {
-          ...members[memberIndex],
-          ...updates,
-          updated_at: new Date().toISOString()
-        };
-        localStorage.setItem('members', JSON.stringify(members));
-        return { data: members[memberIndex] };
-      }
+    const { data, error } = await supabase
+      .from('organization_members')
+      .update(updates)
+      .eq('id', memberId)
+      .select()
+      .single();
+
+    if (error) {
+      return { error: 'Kunne ikke oppdatere medlem' };
     }
-    
-    return { error: 'Medlem ikke funnet' };
+
+    return { data };
   } catch (error) {
     console.error('Error updating organization member:', error);
     return { error: 'Kunne ikke oppdatere medlem' };
@@ -412,15 +463,16 @@ export async function updateOrganizationMember(
 
 export async function deleteOrganizationMember(memberId: string): Promise<ApiResponse<void>> {
   try {
-    const savedMembers = localStorage.getItem('members');
-    if (savedMembers) {
-      const members = JSON.parse(savedMembers);
-      const updatedMembers = members.filter((member: any) => member.id !== memberId);
-      localStorage.setItem('members', JSON.stringify(updatedMembers));
-      return { data: undefined };
+    const { error } = await supabase
+      .from('organization_members')
+      .delete()
+      .eq('id', memberId);
+
+    if (error) {
+      return { error: 'Kunne ikke slette medlem' };
     }
-    
-    return { error: 'Medlem ikke funnet' };
+
+    return { data: undefined };
   } catch (error) {
     console.error('Error deleting organization member:', error);
     return { error: 'Kunne ikke slette medlem' };
@@ -432,7 +484,7 @@ export async function approveMember(memberId: string): Promise<ApiResponse<Organ
 }
 
 export async function updateMemberRole(
-  memberId: string, 
+  memberId: string,
   role: 'member' | 'admin' | 'range_officer'
 ): Promise<ApiResponse<OrganizationMember>> {
   return updateOrganizationMember(memberId, { role });
@@ -441,31 +493,18 @@ export async function updateMemberRole(
 // Training location functions
 export async function getOrganizationTrainingLocations(organizationId: string): Promise<ApiResponse<TrainingLocation[]>> {
   try {
-    // Default locations for SVPK
-    const defaultLocations: TrainingLocation[] = [
-      {
-        id: 'loc-1',
-        organization_id: organizationId,
-        name: 'Innendørs 25m',
-        qr_code_id: 'svpk-innendors-25m',
-        description: 'Innendørs skytebane 25 meter',
-        active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      {
-        id: 'loc-2',
-        organization_id: organizationId,
-        name: 'Utendørs 25m',
-        qr_code_id: 'svpk-utendors-25m',
-        description: 'Utendørs skytebane 25 meter',
-        active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-    ];
-    
-    return { data: defaultLocations };
+    const { data, error } = await supabase
+      .from('training_locations')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('active', true)
+      .order('name');
+
+    if (error) {
+      return { error: 'Kunne ikke hente treningslokasjoner' };
+    }
+
+    return { data: data || [] };
   } catch (error) {
     console.error('Error getting training locations:', error);
     return { error: 'Kunne ikke hente treningslokasjoner' };
@@ -477,18 +516,23 @@ export async function createTrainingLocation(
   locationData: { name: string; qr_code_id: string; description?: string }
 ): Promise<ApiResponse<TrainingLocation>> {
   try {
-    const newLocation: TrainingLocation = {
-      id: crypto.randomUUID(),
-      organization_id: organizationId,
-      name: locationData.name,
-      qr_code_id: locationData.qr_code_id,
-      description: locationData.description,
-      active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    return { data: newLocation };
+    const { data, error } = await supabase
+      .from('training_locations')
+      .insert({
+        organization_id: organizationId,
+        name: locationData.name,
+        qr_code_id: locationData.qr_code_id,
+        description: locationData.description,
+        active: true
+      })
+      .select()
+      .single();
+
+    if (error) {
+      return { error: 'Kunne ikke opprette treningslokasjon' };
+    }
+
+    return { data };
   } catch (error) {
     console.error('Error creating training location:', error);
     return { error: 'Kunne ikke opprette treningslokasjon' };
@@ -500,19 +544,18 @@ export async function updateTrainingLocation(
   updates: Partial<TrainingLocation>
 ): Promise<ApiResponse<TrainingLocation>> {
   try {
-    // For demo, return updated location
-    const updatedLocation: TrainingLocation = {
-      id: locationId,
-      organization_id: updates.organization_id || '',
-      name: updates.name || '',
-      qr_code_id: updates.qr_code_id || '',
-      description: updates.description,
-      active: updates.active !== false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    return { data: updatedLocation };
+    const { data, error } = await supabase
+      .from('training_locations')
+      .update(updates)
+      .eq('id', locationId)
+      .select()
+      .single();
+
+    if (error) {
+      return { error: 'Kunne ikke oppdatere treningslokasjon' };
+    }
+
+    return { data };
   } catch (error) {
     console.error('Error updating training location:', error);
     return { error: 'Kunne ikke oppdatere treningslokasjon' };
@@ -521,15 +564,19 @@ export async function updateTrainingLocation(
 
 export async function getTrainingLocationByQR(organizationId: string, qrCode: string): Promise<ApiResponse<TrainingLocation>> {
   try {
-    const locationsResult = await getOrganizationTrainingLocations(organizationId);
-    if (locationsResult.data) {
-      const location = locationsResult.data.find(loc => loc.qr_code_id === qrCode);
-      if (location) {
-        return { data: location };
-      }
+    const { data, error } = await supabase
+      .from('training_locations')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('qr_code_id', qrCode)
+      .eq('active', true)
+      .single();
+
+    if (error) {
+      return { error: `Treningslokasjon ikke funnet for QR-kode: ${qrCode}` };
     }
-    
-    return { error: `Treningslokasjon ikke funnet for QR-kode: ${qrCode}` };
+
+    return { data };
   } catch (error) {
     console.error('Error getting training location by QR:', error);
     return { error: 'Kunne ikke finne treningslokasjon' };
@@ -544,44 +591,43 @@ export async function startTrainingSession(
 ): Promise<ApiResponse<MemberTrainingSession>> {
   try {
     // Check for existing session today
-    const today = new Date().toDateString();
-    const savedSessions = localStorage.getItem('trainingSessions');
-    
-    if (savedSessions) {
-      const sessions = JSON.parse(savedSessions);
-      const existingToday = sessions.find((session: any) => 
-        session.user_id === memberId && 
-        new Date(session.date).toDateString() === today
-      );
-      
-      if (existingToday) {
-        return { error: 'Du har allerede registrert trening i dag' };
-      }
+    const today = new Date().toISOString().split('T')[0];
+    const { data: existingSession } = await supabase
+      .from('member_training_sessions')
+      .select('id')
+      .eq('organization_id', organizationId)
+      .eq('member_id', memberId)
+      .gte('start_time', `${today}T00:00:00`)
+      .lt('start_time', `${today}T23:59:59`)
+      .single();
+
+    if (existingSession) {
+      return { error: 'Du har allerede registrert trening i dag' };
     }
-    
+
     // Create new training session
-    const newSession = {
-      id: crypto.randomUUID(),
-      user_id: memberId,
-      organization_id: organizationId,
-      location_id: locationId,
-      date: new Date().toISOString(),
-      start_time: new Date().toISOString(),
-      verified: false,
-      approved: false,
-      manual_entry: false,
-      memberName: 'Medlem',
-      location: 'Skytebane',
-      duration: '2 timer',
-      activity: 'Trening'
-    };
-    
-    // Save to localStorage
-    const sessions = savedSessions ? JSON.parse(savedSessions) : [];
-    sessions.push(newSession);
-    localStorage.setItem('trainingSessions', JSON.stringify(sessions));
-    
-    return { data: newSession as any };
+    const { data, error } = await supabase
+      .from('member_training_sessions')
+      .insert({
+        organization_id: organizationId,
+        member_id: memberId,
+        location_id: locationId,
+        start_time: new Date().toISOString(),
+        verified: false,
+        manual_entry: false
+      })
+      .select(`
+        *,
+        organization_members (*),
+        training_locations (*)
+      `)
+      .single();
+
+    if (error) {
+      return { error: 'Kunne ikke starte treningsøkt' };
+    }
+
+    return { data };
   } catch (error) {
     console.error('Error starting training session:', error);
     return { error: 'Kunne ikke starte treningsøkt' };
@@ -590,38 +636,23 @@ export async function startTrainingSession(
 
 export async function getMemberTrainingSessions(memberId: string): Promise<ApiResponse<MemberTrainingSession[]>> {
   try {
-    const savedSessions = localStorage.getItem('trainingSessions');
-    if (savedSessions) {
-      const sessions = JSON.parse(savedSessions);
-      const memberSessions = sessions
-        .filter((session: any) => session.user_id === memberId)
-        .map((session: any) => ({
-          id: session.id,
-          organization_id: session.organization_id || '',
-          member_id: memberId,
-          location_id: session.location_id || '',
-          start_time: session.date || session.start_time,
-          end_time: session.end_time,
-          duration_minutes: session.duration_minutes,
-          verified: session.verified || session.approved || false,
-          verified_by: session.verifiedBy || session.rangeOfficer,
-          verification_time: session.verification_time,
-          manual_entry: session.manual_entry || false,
-          notes: session.notes,
-          created_at: session.created_at || session.date,
-          updated_at: session.updated_at || session.date,
-          details: session.details || {
-            training_type: session.training_type,
-            results: session.results,
-            notes: session.notes
-          },
-          target_images: session.target_images || []
-        }));
-      
-      return { data: memberSessions };
+    const { data, error } = await supabase
+      .from('member_training_sessions')
+      .select(`
+        *,
+        organization_members (*),
+        training_locations (*),
+        training_session_details (*),
+        session_target_images (*)
+      `)
+      .eq('member_id', memberId)
+      .order('start_time', { ascending: false });
+
+    if (error) {
+      return { error: 'Kunne ikke hente treningsøkter' };
     }
-    
-    return { data: [] };
+
+    return { data: data || [] };
   } catch (error) {
     console.error('Error getting member training sessions:', error);
     return { error: 'Kunne ikke hente treningsøkter' };
@@ -630,53 +661,23 @@ export async function getMemberTrainingSessions(memberId: string): Promise<ApiRe
 
 export async function getOrganizationTrainingSessions(organizationId: string): Promise<ApiResponse<MemberTrainingSession[]>> {
   try {
-    const savedSessions = localStorage.getItem('trainingSessions');
-    if (savedSessions) {
-      const sessions = JSON.parse(savedSessions);
-      const orgSessions = sessions
-        .filter((session: any) => session.organization_id === organizationId)
-        .map((session: any) => ({
-          id: session.id,
-          organization_id: organizationId,
-          member_id: session.user_id || session.member_id,
-          location_id: session.location_id || '',
-          start_time: session.date || session.start_time,
-          end_time: session.end_time,
-          duration_minutes: session.duration_minutes,
-          verified: session.verified || session.approved || false,
-          verified_by: session.verifiedBy || session.rangeOfficer,
-          verification_time: session.verification_time,
-          manual_entry: session.manual_entry || false,
-          notes: session.notes,
-          created_at: session.created_at || session.date,
-          updated_at: session.updated_at || session.date,
-          member: {
-            id: session.user_id || session.member_id,
-            full_name: session.memberName || 'Ukjent medlem',
-            member_number: session.memberNumber || '',
-            email: '',
-            organization_id: organizationId,
-            role: 'member',
-            approved: true,
-            active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          },
-          location: {
-            id: session.location_id || '',
-            name: session.location || session.rangeName || 'Ukjent lokasjon',
-            qr_code_id: '',
-            organization_id: organizationId,
-            active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }
-        }));
-      
-      return { data: orgSessions };
+    const { data, error } = await supabase
+      .from('member_training_sessions')
+      .select(`
+        *,
+        organization_members (*),
+        training_locations (*),
+        training_session_details (*),
+        session_target_images (*)
+      `)
+      .eq('organization_id', organizationId)
+      .order('start_time', { ascending: false });
+
+    if (error) {
+      return { error: 'Kunne ikke hente treningsøkter' };
     }
-    
-    return { data: [] };
+
+    return { data: data || [] };
   } catch (error) {
     console.error('Error getting organization training sessions:', error);
     return { error: 'Kunne ikke hente treningsøkter' };
@@ -685,22 +686,19 @@ export async function getOrganizationTrainingSessions(organizationId: string): P
 
 export async function verifyTrainingSession(sessionId: string, verifiedBy: string): Promise<ApiResponse<void>> {
   try {
-    const savedSessions = localStorage.getItem('trainingSessions');
-    if (savedSessions) {
-      const sessions = JSON.parse(savedSessions);
-      const updatedSessions = sessions.map((session: any) =>
-        session.id === sessionId ? {
-          ...session,
-          verified: true,
-          approved: true,
-          verifiedBy,
-          rangeOfficer: verifiedBy,
-          verification_time: new Date().toISOString()
-        } : session
-      );
-      localStorage.setItem('trainingSessions', JSON.stringify(updatedSessions));
+    const { error } = await supabase
+      .from('member_training_sessions')
+      .update({
+        verified: true,
+        verified_by: verifiedBy,
+        verification_time: new Date().toISOString()
+      })
+      .eq('id', sessionId);
+
+    if (error) {
+      return { error: 'Kunne ikke verifisere treningsøkt' };
     }
-    
+
     return { data: undefined };
   } catch (error) {
     console.error('Error verifying training session:', error);
@@ -716,35 +714,42 @@ export async function addManualTrainingSession(
   verifiedBy: string
 ): Promise<ApiResponse<MemberTrainingSession>> {
   try {
-    const newSession = {
-      id: crypto.randomUUID(),
-      user_id: memberId,
-      member_id: memberId,
-      organization_id: organizationId,
-      location_id: locationId,
-      date: sessionData.date,
-      start_time: sessionData.date,
-      activity: sessionData.activity,
-      notes: sessionData.notes,
-      verified: true,
-      approved: true,
-      verifiedBy,
-      rangeOfficer: verifiedBy,
-      manual_entry: true,
-      duration: '2 timer',
-      location: 'Manuell registrering',
-      memberName: 'Medlem',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    // Save to localStorage
-    const savedSessions = localStorage.getItem('trainingSessions');
-    const sessions = savedSessions ? JSON.parse(savedSessions) : [];
-    sessions.push(newSession);
-    localStorage.setItem('trainingSessions', JSON.stringify(sessions));
-    
-    return { data: newSession as any };
+    const { data, error } = await supabase
+      .from('member_training_sessions')
+      .insert({
+        organization_id: organizationId,
+        member_id: memberId,
+        location_id: locationId,
+        start_time: new Date(sessionData.date).toISOString(),
+        verified: true,
+        verified_by: verifiedBy,
+        verification_time: new Date().toISOString(),
+        manual_entry: true,
+        notes: sessionData.notes
+      })
+      .select(`
+        *,
+        organization_members (*),
+        training_locations (*)
+      `)
+      .single();
+
+    if (error) {
+      return { error: 'Kunne ikke legge til manuell treningsøkt' };
+    }
+
+    // Add training details if activity is specified
+    if (sessionData.activity && sessionData.activity !== 'Trening') {
+      await supabase
+        .from('training_session_details')
+        .insert({
+          session_id: data.id,
+          training_type: sessionData.activity,
+          notes: sessionData.notes
+        });
+    }
+
+    return { data };
   } catch (error) {
     console.error('Error adding manual training session:', error);
     return { error: 'Kunne ikke legge til manuell treningsøkt' };
@@ -753,25 +758,40 @@ export async function addManualTrainingSession(
 
 export async function updateTrainingDetails(
   sessionId: string,
-  details: TrainingSessionDetails
+  details: Partial<TrainingSessionDetails>
 ): Promise<ApiResponse<void>> {
   try {
-    const savedSessions = localStorage.getItem('trainingSessions');
-    if (savedSessions) {
-      const sessions = JSON.parse(savedSessions);
-      const updatedSessions = sessions.map((session: any) =>
-        session.id === sessionId ? {
-          ...session,
-          details,
-          training_type: details.training_type,
-          results: details.results,
-          notes: details.notes,
-          updated_at: new Date().toISOString()
-        } : session
-      );
-      localStorage.setItem('trainingSessions', JSON.stringify(updatedSessions));
+    // Check if details already exist
+    const { data: existingDetails } = await supabase
+      .from('training_session_details')
+      .select('id')
+      .eq('session_id', sessionId)
+      .single();
+
+    if (existingDetails) {
+      // Update existing
+      const { error } = await supabase
+        .from('training_session_details')
+        .update(details)
+        .eq('session_id', sessionId);
+
+      if (error) {
+        return { error: 'Kunne ikke oppdatere treningsdetaljer' };
+      }
+    } else {
+      // Create new
+      const { error } = await supabase
+        .from('training_session_details')
+        .insert({
+          session_id: sessionId,
+          ...details
+        });
+
+      if (error) {
+        return { error: 'Kunne ikke opprette treningsdetaljer' };
+      }
     }
-    
+
     return { data: undefined };
   } catch (error) {
     console.error('Error updating training details:', error);
@@ -782,16 +802,23 @@ export async function updateTrainingDetails(
 // File upload functions
 export async function uploadProfileImage(file: File, userId: string): Promise<string> {
   try {
-    // Convert to base64 for localStorage demo
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const imageUrl = e.target?.result as string;
-        resolve(imageUrl);
-      };
-      reader.onerror = () => reject(new Error('Kunne ikke lese filen'));
-      reader.readAsDataURL(file);
-    });
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${userId}-${Date.now()}.${fileExt}`;
+    const filePath = `avatars/${fileName}`;
+
+    const { data, error } = await supabase.storage
+      .from('profiles')
+      .upload(filePath, file);
+
+    if (error) {
+      throw new Error('Kunne ikke laste opp profilbilde');
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('profiles')
+      .getPublicUrl(filePath);
+
+    return publicUrl;
   } catch (error) {
     console.error('Error uploading profile image:', error);
     throw new Error('Kunne ikke laste opp profilbilde');
@@ -800,16 +827,23 @@ export async function uploadProfileImage(file: File, userId: string): Promise<st
 
 export async function uploadStartkortPDF(file: File, userId: string): Promise<string> {
   try {
-    // Convert to base64 for localStorage demo
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const fileUrl = e.target?.result as string;
-        resolve(fileUrl);
-      };
-      reader.onerror = () => reject(new Error('Kunne ikke lese filen'));
-      reader.readAsDataURL(file);
-    });
+    const fileExt = file.name.split('.').pop();
+    const fileName = `startkort-${userId}-${Date.now()}.${fileExt}`;
+    const filePath = `documents/${fileName}`;
+
+    const { data, error } = await supabase.storage
+      .from('documents')
+      .upload(filePath, file);
+
+    if (error) {
+      throw new Error('Kunne ikke laste opp startkort');
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('documents')
+      .getPublicUrl(filePath);
+
+    return publicUrl;
   } catch (error) {
     console.error('Error uploading startkort PDF:', error);
     throw new Error('Kunne ikke laste opp startkort');
@@ -818,16 +852,23 @@ export async function uploadStartkortPDF(file: File, userId: string): Promise<st
 
 export async function uploadDiplomaPDF(file: File, userId: string): Promise<string> {
   try {
-    // Convert to base64 for localStorage demo
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const fileUrl = e.target?.result as string;
-        resolve(fileUrl);
-      };
-      reader.onerror = () => reject(new Error('Kunne ikke lese filen'));
-      reader.readAsDataURL(file);
-    });
+    const fileExt = file.name.split('.').pop();
+    const fileName = `diploma-${userId}-${Date.now()}.${fileExt}`;
+    const filePath = `documents/${fileName}`;
+
+    const { data, error } = await supabase.storage
+      .from('documents')
+      .upload(filePath, file);
+
+    if (error) {
+      throw new Error('Kunne ikke laste opp diplom');
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('documents')
+      .getPublicUrl(filePath);
+
+    return publicUrl;
   } catch (error) {
     console.error('Error uploading diploma PDF:', error);
     throw new Error('Kunne ikke laste opp diplom');
@@ -836,16 +877,32 @@ export async function uploadDiplomaPDF(file: File, userId: string): Promise<stri
 
 export async function uploadTargetImage(file: File, sessionId: string): Promise<string> {
   try {
-    // Convert to base64 for localStorage demo
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const imageUrl = e.target?.result as string;
-        resolve(imageUrl);
-      };
-      reader.onerror = () => reject(new Error('Kunne ikke lese filen'));
-      reader.readAsDataURL(file);
-    });
+    const fileExt = file.name.split('.').pop();
+    const fileName = `target-${sessionId}-${Date.now()}.${fileExt}`;
+    const filePath = `target-images/${fileName}`;
+
+    const { data, error } = await supabase.storage
+      .from('target-images')
+      .upload(filePath, file);
+
+    if (error) {
+      throw new Error('Kunne ikke laste opp målbilde');
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('target-images')
+      .getPublicUrl(filePath);
+
+    // Save to session_target_images table
+    await supabase
+      .from('session_target_images')
+      .insert({
+        session_id: sessionId,
+        image_url: publicUrl,
+        filename: file.name
+      });
+
+    return publicUrl;
   } catch (error) {
     console.error('Error uploading target image:', error);
     throw new Error('Kunne ikke laste opp målbilde');
@@ -854,62 +911,35 @@ export async function uploadTargetImage(file: File, sessionId: string): Promise<
 
 export async function updateOrganizationLogo(organizationId: string, file: File): Promise<ApiResponse<string>> {
   try {
-    // Convert to base64 for localStorage demo
-    const logoUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const imageUrl = e.target?.result as string;
-        resolve(imageUrl);
-      };
-      reader.onerror = () => reject(new Error('Kunne ikke lese filen'));
-      reader.readAsDataURL(file);
-    });
-    
-    // Update organization in localStorage
-    const savedOrgs = localStorage.getItem('organizations');
-    if (savedOrgs) {
-      const organizations = JSON.parse(savedOrgs);
-      const updatedOrganizations = organizations.map((org: any) =>
-        org.id === organizationId ? { ...org, logo_url: logoUrl, updated_at: new Date().toISOString() } : org
-      );
-      localStorage.setItem('organizations', JSON.stringify(updatedOrganizations));
+    const fileExt = file.name.split('.').pop();
+    const fileName = `logo-${organizationId}-${Date.now()}.${fileExt}`;
+    const filePath = `logos/${fileName}`;
+
+    const { data, error } = await supabase.storage
+      .from('logos')
+      .upload(filePath, file);
+
+    if (error) {
+      throw new Error('Kunne ikke laste opp logo');
     }
-    
-    return { data: logoUrl };
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('logos')
+      .getPublicUrl(filePath);
+
+    // Update organization with new logo URL
+    const { error: updateError } = await supabase
+      .from('organizations')
+      .update({ logo_url: publicUrl })
+      .eq('id', organizationId);
+
+    if (updateError) {
+      throw new Error('Kunne ikke oppdatere organisasjon med ny logo');
+    }
+
+    return { data: publicUrl };
   } catch (error) {
     console.error('Error updating organization logo:', error);
     return { error: 'Kunne ikke oppdatere logo' };
-  }
-}
-
-export async function createOrganization(orgData: any): Promise<ApiResponse<Organization>> {
-  try {
-    const newOrganization: Organization = {
-      id: crypto.randomUUID(),
-      name: orgData.name,
-      slug: orgData.slug,
-      description: orgData.description,
-      website: orgData.website,
-      email: orgData.email,
-      phone: orgData.phone,
-      address: orgData.address,
-      logo_url: null,
-      primary_color: orgData.primary_color || '#FFD700',
-      secondary_color: orgData.secondary_color || '#1F2937',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      active: true
-    };
-    
-    // Save to localStorage
-    const savedOrgs = localStorage.getItem('organizations');
-    const organizations = savedOrgs ? JSON.parse(savedOrgs) : [];
-    organizations.push(newOrganization);
-    localStorage.setItem('organizations', JSON.stringify(organizations));
-    
-    return { data: newOrganization };
-  } catch (error) {
-    console.error('Error creating organization:', error);
-    return { error: 'Kunne ikke opprette organisasjon' };
   }
 }

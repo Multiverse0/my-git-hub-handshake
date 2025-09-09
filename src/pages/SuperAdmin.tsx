@@ -8,6 +8,7 @@ import type { Organization, OrganizationMember } from '../lib/types';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { DataExportManager } from '../components/DataExportManager';
 import { LanguageFileManager } from '../components/LanguageFileManager';
+import { SupabaseStatus } from '../components/SupabaseStatus';
 
 interface OrganizationWithStats extends Organization {
   member_count: number;
@@ -899,6 +900,7 @@ export function SuperAdmin() {
               <p className="text-gray-400">Administrer alle organisasjoner i systemet</p>
             </div>
             <div className="flex items-center gap-4">
+              <SupabaseStatus showDetails={false} />
               <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
                 <ThemeToggle />
               </div>

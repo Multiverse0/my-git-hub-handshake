@@ -4,6 +4,7 @@ import { Home, QrCode, ClipboardList, User, Shield, Menu, X, LogOut, Building2 }
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { OrganizationSelector } from './OrganizationSelector';
+import { SupabaseStatus } from './SupabaseStatus';
 
 export function Navigation() {
   const location = useLocation();
@@ -52,6 +53,11 @@ export function Navigation() {
                 </span>
               </div>
             )}
+            
+            {/* Supabase Status Indicator */}
+            <div className="ml-4">
+              <SupabaseStatus />
+            </div>
           </div>
           
           {/* Desktop Navigation */}

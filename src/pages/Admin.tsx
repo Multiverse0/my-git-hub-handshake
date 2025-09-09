@@ -11,7 +11,7 @@ import { EmailManagement } from '../components/EmailManagement';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { languages, setCurrentLanguage } from '../lib/translations';
-import { sendEmail } from '../lib/emailService';
+import { SupabaseStatus } from '../components/SupabaseStatus';
 
 export function Admin() {
   const { user, organization, branding, profile } = useAuth();
@@ -201,6 +201,11 @@ export function Admin() {
 
   return (
     <div className="space-y-8">
+      {/* Supabase Connection Status */}
+      <div className="mb-6">
+        <SupabaseStatus showDetails={true} />
+      </div>
+      
       <header className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-svpk-yellow mb-2">
