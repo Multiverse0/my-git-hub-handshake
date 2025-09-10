@@ -195,25 +195,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ) => {
     try {
       setLoading(true);
-      console.log('📝 Starting minimal signup test...');
       
-      // Minimal signup test - just create auth user
-      const { data, error } = await supabase.auth.signUp({
+      // Use the existing registerOrganizationMember function from supabase.ts
+      const result = await registerOrganizationMember(
+        organizationSlug,
         email,
         password,
-      });
+        fullName,
+        memberNumber
+      );
       
-      if (error) {
-        console.error('❌ Supabase signup failed:', error);
-        throw new Error(error.message);
+      if (result.error) {
+        throw new Error(result.error);
       }
       
-      if (!data.user) {
-        throw new Error('No user returned from signup');
-      }
-      
-      console.log('✅ Minimal signup successful:', data.user.id);
-      return data;
+      console.log('✅ Registration successful');
+      return result.data;
 
     } catch (error) {
       console.error('❌ Registration error:', error);
