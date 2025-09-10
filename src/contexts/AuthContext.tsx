@@ -171,116 +171,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setBranding(brandingData);
         } else if (organizationSlug && user.user_type === 'super_user') {
           // Super users can access any organization
-          try {
             const orgResult = await getOrganizationBySlug(organizationSlug);
             if (orgResult.data) {
               setOrganization(orgResult.data);
-              const brandingData = await getOrganizationBranding(orgResult.data.id);
-              setBranding(brandingData);
-            }
-          } catch (error) {
-            console.warn('Could not load organization for super user:', error);
-          }
-        }
-        
-        // Handle remember me
-        if (rememberMe) {
-          localStorage.setItem('rememberedUser', JSON.stringify({ email }));
-        } else {
-          localStorage.removeItem('rememberedUser');
-        }
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const register = async (organizationSlug: string, email: string, password: string, fullName: string, memberNumber?: string) => {
-    try {
-      console.log('📝 Registering with Supabase:', email);
-
-      // Get organization first to validate it exists
-      const orgResult = await getOrganizationBySlug(organizationSlug);
-      if (orgResult.error || !orgResult.data) {
-        throw new Error('Organisasjon ikke funnet');
-      }
-
-      const organization = orgResult.data;
-      console.log('✅ Organization found:', organization.name);
-
-      // Create user in Supabase Auth first
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (error) {
-        console.error('❌ Supabase Auth signup failed:', error);
-        throw error;
-      }
-
-      if (!data.user) {
-        console.error('❌ No user returned from signup');
-        throw new Error('Kunne ikke opprette bruker');
-      }
-
-      console.log('✅ Supabase Auth user created:', data.user.id);
-
-      // Create organization member profile separately
-      const { error: profileError } = await supabase
-        .from('organization_members')
-        .insert({
-          id: data.user.id, // Same as auth.users.id
-          organization_id: organization.id,
-          email,
-          full_name: fullName,
-          member_number: memberNumber,
-          password_hash: 'managed_by_supabase_auth', // Placeholder since column is NOT NULL
-          role: 'member',
-          approved: false,
-          active: true,
-        })
-
-      if (profileError) {
-        console.error('❌ Failed to create member profile:', profileError);
-        
-        // Rollback: Delete the auth user if profile creation failed
-        try {
-          await supabase.auth.admin.deleteUser(data.user.id);
-          console.log('🔄 Rolled back auth user creation');
-        } catch (rollbackError) {
-          console.error('❌ Failed to rollback auth user:', rollbackError);
-        }
-        
-        throw profileError;
-      }
-
-      console.log('✅ Member profile created successfully');
-
-      // Send welcome email (if email service is configured)
-      try {
-        const { sendMemberWelcomeEmail } = await import('../lib/emailService');
-        await sendMemberWelcomeEmail(
-          email,
-          fullName,
-          organization.name,
-          organization.id,
-          memberNumber
-        );
-        console.log('📧 Welcome email sent');
-      } catch (emailError) {
-        console.warn('⚠️ Welcome email failed:', emailError);
-        // Don't fail registration if email fails
-      }
-
-      console.log('✅ Registration completed successfully');
+      console.log('✅ Supabase registration successful:', data);
       return data;
       
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('❌ Registration error:', error);
       throw error;
     }
   };
