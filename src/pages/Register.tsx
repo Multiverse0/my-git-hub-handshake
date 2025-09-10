@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Shield, Mail, Lock, User, Hash, Loader2, AlertCircle, ArrowLeft, ExternalLink, CheckCircle } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 export function Register() {
   const navigate = useNavigate();
+  const { register } = useAuth();
   const [searchParams] = useSearchParams();
   const orgSlug = searchParams.get('org') || 'svpk';
   
@@ -52,31 +54,14 @@ export function Register() {
       setIsLoading(true);
       console.log('📝 Submitting registration for:', formData.email);
       
-      // Simple registration - save to localStorage for demo
-      const newMember = {
-        id: crypto.randomUUID(),
-        organization_id: organization.id,
-        email: formData.email,
-        full_name: formData.fullName,
-        member_number: formData.memberNumber,
-        role: 'member',
-        approved: false,
-        active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      // Save to localStorage
-      const savedMembers = localStorage.getItem('members');
-      const members = savedMembers ? JSON.parse(savedMembers) : [];
-      
-      // Check for duplicate email
-      if (members.some((member: any) => member.email === formData.email)) {
-        throw new Error('E-post er allerede registrert');
-      }
-      
-      members.push(newMember);
-      localStorage.setItem('members', JSON.stringify(members));
+      // Use Supabase registration
+      await register(
+        orgSlug,
+        formData.email,
+        formData.password,
+        formData.fullName,
+        formData.memberNumber
+      );
       
       console.log('✅ Registration successful');
       setRegistrationSubmitted(true);
