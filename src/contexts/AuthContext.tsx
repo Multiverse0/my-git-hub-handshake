@@ -174,6 +174,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const orgResult = await getOrganizationBySlug(organizationSlug);
             if (orgResult.data) {
               setOrganization(orgResult.data);
+            }
+        }
+      }
       console.log('✅ Supabase registration successful:', data);
       return data;
       
