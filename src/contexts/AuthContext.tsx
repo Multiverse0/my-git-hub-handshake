@@ -211,56 +211,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const organization = orgResult.data;
       console.log('✅ Organization found:', organization.name);
 
-      // Create the user in Supabase auth
+      // Create user in Supabase Auth first
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: {
-            full_name: fullName,
-            member_number: memberNumber,
-            organization_slug: organizationSlug,
-            organization_id: organization.id,
-            role: 'member'
-          },
-        },
       });
 
       if (error) {
         console.error('❌ Supabase Auth signup failed:', error);
-        throw new Error(error.message);
+        throw error;
       }
 
       if (!data.user) {
+        console.error('❌ No user returned from signup');
         throw new Error('Kunne ikke opprette bruker');
       }
 
       console.log('✅ Supabase Auth user created:', data.user.id);
 
-      // Create organization member record using the auth user ID
-      const bcryptLib = await import('bcryptjs');
-      const passwordHash = await bcryptLib.hash(password, 10);
-
-      const { data: memberData, error: memberError } = await supabase
+      // Create organization member profile separately
+      const { error: profileError } = await supabase
         .from('organization_members')
         .insert({
-          id: data.user.id, // Use auth user ID as primary key
+          id: data.user.id, // Same as auth.users.id
           organization_id: organization.id,
           email,
           full_name: fullName,
           member_number: memberNumber,
-          password_hash: passwordHash,
+          password_hash: 'managed_by_supabase_auth', // Placeholder since column is NOT NULL
           role: 'member',
           approved: false,
-          active: true
+          active: true,
         })
-        .select()
-        .single();
 
-      if (memberError) {
-        console.error('❌ Failed to create member record:', memberError);
+      if (profileError) {
+        console.error('❌ Failed to create member profile:', profileError);
         
-        // Rollback: Delete the auth user if member creation failed
+        // Rollback: Delete the auth user if profile creation failed
         try {
           await supabase.auth.admin.deleteUser(data.user.id);
           console.log('🔄 Rolled back auth user creation');
@@ -268,10 +255,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('❌ Failed to rollback auth user:', rollbackError);
         }
         
-        throw new Error('Kunne ikke registrere medlem');
+        throw profileError;
       }
 
-      console.log('✅ Member record created successfully');
+      console.log('✅ Member profile created successfully');
 
       // Send welcome email (if email service is configured)
       try {
@@ -290,6 +277,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       console.log('✅ Registration completed successfully');
+      return data;
       
     } catch (error) {
       console.error('Registration error:', error);
