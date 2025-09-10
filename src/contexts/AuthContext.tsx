@@ -200,35 +200,96 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
   const register = async (organizationSlug: string, email: string, password: string, fullName: string, memberNumber?: string) => {
     try {
-      console.log('📝 Starting registration for:', email, 'in organization:', organizationSlug);
-      
-      // Simple localStorage registration for demo
-      const newMember = {
-        id: crypto.randomUUID(),
-        organization_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-        email,
-        full_name: fullName,
-        member_number: memberNumber,
-        role: 'member',
-        approved: false,
-        active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      console.log('📝 Registering with Supabase:', email);
 
-      // Save to localStorage
-      const savedMembers = localStorage.getItem('members');
-      const members = savedMembers ? JSON.parse(savedMembers) : [];
-      
-      // Check for duplicate email
-      if (members.some((member: any) => member.email === email)) {
-        throw new Error('E-post er allerede registrert');
+      // Get organization first to validate it exists
+      const orgResult = await getOrganizationBySlug(organizationSlug);
+      if (orgResult.error || !orgResult.data) {
+        throw new Error('Organisasjon ikke funnet');
       }
-      
-      members.push(newMember);
-      localStorage.setItem('members', JSON.stringify(members));
-      
-      console.log('✅ Registration successful');
+
+      const organization = orgResult.data;
+      console.log('✅ Organization found:', organization.name);
+
+      // Create the user in Supabase auth
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            member_number: memberNumber,
+            organization_slug: organizationSlug,
+            organization_id: organization.id,
+            role: 'member'
+          },
+        },
+      });
+
+      if (error) {
+        console.error('❌ Supabase Auth signup failed:', error);
+        throw new Error(error.message);
+      }
+
+      if (!data.user) {
+        throw new Error('Kunne ikke opprette bruker');
+      }
+
+      console.log('✅ Supabase Auth user created:', data.user.id);
+
+      // Create organization member record using the auth user ID
+      const bcryptLib = await import('bcryptjs');
+      const passwordHash = await bcryptLib.hash(password, 10);
+
+      const { data: memberData, error: memberError } = await supabase
+        .from('organization_members')
+        .insert({
+          id: data.user.id, // Use auth user ID as primary key
+          organization_id: organization.id,
+          email,
+          full_name: fullName,
+          member_number: memberNumber,
+          password_hash: passwordHash,
+          role: 'member',
+          approved: false,
+          active: true
+        })
+        .select()
+        .single();
+
+      if (memberError) {
+        console.error('❌ Failed to create member record:', memberError);
+        
+        // Rollback: Delete the auth user if member creation failed
+        try {
+          await supabase.auth.admin.deleteUser(data.user.id);
+          console.log('🔄 Rolled back auth user creation');
+        } catch (rollbackError) {
+          console.error('❌ Failed to rollback auth user:', rollbackError);
+        }
+        
+        throw new Error('Kunne ikke registrere medlem');
+      }
+
+      console.log('✅ Member record created successfully');
+
+      // Send welcome email (if email service is configured)
+      try {
+        const { sendMemberWelcomeEmail } = await import('../lib/emailService');
+        await sendMemberWelcomeEmail(
+          email,
+          fullName,
+          organization.name,
+          organization.id,
+          memberNumber
+        );
+        console.log('📧 Welcome email sent');
+      } catch (emailError) {
+        console.warn('⚠️ Welcome email failed:', emailError);
+        // Don't fail registration if email fails
+      }
+
+      console.log('✅ Registration completed successfully');
       
     } catch (error) {
       console.error('Registration error:', error);
