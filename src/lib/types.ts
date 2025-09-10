@@ -138,7 +138,8 @@ export interface Profile {
   avatar_url?: string;
   startkort_url?: string;
   diploma_url?: string;
-  role?: 'user' | 'admin' | 'superuser';
+  // This role is for the legacy profiles table, not the organization_members role
+  role?: 'member' | 'admin' | 'range_officer' | 'super_user';
   created_at?: string;
   updated_at?: string;
 }

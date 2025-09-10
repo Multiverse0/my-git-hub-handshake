@@ -8,6 +8,7 @@ import type {
   MemberTrainingSession,
   TrainingSessionDetails,
   ApiResponse,
+  Profile
   SuperUser
 } from './types';
 
@@ -63,6 +64,20 @@ export async function authenticateUser(email: string, password: string): Promise
           super_user_profile: superUser
         };
         
+        // Create or update profile entry for super user
+        await supabase.from('profiles').upsert({
+          id: superUser.id,
+          full_name: superUser.full_name,
+          email: superUser.email,
+          member_number: null, // Super users don't have member numbers
+          role: 'super_user',
+          created_at: superUser.created_at,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'id',
+          ignoreDuplicates: false
+        });
+
         await setUserContext(authUser.email);
         return { data: { user: authUser } };
       }
@@ -95,6 +110,20 @@ export async function authenticateUser(email: string, password: string): Promise
           organization: member.organizations
         };
         
+        // Create or update profile entry for organization member
+        await supabase.from('profiles').upsert({
+          id: member.id,
+          full_name: member.full_name,
+          email: member.email,
+          member_number: member.member_number,
+          role: member.role,
+          created_at: member.created_at,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'id',
+          ignoreDuplicates: false
+        });
+
         await setUserContext(authUser.email);
         return { data: { user: authUser } };
       }
@@ -291,6 +320,20 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
         organization: member.organizations
       };
     }
+
+    // Ensure profile table is updated/created for the current user
+    const { error: profileUpsertError } = await supabase.from('profiles').upsert({
+      id: user.id,
+      full_name: authUser.member_profile?.full_name || authUser.super_user_profile?.full_name || user.email,
+      email: user.email,
+      member_number: authUser.member_profile?.member_number || null,
+      role: authUser.user_type === 'super_user' ? 'super_user' : authUser.member_profile?.role,
+      created_at: authUser.member_profile?.created_at || authUser.super_user_profile?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'id',
+      ignoreDuplicates: false
+    });
 
     // User exists in auth but not in our user tables - sign them out
     console.log('❌ User exists in auth but not found in any user tables, signing out...');
@@ -646,6 +689,20 @@ export async function addOrganizationMember(
       
       return { error: 'Kunne ikke legge til medlem' };
     }
+
+    // Create or update profile entry for the new member
+    const { error: profileUpsertError } = await supabase.from('profiles').upsert({
+      id: data.id,
+      full_name: data.full_name,
+      email: data.email,
+      member_number: data.member_number,
+      role: data.role,
+      created_at: data.created_at,
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'id',
+      ignoreDuplicates: false
+    });
 
     console.log('✅ Member record created successfully');
     return { data };
