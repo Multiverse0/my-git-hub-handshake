@@ -50,34 +50,66 @@ export function Profile() {
 
   // Load profile data from auth context
   useEffect(() => {
-    if (profile && user) {
-      const newProfileData: ProfileData = {
-        name: profile.full_name || '',
-        email: profile.email || user.email || '',
-        memberNumber: profile.member_number || '',
-        joinDate: profile.created_at ? new Date(profile.created_at).toLocaleDateString('nb-NO') : '',
-        avatarUrl: profile.avatar_url,
-        startkortUrl: profile.startkort_url,
-        startkortFileName: profile.startkort_file_name,
-        diplomaUrl: profile.diploma_url, // This is for member card
-        diplomaFileName: profile.diploma_file_name,
-      };
-      setProfileData(newProfileData);
-      setEditData(newProfileData);
+    const loadProfileData = async () => {
+      if (!user?.id) return;
       
-      // Load other files array
       try {
-        const savedOtherFiles = localStorage.getItem(`otherFiles_${user?.id}`);
-        if (savedOtherFiles) {
-          setOtherFiles(JSON.parse(savedOtherFiles));
+        // Load profile from Supabase profiles table
+        const { data: profileData, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error('Error loading profile:', error);
+          // Fallback to auth context data
+          if (profile) {
+            const fallbackData: ProfileData = {
+              name: profile.full_name || '',
+              email: profile.email || user.email || '',
+              memberNumber: profile.member_number || '',
+              joinDate: profile.created_at ? new Date(profile.created_at).toLocaleDateString('nb-NO') : '',
+              avatarUrl: profile.avatar_url,
+              startkortUrl: profile.startkort_url,
+              startkortFileName: profile.startkort_file_name,
+              diplomaUrl: profile.diploma_url,
+              diplomaFileName: profile.diploma_file_name,
+            };
+            setProfileData(fallbackData);
+            setEditData(fallbackData);
+            setProfileRole(profile.role);
+          }
+          return;
         }
+
+        // Use data from profiles table
+        const newProfileData: ProfileData = {
+          name: profileData.full_name || '',
+          email: profileData.email || '',
+          memberNumber: profileData.member_number || '',
+          joinDate: profileData.created_at ? new Date(profileData.created_at).toLocaleDateString('nb-NO') : '',
+          avatarUrl: profileData.avatar_url,
+          startkortUrl: profileData.startkort_url,
+          startkortFileName: profileData.startkort_file_name,
+          diplomaUrl: profileData.diploma_url,
+          diplomaFileName: profileData.diploma_file_name,
+        };
+        
+        setProfileData(newProfileData);
+        setEditData(newProfileData);
+        setProfileRole(profileData.role);
+        
+        // Load other files from profiles table
+        if (profileData.other_files && Array.isArray(profileData.other_files)) {
+          setOtherFiles(profileData.other_files);
+        } else {
+          setOtherFiles([]);
+        }
+        
       } catch (error) {
-        console.error('Error loading other files:', error);
-        setOtherFiles([]);
+        console.error('Error in loadProfileData:', error);
       }
-      setProfileRole(profile.role);
-    }
-  }, [profile, user]);
 
   useEffect(() => {
     const getUser = async () => {
@@ -128,6 +160,7 @@ export function Profile() {
     
     try {
       setIsLoading(true);
+      setError(null);
       
       // Update profile in Supabase
       const { error } = await supabase
@@ -136,8 +169,6 @@ export function Profile() {
           full_name: editData.name,
           email: editData.email,
           member_number: editData.memberNumber,
-          // join_date is created_at, not directly editable
-          // role is not directly editable by user
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
@@ -146,21 +177,51 @@ export function Profile() {
         throw error;
       }
 
-      // If email changed, update auth email as well
+      // If email changed, update auth email and organization member record
       if (user.email !== editData.email) {
-        await supabase.auth.updateUser({ email: editData.email });
+        const { error: authError } = await supabase.auth.updateUser({ 
+          email: editData.email 
+        });
+        
+        if (authError) {
+          console.warn('Could not update auth email:', authError);
+        }
+        
+        // Update organization member record if applicable
+        if (user.user_type === 'organization_member' && user.organization_id) {
+          await supabase
+            .from('organization_members')
+            .update({ 
+              email: editData.email,
+              full_name: editData.name,
+              member_number: editData.memberNumber
+            })
+            .eq('id', user.id);
+        }
+        
+        // Update super user record if applicable
+        if (user.user_type === 'super_user') {
+          await supabase
+            .from('super_users')
+            .update({ 
+              email: editData.email,
+              full_name: editData.name
+            })
+            .eq('id', user.id);
+        }
       }
 
       // Update local state
       setProfileData(editData);
       setIsEditing(false);
       
-      // Update auth context without full page refresh
-      setTimeout(() => {
-        window.location.reload();
-      }, 100);
+      // Show success message
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+      
     } catch (error) {
       console.error('Error updating profile:', error);
+      setError(error instanceof Error ? error.message : 'Kunne ikke oppdatere profil');
     } finally {
       setIsLoading(false);
     }
@@ -247,6 +308,10 @@ export function Profile() {
   const handleOtherFilesUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
+    if (!user?.id) {
+      setOtherFilesError('Bruker ikke funnet');
+      return;
+    }
 
     try {
       setUploadingOtherFiles(true);
@@ -266,18 +331,24 @@ export function Profile() {
           throw new Error(`${fileName}: Filen er for stor. Maksimal størrelse er 2MB.`);
         }
         
-        // Upload to Supabase Storage (assuming a bucket named 'documents' or similar)
+        // Upload to Supabase Storage
+        const fileExt = fileName.split('.').pop();
+        const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `other_files/${user.id}/${uniqueFileName}`;
+        
         const { data, error } = await supabase.storage
-          .from('documents') // Or another appropriate bucket
-          .upload(`other_files/${user.id}/${fileName}`, file, {
-            upsert: true // Overwrite if file with same name exists
+          .from('documents')
+          .upload(filePath, file, {
+            upsert: false
           });
 
         if (error) {
           throw new Error(`Kunne ikke laste opp filen ${fileName}: ${error.message}`);
         }
 
-        const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(data.path);
+        const { data: { publicUrl } } = supabase.storage
+          .from('documents')
+          .getPublicUrl(data.path);
 
         return { url: publicUrl, name: fileName };
       });
@@ -304,6 +375,9 @@ export function Profile() {
     } catch (error) {
       console.error('Error uploading other files:', error);
       setOtherFilesError(error instanceof Error ? error.message : 'Det oppstod en feil ved opplasting av filene.');
+      
+      // Reset file input on error
+      event.target.value = '';
     } finally {
       setUploadingOtherFiles(false);
     }
@@ -314,7 +388,48 @@ export function Profile() {
       return;
     }
 
-    try {
+    const deleteFile = async () => {
+      try {
+        const fileToDelete = otherFiles[fileIndex];
+        
+        // Remove from local state first
+        const updatedFiles = otherFiles.filter((_, index) => index !== fileIndex);
+        setOtherFiles(updatedFiles);
+
+        // Update the user's profile in Supabase with the modified list
+        const { error } = await supabase
+          .from('profiles')
+          .update({ other_files: updatedFiles })
+          .eq('id', user?.id);
+
+        if (error) {
+          throw new Error(`Kunne ikke slette filen fra profilen: ${error.message}`);
+        }
+
+        // Optionally, delete the file from storage as well
+        if (fileToDelete.url.includes('supabase')) {
+          const filePath = fileToDelete.url.split('/').pop();
+          if (filePath) {
+            await supabase.storage
+              .from('documents')
+              .remove([`other_files/${user?.id}/${fileToDelete.name}`]);
+          }
+        }
+        
+        console.log('✅ File deleted successfully');
+        
+      } catch (error) {
+        console.error('Error deleting file:', error);
+        setOtherFilesError('Kunne ikke slette filen');
+        
+        // Revert local state on error
+        const revertedFiles = [...otherFiles];
+        setOtherFiles(revertedFiles);
+      }
+    };
+
+    deleteFile();
+  };
       const updatedFiles = otherFiles.filter((_, index) => index !== fileIndex);
       setOtherFiles(updatedFiles);
 
