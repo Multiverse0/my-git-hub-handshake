@@ -177,12 +177,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
         }
       }
+      
+    } catch (error) {
+      console.error('❌ Login error:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const register = async (
+    organizationSlug: string,
+    email: string,
+    password: string,
+    fullName: string,
+    memberNumber?: string
+  ) => {
+    try {
+      setLoading(true);
+      console.log('📝 Registering with Supabase:', email);
+
+      // Minimal signup test - just create auth user
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) {
+        throw error;
+      }
+
       console.log('✅ Supabase registration successful:', data);
       return data;
-      
+
     } catch (error) {
       console.error('❌ Registration error:', error);
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
