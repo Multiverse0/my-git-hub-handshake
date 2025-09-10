@@ -188,49 +188,19 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       return null;
     }
 
-    // Check if user is super user using auth user ID
-    const { data: superUser } = await supabase
-      .from('super_users')
-      .select('*') 
-      .eq('id', user.id)
-      .eq('active', true)
+    // Check if user has a profile in the profiles table
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', user.id)
       .single();
 
-    if (superUser) {
+    if (profile) {
       return {
-        id: superUser.id,
-        email: superUser.email,
-        user_type: 'super_user',
-        super_user_profile: superUser
-      };
-    }
-
-    // Check if user is organization member using auth user ID
-    const { data: member } = await supabase
-      .from('organization_members')
-      .select(`
-        *,
-        organizations (*)
-      `)
-      .eq('id', user.id)
-      .eq('active', true)
-      .single();
-
-    if (member) {
-      // Check if member is approved
-      if (!member.approved) {
-        // Sign out unapproved users
-        await supabase.auth.signOut();
-        return null;
-      }
-      
-      return {
-        id: member.id,
-        email: member.email,
+        id: profile.id,
+        email: profile.email,
         user_type: 'organization_member',
-        organization_id: member.organization_id,
-        member_profile: member,
-        organization: member.organizations
+        member_profile: profile
       };
     }
 
