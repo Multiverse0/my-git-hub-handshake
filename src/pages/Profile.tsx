@@ -35,8 +35,6 @@ export function Profile() {
   const [startkortError, setStartkortError] = useState<string | null>(null);
   const [diplomaError, setDiplomaError] = useState<string | null>(null);
   const [otherFilesError, setOtherFilesError] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [profileData, setProfileData] = useState<ProfileData>({
     name: '',
     email: '',
@@ -166,7 +164,6 @@ export function Profile() {
     
     try {
       setIsLoading(true);
-      setError(null);
       
       // Update profile in Supabase
       const { error } = await supabase
@@ -175,6 +172,8 @@ export function Profile() {
           full_name: editData.name,
           email: editData.email,
           member_number: editData.memberNumber,
+          // join_date is created_at, not directly editable
+          // role is not directly editable by user
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
@@ -183,51 +182,21 @@ export function Profile() {
         throw error;
       }
 
-      // If email changed, update auth email and organization member record
+      // If email changed, update auth email as well
       if (user.email !== editData.email) {
-        const { error: authError } = await supabase.auth.updateUser({ 
-          email: editData.email 
-        });
-        
-        if (authError) {
-          console.warn('Could not update auth email:', authError);
-        }
-        
-        // Update organization member record if applicable
-        if (user.user_type === 'organization_member' && user.organization_id) {
-          await supabase
-            .from('organization_members')
-            .update({ 
-              email: editData.email,
-              full_name: editData.name,
-              member_number: editData.memberNumber
-            })
-            .eq('id', user.id);
-        }
-        
-        // Update super user record if applicable
-        if (user.user_type === 'super_user') {
-          await supabase
-            .from('super_users')
-            .update({ 
-              email: editData.email,
-              full_name: editData.name
-            })
-            .eq('id', user.id);
-        }
+        await supabase.auth.updateUser({ email: editData.email });
       }
 
       // Update local state
       setProfileData(editData);
       setIsEditing(false);
       
-      // Show success message
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-      
+      // Update auth context without full page refresh
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
     } catch (error) {
       console.error('Error updating profile:', error);
-      setError(error instanceof Error ? error.message : 'Kunne ikke oppdatere profil');
     } finally {
       setIsLoading(false);
     }
