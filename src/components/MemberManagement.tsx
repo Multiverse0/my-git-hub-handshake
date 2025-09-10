@@ -829,13 +829,6 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
         </div>
       </div>
 
-      {showAddModal && (
-        <AddMemberModal
-          onClose={() => setShowAddModal(false)}
-          onAdd={handleAddMember}
-        />
-      )}
-
       {editingMember && (
         <EditModal
           member={editingMember}

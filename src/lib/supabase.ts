@@ -158,12 +158,21 @@ export async function registerOrganizationMember(
   email: string,
   password: string,
   fullName: string,
-  memberNumber?: string
+  memberNumber?: string,
+  role: 'member' | 'admin' | 'range_officer' = 'member'
 ): Promise<ApiResponse<{ user: AuthUser }>> {
   try {
-    console.log('📝 Starting minimal signup test...');
+    console.log('📝 Starting organization member registration...');
     
-    // Minimal signup test - just create auth user
+    // Get organization first
+    const orgResult = await getOrganizationBySlug(organizationSlug);
+    if (orgResult.error || !orgResult.data) {
+      throw new Error(orgResult.error || 'Organisasjon ikke funnet');
+    }
+    
+    const organization = orgResult.data;
+    
+    // Create Supabase auth user
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -180,35 +189,52 @@ export async function registerOrganizationMember(
     
     console.log('✅ Minimal signup successful:', data.user.id);
     
-    // Create profile in the profiles table (which exists in the database)
-    const { error: profileError } = await supabase
-      .from('profiles')
+    // Create organization member record
+    const { error: memberError } = await supabase
+      .from('organization_members')
       .insert({
         id: data.user.id,
+        organization_id: organization.id,
         full_name: fullName,
         email: email,
         member_number: memberNumber,
-        user_id: data.user.id
+        role: role,
+        approved: false, // All new registrations require approval
+        active: true
       });
     
-    if (profileError) {
-      console.error('❌ Profile creation failed:', profileError);
+    if (memberError) {
+      console.error('❌ Organization member creation failed:', memberError);
       // Rollback auth user
       try {
         await supabase.auth.admin.deleteUser(data.user.id);
       } catch (rollbackError) {
         console.error('❌ Rollback failed:', rollbackError);
       }
-      throw new Error('Could not create user profile');
+      throw new Error('Could not create organization member record');
     }
     
-    console.log('✅ Profile created successfully');
+    console.log('✅ Organization member created successfully');
     
-    // Return minimal auth user data
+    // Return auth user data (user will need approval before they can actually log in)
     const authUser: AuthUser = {
       id: data.user.id,
       email: email,
-      user_type: 'organization_member'
+      user_type: 'organization_member',
+      organization_id: organization.id,
+      organization: organization,
+      member_profile: {
+        id: data.user.id,
+        organization_id: organization.id,
+        email: email,
+        full_name: fullName,
+        member_number: memberNumber,
+        role: role,
+        approved: false,
+        active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
     };
     
     return { data: { user: authUser } };
@@ -227,25 +253,57 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       return null;
     }
 
-    // Check if user has a profile in the profiles table
-    const { data: profile } = await supabase
-      .from('profiles')
+    // Check if user is a super user first
+    const { data: superUser } = await supabase
+      .from('super_users')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('id', user.id)
+      .eq('active', true)
       .single();
 
-    if (profile) {
+    if (superUser) {
       return {
-        id: profile.id,
-        email: profile.email,
-        user_type: 'organization_member',
-        member_profile: profile
+        id: superUser.id,
+        email: superUser.email,
+        user_type: 'super_user',
+        super_user_profile: superUser
       };
     }
 
+    // Check if user is organization member
+    const { data: member } = await supabase
+      .from('organization_members')
+      .select(`
+        *,
+        organizations (*)
+      `)
+      .eq('id', user.id)
+      .eq('active', true)
+      .single();
+
+    if (member) {
+      return {
+        id: member.id,
+        email: member.email,
+        user_type: 'organization_member',
+        organization_id: member.organization_id,
+        member_profile: member,
+        organization: member.organizations
+      };
+    }
+
+    // User exists in auth but not in our user tables - sign them out
+    console.log('❌ User exists in auth but not found in any user tables, signing out...');
+    await supabase.auth.signOut();
     return null;
   } catch (error) {
     console.error('Error getting current user:', error);
+    // On any error, ensure user is signed out
+    try {
+      await supabase.auth.signOut();
+    } catch (signOutError) {
+      console.error('Error signing out after getCurrentUser failure:', signOutError);
+    }
     return null;
   }
 }

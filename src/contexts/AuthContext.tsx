@@ -21,6 +21,7 @@ interface AuthContextType {
   needsSetup: boolean;
   login: (email: string, password: string, rememberMe: boolean, organizationSlug?: string) => Promise<void>;
   register: (organizationSlug: string, email: string, password: string, fullName: string, memberNumber?: string) => Promise<void>;
+  register: (organizationSlug: string, email: string, password: string, fullName: string, memberNumber?: string, role?: 'member' | 'admin' | 'range_officer') => Promise<void>;
   logout: () => void;
   switchOrganization: (organizationSlug: string) => Promise<void>;
   setOrganizationContext: (organizationSlug: string) => Promise<void>;
@@ -191,7 +192,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     email: string,
     password: string,
     fullName: string,
-    memberNumber?: string
+    memberNumber?: string,
+    role: 'member' | 'admin' | 'range_officer' = 'member'
   ) => {
     try {
       setLoading(true);
@@ -202,7 +204,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email,
         password,
         fullName,
-        memberNumber
+        memberNumber,
+        role
       );
       
       if (result.error) {
