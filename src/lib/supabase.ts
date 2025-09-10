@@ -104,76 +104,15 @@ export async function authenticateUser(email: string, password: string): Promise
       return { error: 'Bruker ikke funnet i systemet' };
     }
 
-    console.log('🔄 Supabase Auth failed, trying custom auth');
-    // If Supabase auth fails, try custom authentication for demo users
-    return await authenticateWithCustomAuth(email, password);
+    // If Supabase auth fails, return error
+    console.log('❌ Supabase Auth failed');
+    return { error: 'Ugyldig e-post eller passord' };
   } catch (error) {
     console.error('Authentication error:', error);
     return { error: 'Innlogging feilet' };
   }
 }
 
-async function authenticateWithCustomAuth(email: string, password: string): Promise<ApiResponse<{ user: AuthUser }>> {
-  try {
-    console.log('🔍 Checking super users for:', email);
-    // Check super users
-    const { data: superUsers, error: superError } = await supabase
-      .from('super_users')
-      .select('*')
-      .eq('email', email)
-      .eq('active', true)
-      .single();
-
-    if (!superError && superUsers) {
-      console.log('✅ Super user found');
-      // TODO: Verify password hash in production
-      const authUser: AuthUser = {
-        id: superUsers.id,
-        email: superUsers.email,
-        user_type: 'super_user',
-        super_user_profile: superUsers
-      };
-      
-      await setUserContext(email);
-      return { data: { user: authUser } };
-    }
-
-    console.log('🔍 Checking organization members for:', email);
-    // Check organization members
-    const { data: members, error: memberError } = await supabase
-      .from('organization_members')
-      .select(`
-        *,
-        organizations (*)
-      `)
-      .eq('email', email)
-      .eq('approved', true)
-      .eq('active', true)
-      .single();
-
-    if (!memberError && members) {
-      console.log('✅ Organization member found');
-      // TODO: Verify password hash in production
-      const authUser: AuthUser = {
-        id: members.id,
-        email: members.email,
-        user_type: 'organization_member',
-        organization_id: members.organization_id,
-        member_profile: members,
-        organization: members.organizations
-      };
-      
-      await setUserContext(email);
-      return { data: { user: authUser } };
-    }
-
-    console.log('❌ No user found or user not approved');
-    return { error: 'Ugyldig e-post eller passord' };
-  } catch (error) {
-    console.error('Custom authentication error:', error);
-    return { error: 'Innlogging feilet' };
-  }
-}
 
 export async function registerOrganizationMember(
   organizationSlug: string,
