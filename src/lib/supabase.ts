@@ -196,7 +196,7 @@ export async function registerOrganizationMember(
           email,
           full_name: fullName,
           member_number: memberNumber,
-          password_hash: passwordHash,
+          password_hash: memberPasswordHash,
           role: 'member',
           approved: false,
           active: true
