@@ -14,7 +14,8 @@ export function Register() {
     password: '',
     confirmPassword: '',
     fullName: '',
-    memberNumber: ''
+    memberNumber: '',
+    role: 'member' as 'member' | 'admin' | 'range_officer'
   });
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -35,7 +36,7 @@ export function Register() {
 
     // Validate form
     if (!formData.email || !formData.password || !formData.confirmPassword || 
-        !formData.fullName || !formData.memberNumber) {
+        !formData.fullName || !formData.memberNumber || !formData.role) {
       setError('Vennligst fyll ut alle felt');
       return;
     }
@@ -60,7 +61,8 @@ export function Register() {
         formData.email,
         formData.password,
         formData.fullName,
-        formData.memberNumber
+        formData.memberNumber,
+        formData.role
       );
       
       console.log('✅ Registration successful');
@@ -89,13 +91,13 @@ export function Register() {
           </h1>
           <p className="text-gray-300 mb-6">
             Din registrering som medlem i <strong>{organization.name}</strong> er nå sendt til godkjenning. 
-            Du vil motta en e-post når kontoen din er aktivert av en administrator.
+            Du vil motta en e-post når {formData.role === 'member' ? 'medlemskapet' : formData.role === 'admin' ? 'administrator-tilgangen' : 'standplassleder-tilgangen'} din er godkjent av en administrator.
           </p>
           <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 mb-6">
             <h3 className="font-medium text-blue-400 mb-2">Hva skjer nå?</h3>
             <ol className="text-sm text-blue-200 space-y-1 text-left">
-              <li>1. En administrator vil gjennomgå din registrering</li>
-              <li>2. Du får e-post når medlemskapet er godkjent</li>
+              <li>1. En administrator vil gjennomgå din {formData.role === 'member' ? 'medlems' : formData.role === 'admin' ? 'administrator' : 'standplassleder'}-registrering</li>
+              <li>2. Du får e-post når {formData.role === 'member' ? 'medlemskapet' : 'tilgangen'} er godkjent</li>
               <li>3. Du kan da logge inn og begynne å bruke systemet</li>
             </ol>
           </div>
@@ -175,6 +177,26 @@ export function Register() {
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-sm font-medium text-gray-300">
+                Rolle *
+              </label>
+              <select
+                value={formData.role}
+                onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value as 'member' | 'admin' | 'range_officer' }))}
+                className="w-full bg-gray-700 rounded-lg px-3 py-2"
+                disabled={isLoading}
+                required
+              >
+                <option value="member">Medlem</option>
+                <option value="admin">Administrator</option>
+                <option value="range_officer">Standplassleder</option>
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                Alle registreringer må godkjennes av en eksisterende administrator
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 Skytter ID *
               </label>
               <a
@@ -281,10 +303,9 @@ export function Register() {
             <div className="flex items-start gap-3">
               <Shield className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-blue-200">
-                <p className="font-medium mb-1">Kun for medlemmer</p>
+                <p className="font-medium mb-1">Registrering for {organization.name}</p>
                 <p>
-                  Denne registreringen er kun for medlemmer av {organization.name}. 
-                  Etter registrering må en administrator godkjenne medlemskapet ditt.
+                  Alle registreringer (medlemmer, administratorer og standplassledere) må godkjennes av en eksisterende administrator før tilgang gis.
                 </p>
               </div>
             </div>
