@@ -138,6 +138,22 @@ export function Register() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Logout button at top of form for already logged in users */}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                // Simple logout - clear any existing session and redirect to login
+                localStorage.clear();
+                window.location.href = `/login?org=${orgSlug}`;
+              }}
+              className="text-sm text-gray-400 hover:text-gray-300 flex items-center gap-1"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Logg ut og start på nytt
+            </button>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
               Fullt navn *
