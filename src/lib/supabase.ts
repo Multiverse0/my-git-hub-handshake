@@ -38,19 +38,70 @@ export async function authenticateUser(email: string, password: string): Promise
   try {
     console.log('🔐 Authenticating user:', email);
     
-    // First try Supabase Auth for existing users
+    // Try Supabase Auth first
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password
     });
 
-    if (!authError && authData.user) {
+    if (!authError && authData.user && authData.session) {
       console.log('✅ Supabase Auth successful');
-      const currentUser = await getCurrentUser();
-      if (currentUser) {
-        await setUserContext(currentUser.email);
-        return { data: { user: currentUser } };
+      
+      // Check if user is a super user
+      const { data: superUser } = await supabase
+        .from('super_users')
+        .select('*')
+        .eq('id', authData.user.id)
+        .eq('active', true)
+        .single();
+
+      if (superUser) {
+        const authUser: AuthUser = {
+          id: superUser.id,
+          email: superUser.email,
+          user_type: 'super_user',
+          super_user_profile: superUser
+        };
+        
+        await setUserContext(authUser.email);
+        return { data: { user: authUser } };
       }
+
+      // Check if user is organization member
+      const { data: member } = await supabase
+        .from('organization_members')
+        .select(`
+          *,
+          organizations (*)
+        `)
+        .eq('id', authData.user.id)
+        .eq('active', true)
+        .single();
+
+      if (member) {
+        // Check if member is approved
+        if (!member.approved) {
+          // Sign out the user since they're not approved yet
+          await supabase.auth.signOut();
+          return { error: 'Medlemskapet ditt venter på godkjenning fra en administrator' };
+        }
+        
+        const authUser: AuthUser = {
+          id: member.id,
+          email: member.email,
+          user_type: 'organization_member',
+          organization_id: member.organization_id,
+          member_profile: member,
+          organization: member.organizations
+        };
+        
+        await setUserContext(authUser.email);
+        return { data: { user: authUser } };
+      }
+      
+      // User exists in auth but not in our tables - sign them out
+      await supabase.auth.signOut();
+      return { error: 'Bruker ikke funnet i systemet' };
     }
 
     console.log('🔄 Supabase Auth failed, trying custom auth');
@@ -149,7 +200,7 @@ export async function registerOrganizationMember(
 
     console.log('✅ Organization found:', organization.name);
     
-    // Check if email already exists
+    // Check if email already exists in this organization
     const { data: existingMember } = await supabase
       .from('organization_members')
       .select('id')
@@ -160,6 +211,114 @@ export async function registerOrganizationMember(
     if (existingMember) {
       console.error('❌ Email already exists');
       return { error: 'E-post er allerede registrert i denne organisasjonen' };
+    }
+
+    console.log('📝 Creating Supabase Auth user...');
+    
+    // Create user in Supabase Auth first
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+          member_number: memberNumber,
+          organization_id: organization.id,
+          role: 'member'
+        }
+      }
+    });
+
+    if (authError) {
+      console.error('❌ Supabase Auth signup failed:', authError);
+      return { error: authError.message };
+    }
+
+    if (!authData.user) {
+      console.error('❌ No user returned from signup');
+      return { error: 'Kunne ikke opprette bruker' };
+    }
+
+    console.log('✅ Supabase Auth user created:', authData.user.id);
+    
+    // Hash password for storage in organization_members table
+    const bcrypt = await import('bcryptjs');
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    try {
+      console.log('📝 Creating organization member record...');
+      
+      // Create member record using the auth user ID
+      const { data: newMember, error: memberError } = await supabase
+        .from('organization_members')
+        .insert({
+          id: authData.user.id, // Use auth user ID as primary key
+          organization_id: organization.id,
+          email,
+          full_name: fullName,
+          member_number: memberNumber,
+          password_hash: passwordHash,
+          role: 'member',
+          approved: false,
+          active: true
+        })
+        .select()
+        .single();
+
+      if (memberError) {
+        console.error('❌ Failed to create member record:', memberError);
+        
+        // Rollback: Delete the auth user if member creation failed
+        try {
+          await supabase.auth.admin.deleteUser(authData.user.id);
+          console.log('🔄 Rolled back auth user creation');
+        } catch (rollbackError) {
+          console.error('❌ Failed to rollback auth user:', rollbackError);
+        }
+        
+        return { error: 'Kunne ikke registrere medlem' };
+      }
+
+      console.log('✅ Member record created successfully');
+      
+      // Send welcome email (member needs approval)
+      try {
+        const { sendMemberWelcomeEmail } = await import('./emailService');
+        await sendMemberWelcomeEmail(
+          email,
+          fullName,
+          organization.name,
+          organization.id,
+          memberNumber
+        );
+        console.log('📧 Welcome email sent');
+      } catch (emailError) {
+        console.warn('⚠️ Welcome email failed:', emailError);
+      }
+      
+      const authUser: AuthUser = {
+        id: newMember.id,
+        email: newMember.email,
+        user_type: 'organization_member',
+        organization_id: organization.id,
+        member_profile: newMember,
+        organization
+      };
+
+      return { data: { user: authUser } };
+      
+    } catch (error) {
+      console.error('❌ Error creating member record:', error);
+      
+      // Rollback: Delete the auth user if member creation failed
+      try {
+        await supabase.auth.admin.deleteUser(authData.user.id);
+        console.log('🔄 Rolled back auth user creation');
+      } catch (rollbackError) {
+        console.error('❌ Failed to rollback auth user:', rollbackError);
+      }
+      
+      return { error: 'Kunne ikke registrere medlem' };
     }
 
     console.log('📝 Creating new member...');
@@ -230,11 +389,11 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       return null;
     }
 
-    // Check if user is super user
+    // Check if user is super user using auth user ID
     const { data: superUser } = await supabase
       .from('super_users')
-      .select('*')
-      .eq('email', user.email)
+      .select('*') 
+      .eq('id', user.id)
       .eq('active', true)
       .single();
 
@@ -247,19 +406,25 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       };
     }
 
-    // Check if user is organization member
+    // Check if user is organization member using auth user ID
     const { data: member } = await supabase
       .from('organization_members')
       .select(`
         *,
         organizations (*)
       `)
-      .eq('email', user.email)
-      .eq('approved', true)
+      .eq('id', user.id)
       .eq('active', true)
       .single();
 
     if (member) {
+      // Check if member is approved
+      if (!member.approved) {
+        // Sign out unapproved users
+        await supabase.auth.signOut();
+        return null;
+      }
+      
       return {
         id: member.id,
         email: member.email,
@@ -451,32 +616,64 @@ export async function checkSuperUsersExist(): Promise<boolean> {
 
 export async function createFirstSuperUser(email: string, password: string, fullName: string): Promise<ApiResponse<SuperUser>> {
   try {
-    // First create Supabase auth user
+    console.log('🔧 Creating Supabase Auth user for super user...');
+    
+    // Create Supabase auth user first
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
-      password
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+          user_type: 'super_user'
+        }
+      }
     });
 
     if (authError) {
+      console.error('❌ Supabase Auth signup failed:', authError);
       return { error: authError.message };
     }
 
-    // Create super user record
+    if (!authData.user) {
+      console.error('❌ No user returned from signup');
+      return { error: 'Kunne ikke opprette bruker' };
+    }
+
+    console.log('✅ Supabase Auth user created:', authData.user.id);
+    
+    // Hash password for storage in super_users table
+    const bcrypt = await import('bcryptjs');
+    const passwordHash = await bcrypt.hash(password, 10);
+    
+    // Create super user record using the auth user ID
     const { data, error } = await supabase
       .from('super_users')
       .insert({
+        id: authData.user.id, // Use auth user ID as primary key
         email,
         full_name: fullName,
-        password_hash: password, // In production, hash this properly
+        password_hash: passwordHash,
         active: true
       })
       .select()
       .single();
 
     if (error) {
+      console.error('❌ Failed to create super user record:', error);
+      
+      // Rollback: Delete the auth user if super user creation failed
+      try {
+        await supabase.auth.admin.deleteUser(authData.user.id);
+        console.log('🔄 Rolled back auth user creation');
+      } catch (rollbackError) {
+        console.error('❌ Failed to rollback auth user:', rollbackError);
+      }
+      
       return { error: 'Kunne ikke opprette super-bruker' };
     }
 
+    console.log('✅ Super user record created successfully');
     return { data };
   } catch (error) {
     console.error('Error creating first super user:', error);
@@ -509,13 +706,58 @@ export async function addOrganizationMember(
   memberData: Partial<OrganizationMember> & { password?: string }
 ): Promise<ApiResponse<OrganizationMember>> {
   try {
+    let authUserId: string;
+    
+    // If password is provided, create Supabase Auth user
+    if (memberData.password) {
+      console.log('📝 Creating Supabase Auth user for new member...');
+      
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: memberData.email!,
+        password: memberData.password,
+        options: {
+          data: {
+            full_name: memberData.full_name,
+            member_number: memberData.member_number,
+            organization_id: organizationId,
+            role: memberData.role || 'member'
+          }
+        }
+      });
+
+      if (authError) {
+        console.error('❌ Supabase Auth signup failed:', authError);
+        return { error: authError.message };
+      }
+
+      if (!authData.user) {
+        console.error('❌ No user returned from signup');
+        return { error: 'Kunne ikke opprette bruker' };
+      }
+
+      authUserId = authData.user.id;
+      console.log('✅ Supabase Auth user created:', authUserId);
+    } else {
+      // Generate a UUID for members created without auth (admin-created)
+      authUserId = crypto.randomUUID();
+    }
+    
+    // Hash password if provided
+    let passwordHash: string | undefined;
+    if (memberData.password) {
+      const bcrypt = await import('bcryptjs');
+      passwordHash = await bcrypt.hash(memberData.password, 10);
+    }
+    
     const { data, error } = await supabase
       .from('organization_members')
       .insert({
+        id: authUserId, // Use auth user ID or generated UUID
         organization_id: organizationId,
         email: memberData.email,
         full_name: memberData.full_name,
         member_number: memberData.member_number,
+        password_hash: passwordHash || 'placeholder_hash', // Required by schema
         role: memberData.role || 'member',
         approved: memberData.approved || false,
         active: memberData.active !== false
@@ -524,9 +766,22 @@ export async function addOrganizationMember(
       .single();
 
     if (error) {
+      console.error('❌ Failed to create member record:', error);
+      
+      // Rollback auth user if it was created
+      if (memberData.password && authUserId) {
+        try {
+          await supabase.auth.admin.deleteUser(authUserId);
+          console.log('🔄 Rolled back auth user creation');
+        } catch (rollbackError) {
+          console.error('❌ Failed to rollback auth user:', rollbackError);
+        }
+      }
+      
       return { error: 'Kunne ikke legge til medlem' };
     }
 
+    console.log('✅ Member record created successfully');
     return { data };
   } catch (error) {
     console.error('Error adding organization member:', error);
@@ -576,7 +831,24 @@ export async function deleteOrganizationMember(memberId: string): Promise<ApiRes
 }
 
 export async function approveMember(memberId: string): Promise<ApiResponse<OrganizationMember>> {
-  return updateOrganizationMember(memberId, { approved: true });
+  try {
+    console.log('✅ Approving member:', memberId);
+    
+    // Update member approval status
+    const result = await updateOrganizationMember(memberId, { approved: true });
+    
+    if (result.error) {
+      return result;
+    }
+    
+    // If member has an auth user, ensure they can sign in
+    // (No additional action needed as Supabase Auth user already exists)
+    
+    return result;
+  } catch (error) {
+    console.error('Error approving member:', error);
+    return { error: 'Kunne ikke godkjenne medlem' };
+  }
 }
 
 export async function updateMemberRole(
