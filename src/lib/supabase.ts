@@ -122,135 +122,57 @@ export async function registerOrganizationMember(
   memberNumber?: string
 ): Promise<ApiResponse<{ user: AuthUser }>> {
   try {
-    console.log('📝 Registering member for organization:', organizationSlug);
+    console.log('📝 Starting minimal signup test...');
     
-    // Get organization by slug
-    const { data: organization, error: orgError } = await supabase
-      .from('organizations')
-      .select('*')
-      .eq('slug', organizationSlug)
-      .eq('active', true)
-      .single();
-
-    if (orgError || !organization) {
-      console.error('❌ Organization not found:', organizationSlug);
-      return { error: 'Organisasjon ikke funnet' };
-    }
-
-    console.log('✅ Organization found:', organization.name);
-    
-    // Check if email already exists in this organization
-    const { data: existingMember } = await supabase
-      .from('organization_members')
-      .select('id')
-      .eq('organization_id', organization.id)
-      .eq('email', email)
-      .single();
-
-    if (existingMember) {
-      console.error('❌ Email already exists');
-      return { error: 'E-post er allerede registrert i denne organisasjonen' };
-    }
-
-    console.log('📝 Creating Supabase Auth user...');
-    
-    // Create user in Supabase Auth first
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    // Minimal signup test - just create auth user
+    const { data, error } = await supabase.auth.signUp({
       email,
-      password
+      password,
     });
-
-    if (authError) {
-      console.error('❌ Supabase Auth signup failed:', authError);
-      return { error: authError.message };
-    }
-
-    if (!authData.user) {
-      console.error('❌ No user returned from signup');
-      return { error: 'Kunne ikke opprette bruker' };
-    }
-
-    console.log('✅ Supabase Auth user created:', authData.user.id);
     
-    // Hash password for storage in organization_members table
-    const bcryptLib = await import('bcryptjs');
-    const memberPasswordHash = await bcryptLib.hash(password, 10);
+    if (error) {
+      console.error('❌ Supabase signup failed:', error);
+      throw new Error(error.message);
+    }
     
-    try {
-      console.log('📝 Creating organization member record...');
-      
-      // Create member record using the auth user ID
-      const { data: newMember, error: memberError } = await supabase
-        .from('organization_members')
-        .insert({
-          id: authData.user.id, // Use auth user ID as primary key
-          organization_id: organization.id,
-          email,
-          full_name: fullName,
-          member_number: memberNumber,
-          password_hash: memberPasswordHash,
-          role: 'member',
-          approved: false,
-          active: true
-        })
-        .select()
-        .single();
-
-      if (memberError) {
-        console.error('❌ Failed to create member record:', memberError);
-        
-        // Rollback: Delete the auth user if member creation failed
-        try {
-          await supabase.auth.admin.deleteUser(authData.user.id);
-          console.log('🔄 Rolled back auth user creation');
-        } catch (rollbackError) {
-          console.error('❌ Failed to rollback auth user:', rollbackError);
-        }
-        
-        return { error: 'Kunne ikke registrere medlem' };
-      }
-
-      console.log('✅ Member record created successfully');
-      
-      // Send welcome email (member needs approval)
+    if (!data.user) {
+      throw new Error('No user returned from signup');
+    }
+    
+    console.log('✅ Minimal signup successful:', data.user.id);
+    
+    // Create profile in the profiles table (which exists in the database)
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        id: data.user.id,
+        full_name: fullName,
+        email: email,
+        member_number: memberNumber,
+        user_id: data.user.id
+      });
+    
+    if (profileError) {
+      console.error('❌ Profile creation failed:', profileError);
+      // Rollback auth user
       try {
-        const { sendMemberWelcomeEmail } = await import('./emailService');
-        await sendMemberWelcomeEmail(
-          email,
-          fullName,
-          organization.name,
-          organization.id,
-          memberNumber
-        );
-        console.log('📧 Welcome email sent');
-      } catch (emailError) {
-        console.warn('⚠️ Welcome email failed:', emailError);
-      }
-      
-      const authUser: AuthUser = {
-        id: newMember.id,
-        email: newMember.email,
-        user_type: 'organization_member',
-        organization_id: organization.id,
-        member_profile: newMember,
-        organization
-      };
-
-      return { data: { user: authUser } };
-      
-    } catch (error) {
-      console.error('❌ Error creating member record:', error);
-      
-      // Rollback: Delete the auth user if member creation failed
-      try {
-        await supabase.auth.admin.deleteUser(authData.user.id);
-        console.log('🔄 Rolled back auth user creation');
+        await supabase.auth.admin.deleteUser(data.user.id);
       } catch (rollbackError) {
-        console.error('❌ Failed to rollback auth user:', rollbackError);
+        console.error('❌ Rollback failed:', rollbackError);
       }
-      
-      return { error: 'Kunne ikke registrere medlem' };
+      throw new Error('Could not create user profile');
     }
+    
+    console.log('✅ Profile created successfully');
+    
+    // Return minimal auth user data
+    const authUser: AuthUser = {
+      id: data.user.id,
+      email: email,
+      user_type: 'organization_member'
+    };
+    
+    return { data: { user: authUser } };
 
   } catch (error) {
     console.error('Registration error:', error);
