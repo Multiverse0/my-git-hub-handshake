@@ -242,8 +242,8 @@ export async function registerOrganizationMember(
     console.log('✅ Supabase Auth user created:', authData.user.id);
     
     // Hash password for storage in organization_members table
-    const bcrypt = await import('bcryptjs');
-    const passwordHash = await bcrypt.hash(password, 10);
+    const bcryptLib = await import('bcryptjs');
+    const memberPasswordHash = await bcryptLib.hash(password, 10);
     
     try {
       console.log('📝 Creating organization member record...');
@@ -321,60 +321,6 @@ export async function registerOrganizationMember(
       return { error: 'Kunne ikke registrere medlem' };
     }
 
-    console.log('📝 Creating new member...');
-    
-    // Hash password for storage
-    const bcrypt = await import('bcryptjs');
-    const passwordHash = await bcrypt.hash(password, 10);
-    
-    // Create new member
-    const { data: newMember, error: memberError } = await supabase
-      .from('organization_members')
-      .insert({
-        organization_id: organization.id,
-        email,
-        full_name: fullName,
-        member_number: memberNumber,
-        password_hash: passwordHash,
-        role: 'member',
-        approved: false,
-        active: true
-      })
-      .select()
-      .single();
-
-    if (memberError) {
-      console.error('❌ Failed to create member:', memberError);
-      return { error: 'Kunne ikke registrere medlem' };
-    }
-
-    console.log('✅ Member created successfully');
-    
-    // Send welcome email (member needs approval)
-    try {
-      const { sendMemberWelcomeEmail } = await import('./emailService');
-      await sendMemberWelcomeEmail(
-        email,
-        fullName,
-        organization.name,
-        organization.id,
-        memberNumber
-      );
-      console.log('📧 Welcome email sent');
-    } catch (emailError) {
-      console.warn('⚠️ Welcome email failed:', emailError);
-    }
-    
-    const authUser: AuthUser = {
-      id: newMember.id,
-      email: newMember.email,
-      user_type: 'organization_member',
-      organization_id: organization.id,
-      member_profile: newMember,
-      organization
-    };
-
-    return { data: { user: authUser } };
   } catch (error) {
     console.error('Registration error:', error);
     return { error: 'Registrering feilet' };
@@ -643,8 +589,8 @@ export async function createFirstSuperUser(email: string, password: string, full
     console.log('✅ Supabase Auth user created:', authData.user.id);
     
     // Hash password for storage in super_users table
-    const bcrypt = await import('bcryptjs');
-    const passwordHash = await bcrypt.hash(password, 10);
+    const bcryptLib = await import('bcryptjs');
+    const superUserPasswordHash = await bcryptLib.hash(password, 10);
     
     // Create super user record using the auth user ID
     const { data, error } = await supabase
@@ -653,7 +599,7 @@ export async function createFirstSuperUser(email: string, password: string, full
         id: authData.user.id, // Use auth user ID as primary key
         email,
         full_name: fullName,
-        password_hash: passwordHash,
+        password_hash: superUserPasswordHash,
         active: true
       })
       .select()
@@ -745,8 +691,8 @@ export async function addOrganizationMember(
     // Hash password if provided
     let passwordHash: string | undefined;
     if (memberData.password) {
-      const bcrypt = await import('bcryptjs');
-      passwordHash = await bcrypt.hash(memberData.password, 10);
+      const bcryptLib = await import('bcryptjs');
+      passwordHash = await bcryptLib.hash(memberData.password, 10);
     }
     
     const { data, error } = await supabase
