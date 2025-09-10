@@ -99,9 +99,40 @@ export async function authenticateUser(email: string, password: string): Promise
         return { data: { user: authUser } };
       }
       
-      // User exists in auth but not in our tables - sign them out
+      // Check if user has a profile in the profiles table (fallback)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profile) {
+        const authUser: AuthUser = {
+          id: profile.id,
+          email: profile.email,
+          user_type: 'organization_member',
+          member_profile: {
+            id: profile.id,
+            organization_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', // Default to SVPK
+            email: profile.email,
+            full_name: profile.full_name,
+            member_number: profile.member_number,
+            role: 'member',
+            approved: true,
+            active: true,
+            created_at: profile.created_at,
+            updated_at: profile.updated_at
+          }
+        };
+        
+        await setUserContext(authUser.email);
+        return { data: { user: authUser } };
+      }
+      
+      // User exists in auth but not in our tables - sign them out and return error
+      console.log('❌ User exists in auth but not found in any user tables, signing out...');
       await supabase.auth.signOut();
-      return { error: 'Bruker ikke funnet i systemet' };
+      return { error: 'Bruker ikke funnet i systemet. Vennligst registrer deg på nytt eller kontakt administrator.' };
     }
 
     // If Supabase auth fails, return error
@@ -109,6 +140,14 @@ export async function authenticateUser(email: string, password: string): Promise
     return { error: 'Ugyldig e-post eller passord' };
   } catch (error) {
     console.error('Authentication error:', error);
+    
+    // If there's any authentication error, ensure user is signed out
+    try {
+      await supabase.auth.signOut();
+    } catch (signOutError) {
+      console.error('Error signing out after auth failure:', signOutError);
+    }
+    
     return { error: 'Innlogging feilet' };
   }
 }
