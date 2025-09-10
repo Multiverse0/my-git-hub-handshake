@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useEffect } from 'react';
-import { User, Mail, Hash, Calendar, Camera, Pencil, X, Check, Loader2, ExternalLink, FileText, Download, Upload, AlertCircle } from 'lucide-react';
+import { User, Mail, Hash, Calendar, Camera, Pencil, X, Check, Loader2, ExternalLink, FileText, Download, Upload, AlertCircle, Shield } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { supabase, uploadProfileImage, uploadStartkortPDF, uploadDiplomaPDF } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,7 +15,7 @@ interface ProfileData {
   avatarUrl?: string;
   startkortUrl?: string;
   startkortFileName?: string;
-  diplomaUrl?: string;
+  diplomaUrl?: string; // This is for member card
   diplomaFileName?: string;
   otherFilesUrl?: string;
   otherFilesFileName?: string;
@@ -30,6 +30,7 @@ export function Profile() {
   const [uploadingStartkort, setUploadingStartkort] = useState(false);
   const [uploadingDiploma, setUploadingDiploma] = useState(false);
   const [uploadingOtherFiles, setUploadingOtherFiles] = useState(false);
+  const [profileRole, setProfileRole] = useState<'member' | 'admin' | 'range_officer' | 'super_user' | undefined>(undefined);
   const [otherFiles, setOtherFiles] = useState<Array<{url: string, name: string}>>([]);
   const [startkortError, setStartkortError] = useState<string | null>(null);
   const [diplomaError, setDiplomaError] = useState<string | null>(null);
@@ -42,7 +43,7 @@ export function Profile() {
     avatarUrl: undefined,
     startkortUrl: undefined,
     startkortFileName: undefined,
-    diplomaUrl: undefined,
+    diplomaUrl: undefined, // This is for member card
     diplomaFileName: undefined
   });
   const [editData, setEditData] = useState<ProfileData>(profileData);
@@ -58,7 +59,7 @@ export function Profile() {
         avatarUrl: profile.avatar_url,
         startkortUrl: profile.startkort_url,
         startkortFileName: profile.startkort_file_name,
-        diplomaUrl: profile.diploma_url,
+        diplomaUrl: profile.diploma_url, // This is for member card
         diplomaFileName: profile.diploma_file_name,
       };
       setProfileData(newProfileData);
@@ -74,6 +75,7 @@ export function Profile() {
         console.error('Error loading other files:', error);
         setOtherFiles([]);
       }
+      setProfileRole(profile.role);
     }
   }, [profile, user]);
 
@@ -127,48 +129,29 @@ export function Profile() {
     try {
       setIsLoading(true);
       
-      // Update profile in localStorage for demo purposes
-      const currentUser = localStorage.getItem('currentUser');
-      if (currentUser) {
-        const userData = JSON.parse(currentUser);
-        
-        // Update the profile data
-        userData.profile = {
-          ...userData.profile,
+      // Update profile in Supabase
+      const { error } = await supabase
+        .from('profiles')
+        .update({
           full_name: editData.name,
           email: editData.email,
           member_number: editData.memberNumber,
-          join_date: editData.joinDate,
+          // join_date is created_at, not directly editable
+          // role is not directly editable by user
           updated_at: new Date().toISOString()
-        };
-        
-        // Update the user email as well
-        userData.user.email = editData.email;
-        
-        // Save back to localStorage
-        localStorage.setItem('currentUser', JSON.stringify(userData));
-        
-        // Also update members list if this user exists there
-        const savedMembers = localStorage.getItem('members');
-        if (savedMembers) {
-          const members = JSON.parse(savedMembers);
-          const memberIndex = members.findIndex((member: any) => 
-            member.email === profile?.email || member.id === user.id
-          );
-          
-          if (memberIndex !== -1) {
-            members[memberIndex] = {
-              ...members[memberIndex],
-              fullName: editData.name,
-              email: editData.email,
-              memberNumber: editData.memberNumber,
-              joinDate: editData.joinDate
-            };
-            localStorage.setItem('members', JSON.stringify(members));
-          }
-        }
+        })
+        .eq('id', user.id);
+
+      if (error) {
+        throw error;
       }
 
+      // If email changed, update auth email as well
+      if (user.email !== editData.email) {
+        await supabase.auth.updateUser({ email: editData.email });
+      }
+
+      // Update local state
       setProfileData(editData);
       setIsEditing(false);
       
@@ -199,24 +182,19 @@ export function Profile() {
         throw new Error('Kun PDF og bildefiler (JPG, PNG) er tillatt.');
       }
       
-      // Create a mock URL for demo purposes (in real app, upload to storage)
-      const mockUrl = URL.createObjectURL(file);
+      const publicUrl = await uploadStartkortPDF(file, user.id);
       
-      // Save to localStorage
-      const currentUser = localStorage.getItem('currentUser');
-      if (currentUser) {
-        const userData = JSON.parse(currentUser);
-        userData.profile = {
-          ...userData.profile,
-          startkort_url: mockUrl,
-          startkort_file_name: fileName
-        };
-        localStorage.setItem('currentUser', JSON.stringify(userData));
-      }
-      
-      setProfileData(prev => ({ 
-        ...prev, 
-        startkortUrl: mockUrl,
+      // Update profile with new startkort URL
+      const { error } = await supabase
+        .from('profiles')
+        .update({ startkort_url: publicUrl, startkort_file_name: fileName })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setProfileData(prev => ({
+        ...prev,
+        startkortUrl: publicUrl,
         startkortFileName: fileName
       }));
     } catch (error) {
@@ -243,24 +221,19 @@ export function Profile() {
         throw new Error('Kun PDF og bildefiler (JPG, PNG) er tillatt.');
       }
       
-      // Create a mock URL for demo purposes (in real app, upload to storage)
-      const mockUrl = URL.createObjectURL(file);
-      
-      // Save to localStorage
-      const currentUser = localStorage.getItem('currentUser');
-      if (currentUser) {
-        const userData = JSON.parse(currentUser);
-        userData.profile = {
-          ...userData.profile,
-          diploma_url: mockUrl,
-          diploma_file_name: fileName
-        };
-        localStorage.setItem('currentUser', JSON.stringify(userData));
-      }
-      
-      setProfileData(prev => ({ 
-        ...prev, 
-        diplomaUrl: mockUrl,
+      const publicUrl = await uploadDiplomaPDF(file, user.id);
+
+      // Update profile with new diploma URL
+      const { error } = await supabase
+        .from('profiles')
+        .update({ diploma_url: publicUrl, diploma_file_name: fileName })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setProfileData(prev => ({
+        ...prev,
+        diplomaUrl: publicUrl,
         diplomaFileName: fileName
       }));
     } catch (error) {
@@ -293,18 +266,20 @@ export function Profile() {
           throw new Error(`${fileName}: Filen er for stor. Maksimal størrelse er 2MB.`);
         }
         
-        // Convert to base64 for localStorage
-        return new Promise<{url: string, name: string}>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            const fileUrl = e.target?.result as string;
-            resolve({ url: fileUrl, name: fileName });
-          };
-          reader.onerror = () => {
-            reject(new Error(`Kunne ikke lese filen ${fileName}`));
-          };
-          reader.readAsDataURL(file);
-        });
+        // Upload to Supabase Storage (assuming a bucket named 'documents' or similar)
+        const { data, error } = await supabase.storage
+          .from('documents') // Or another appropriate bucket
+          .upload(`other_files/${user.id}/${fileName}`, file, {
+            upsert: true // Overwrite if file with same name exists
+          });
+
+        if (error) {
+          throw new Error(`Kunne ikke laste opp filen ${fileName}: ${error.message}`);
+        }
+
+        const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(data.path);
+
+        return { url: publicUrl, name: fileName };
       });
       
       // Wait for all files to be processed
@@ -313,10 +288,15 @@ export function Profile() {
       // Add to existing files
       const updatedFiles = [...otherFiles, ...uploadedFiles];
       setOtherFiles(updatedFiles);
-      
-      // Save to localStorage
-      if (user?.id) {
-        localStorage.setItem(`otherFiles_${user.id}`, JSON.stringify(updatedFiles));
+
+      // Update the user's profile with the new list of other files (as JSONB)
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ other_files: updatedFiles })
+        .eq('id', user.id);
+
+      if (updateError) {
+        throw new Error(`Kunne ikke oppdatere profilen med filinformasjon: ${updateError.message}`);
       }
       
       console.log(`✅ ${uploadedFiles.length} fil(er) lastet opp`);
@@ -337,11 +317,18 @@ export function Profile() {
     try {
       const updatedFiles = otherFiles.filter((_, index) => index !== fileIndex);
       setOtherFiles(updatedFiles);
-      
-      // Save to localStorage
-      if (user?.id) {
-        localStorage.setItem(`otherFiles_${user.id}`, JSON.stringify(updatedFiles));
+
+      // Update the user's profile in Supabase with the modified list
+      const { error } = await supabase
+        .from('profiles')
+        .update({ other_files: updatedFiles })
+        .eq('id', user?.id);
+
+      if (error) {
+        throw new Error(`Kunne ikke slette filen fra profilen: ${error.message}`);
       }
+      // Optionally, delete the file from storage as well
+      // await supabase.storage.from('documents').remove([`other_files/${user.id}/${otherFiles[fileIndex].name}`]);
       
       console.log('✅ File deleted successfully');
       
@@ -411,6 +398,19 @@ export function Profile() {
         </div>
 
         <div className="space-y-6">
+          <div className="flex items-center gap-4 p-4 bg-gray-700 rounded-lg">
+            <Shield className="w-6 h-6 text-svpk-yellow" />
+            <div className="flex-grow">
+              <p className="text-sm text-gray-400">Rolle</p>
+              <p className="font-medium">
+                {profileRole === 'super_user' ? 'Super Administrator' :
+                 profileRole === 'admin' ? 'Administrator' :
+                 profileRole === 'range_officer' ? 'Standplassleder' :
+                 'Medlem'}
+              </p>
+            </div>
+          </div>
+
           <div className="flex items-center gap-4 p-4 bg-gray-700 rounded-lg">
             <Mail className="w-6 h-6 text-svpk-yellow" />
             <div className="flex-grow">

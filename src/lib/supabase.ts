@@ -1118,6 +1118,17 @@ export async function uploadProfileImage(file: File, userId: string): Promise<st
 
 export async function uploadStartkortPDF(file: File, userId: string): Promise<string> {
   try {
+    // Validate file type
+    const fileType = file.type;
+    if (!fileType.includes('pdf') && !fileType.includes('image')) {
+      throw new Error('Kun PDF og bildefiler (JPG, PNG) er tillatt.');
+    }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      throw new Error('Filen er for stor. Maksimal størrelse er 5MB.');
+    }
+
     const fileExt = file.name.split('.').pop();
     const fileName = `startkort-${userId}-${Date.now()}.${fileExt}`;
     const filePath = `documents/${fileName}`;
@@ -1134,6 +1145,16 @@ export async function uploadStartkortPDF(file: File, userId: string): Promise<st
       .from('documents')
       .getPublicUrl(filePath);
 
+    // Update profiles table with startkort URL
+    await supabase
+      .from('profiles')
+      .update({ 
+        startkort_url: publicUrl,
+        startkort_file_name: file.name,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
     return publicUrl;
   } catch (error) {
     console.error('Error uploading startkort PDF:', error);
@@ -1143,6 +1164,17 @@ export async function uploadStartkortPDF(file: File, userId: string): Promise<st
 
 export async function uploadDiplomaPDF(file: File, userId: string): Promise<string> {
   try {
+    // Validate file type
+    const fileType = file.type;
+    if (!fileType.includes('pdf') && !fileType.includes('image')) {
+      throw new Error('Kun PDF og bildefiler (JPG, PNG) er tillatt.');
+    }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      throw new Error('Filen er for stor. Maksimal størrelse er 5MB.');
+    }
+
     const fileExt = file.name.split('.').pop();
     const fileName = `diploma-${userId}-${Date.now()}.${fileExt}`;
     const filePath = `documents/${fileName}`;
@@ -1158,6 +1190,16 @@ export async function uploadDiplomaPDF(file: File, userId: string): Promise<stri
     const { data: { publicUrl } } = supabase.storage
       .from('documents')
       .getPublicUrl(filePath);
+
+    // Update profiles table with diploma URL
+    await supabase
+      .from('profiles')
+      .update({ 
+        diploma_url: publicUrl,
+        diploma_file_name: file.name,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
 
     return publicUrl;
   } catch (error) {
