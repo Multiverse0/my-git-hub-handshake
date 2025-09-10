@@ -157,15 +157,7 @@ export async function registerOrganizationMember(
     // Create user in Supabase Auth first
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          member_number: memberNumber,
-          organization_id: organization.id,
-          role: 'member'
-        }
-      }
+      password
     });
 
     if (authError) {
