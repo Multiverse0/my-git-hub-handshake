@@ -8,7 +8,7 @@ import type {
   MemberTrainingSession,
   TrainingSessionDetails,
   ApiResponse,
-  Profile
+  Profile,
   SuperUser
 } from './types';
 
