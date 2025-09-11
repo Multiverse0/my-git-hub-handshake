@@ -245,6 +245,28 @@ export async function registerOrganizationMember(
     
     console.log('✅ Organization member created successfully');
     
+    // Create profile entry immediately after organization member creation
+    const { error: profileError } = await supabase.from('profiles').upsert({
+      id: data.user.id,
+      full_name: fullName,
+      email: email,
+      member_number: memberNumber,
+      role: role,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'id',
+      ignoreDuplicates: false
+    });
+    
+    if (profileError) {
+      console.error('❌ Profile creation failed:', profileError);
+      // Don't fail the registration, but log the error
+      console.warn('Profile creation failed but registration succeeded');
+    } else {
+      console.log('✅ Profile entry created successfully');
+    }
+    
     // Return auth user data (user will need approval before they can actually log in)
     const authUser: AuthUser = {
       id: data.user.id,
@@ -322,19 +344,6 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     }
 
     // Ensure profile table is updated/created for the current user
-    const { error: profileUpsertError } = await supabase.from('profiles').upsert({
-      id: user.id,
-      full_name: authUser.member_profile?.full_name || authUser.super_user_profile?.full_name || user.email,
-      email: user.email,
-      member_number: authUser.member_profile?.member_number || null,
-      role: authUser.user_type === 'super_user' ? 'super_user' : authUser.member_profile?.role,
-      created_at: authUser.member_profile?.created_at || authUser.super_user_profile?.created_at || new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }, {
-      onConflict: 'id',
-      ignoreDuplicates: false
-    });
-
     // User exists in auth but not in our user tables - sign them out
     console.log('❌ User exists in auth but not found in any user tables, signing out...');
     await supabase.auth.signOut();
@@ -583,6 +592,29 @@ export async function createFirstSuperUser(email: string, password: string, full
     }
 
     console.log('✅ Super user record created successfully');
+    
+    // Create profile entry for super user
+    const { error: profileError } = await supabase.from('profiles').upsert({
+      id: data.user.id,
+      full_name: fullName,
+      email: email,
+      member_number: null, // Super users don't have member numbers
+      role: 'super_user',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'id',
+      ignoreDuplicates: false
+    });
+    
+    if (profileError) {
+      console.error('❌ Super user profile creation failed:', profileError);
+      // Don't fail the registration, but log the error
+      console.warn('Super user profile creation failed but registration succeeded');
+    } else {
+      console.log('✅ Super user profile entry created successfully');
+    }
+    
     return { data };
   } catch (error) {
     console.error('Error creating first super user:', error);

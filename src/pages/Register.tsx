@@ -96,10 +96,26 @@ export function Register() {
         
         console.log('✅ Super user registration successful');
         
-        // Auto-login and redirect to super admin
-        setTimeout(() => {
-          window.location.href = '/super-admin';
-        }, 2000);
+        // Auto-login the new super user and redirect
+        try {
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: formData.email,
+            password: formData.password
+          });
+          
+          if (signInError) {
+            console.warn('Auto-login failed:', signInError);
+            // Still show success but user will need to login manually
+          } else {
+            console.log('✅ Auto-login successful');
+            // Navigate to super admin after a short delay
+            setTimeout(() => {
+              navigate('/super-admin', { replace: true });
+            }, 2000);
+          }
+        } catch (autoLoginError) {
+          console.warn('Auto-login error:', autoLoginError);
+        }
       } else {
         // Use existing registration for organization members
         await register(
@@ -142,7 +158,7 @@ export function Register() {
             <div>
               <p className="text-gray-300 mb-6">
                 Din super-bruker konto er opprettet og du blir automatisk logget inn. 
-                Du har nå full tilgang til hele systemet.
+                Du har nå full tilgang til hele systemet og blir omdirigert til Super Admin dashbordet.
               </p>
               <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 mb-6">
                 <h3 className="font-medium text-blue-400 mb-2">Super-bruker rettigheter:</h3>
@@ -154,9 +170,14 @@ export function Register() {
                   <li>• Opprette andre super-brukere</li>
                 </ul>
               </div>
-              <p className="text-sm text-gray-400">
-                Du blir omdirigert til Super Admin dashbordet...
-              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => navigate('/super-admin', { replace: true })}
+                  className="btn-primary"
+                >
+                  Gå til Super Admin Dashboard
+                </button>
+              </div>
             </div>
           ) : (
             <div>
