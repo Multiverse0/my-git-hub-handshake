@@ -5,7 +5,6 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { ResetPassword } from './pages/ResetPassword';
 import { LandingPage } from './components/LandingPage';
-import { SuperUserSetup } from './pages/SuperUserSetup';
 import { useAuth } from './contexts/AuthContext';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -45,22 +44,6 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  const { needsSetup, checkSetupStatus } = useAuth();
-
-  const handleSetupComplete = async () => {
-    console.log('🎉 Setup completed, checking status...');
-    await checkSetupStatus();
-  };
-
-  // Show setup page if no super users exist
-  if (needsSetup) {
-    console.log('🔧 Showing setup page - no super users exist');
-    return (
-      <SuperUserSetup onSetupComplete={handleSetupComplete} />
-    );
-  }
-
-  console.log('✅ Setup complete, showing main app');
   return (
     <ThemeProvider>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
