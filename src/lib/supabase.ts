@@ -560,10 +560,6 @@ export async function createFirstSuperUser(email: string, password: string, full
 
     console.log('✅ Supabase Auth user created:', authData.user.id);
     
-    // Hash password for storage in super_users table
-    const bcryptLib = await import('bcryptjs');
-    const superUserPasswordHash = await bcryptLib.hash(password, 10);
-    
     // Create super user record using the auth user ID
     const { data, error } = await supabase
       .from('super_users')
@@ -571,7 +567,6 @@ export async function createFirstSuperUser(email: string, password: string, full
         id: authData.user.id, // Use auth user ID as primary key
         email,
         full_name: fullName,
-        password_hash: superUserPasswordHash,
         active: true
       })
       .select()
@@ -684,12 +679,6 @@ export async function addOrganizationMember(
     }
     
     // Hash password if provided
-    let passwordHash: string | undefined;
-    if (memberData.password) {
-      const bcryptLib = await import('bcryptjs');
-      passwordHash = await bcryptLib.hash(memberData.password, 10);
-    }
-    
     const { data, error } = await supabase
       .from('organization_members')
       .insert({
@@ -698,7 +687,6 @@ export async function addOrganizationMember(
         email: memberData.email,
         full_name: memberData.full_name,
         member_number: memberData.member_number,
-        password_hash: passwordHash || 'placeholder_hash', // Required by schema
         role: memberData.role || 'member',
         approved: memberData.approved || false,
         active: memberData.active !== false
