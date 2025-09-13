@@ -330,7 +330,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       `)
       .eq('id', user.id)
       .eq('active', true)
-      .single();
+      .maybeSingle();
 
     if (member) {
       return {
