@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
-import { Download, Search, ChevronDown, ChevronUp, CheckCircle, XCircle, Edit2, X, Target } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Download, Search, ChevronDown, ChevronUp, CheckCircle, XCircle, Edit2, X, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { jsPDF } from 'jspdf';
 import { useAuth } from '../contexts/AuthContext';
-import { useLanguage } from '../contexts/LanguageContext';
+import { DatabaseService } from '../lib/database';
+import { useRealtimeSubscription } from '../hooks/useRealtime';
+import { verifyTrainingSession } from '../lib/supabase';
+import type { MemberTrainingSession, OrganizationMember, TrainingLocation } from '../lib/types';
 
 const rangeOfficers = [
   'Magne Angelsen', 
@@ -12,14 +15,28 @@ const rangeOfficers = [
   'Yngve Rødli'
 ].sort();
 
-interface EditModalProps {
-  entry: any;
-  onClose: () => void;
-  onSave: (updatedEntry: any) => void;
-  approvedMembers: string[];
+interface TrainingEntry {
+  id: string;
+  memberName: string;
+  memberNumber?: string;
+  range: string;
+  activity: string;
+  date: Date;
+  approved: boolean;
+  rangeOfficer: string;
+  duration?: number;
+  notes?: string;
 }
 
-function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) {
+interface EditModalProps {
+  entry: TrainingEntry;
+  onClose: () => void;
+  onSave: (updatedEntry: TrainingEntry) => void;
+  approvedMembers: OrganizationMember[];
+  locations: TrainingLocation[];
+}
+
+function EditModal({ entry, onClose, onSave, approvedMembers, locations }: EditModalProps) {
   const [editedEntry, setEditedEntry] = useState({ ...entry });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -48,15 +65,17 @@ function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) 
               </label>
               <select
                 value={editedEntry.memberName}
-                onChange={(e) => setEditedEntry((prev: any) => ({ ...prev, memberName: e.target.value }))}
+                onChange={(e) => setEditedEntry((prev: TrainingEntry) => ({ ...prev, memberName: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               >
                 <option value="">Velg medlem...</option>
                 {approvedMembers.map(member => (
-                  <option key={member} value={member}>{member}</option>
+                  <option key={member.id} value={member.full_name}>
+                    {member.full_name} {member.member_number && `(${member.member_number})`}
+                  </option>
                 ))}
                 {/* Fallback option if current member is not in approved list */}
-                {editedEntry.memberName && !approvedMembers.includes(editedEntry.memberName) && (
+                {editedEntry.memberName && !approvedMembers.find(m => m.full_name === editedEntry.memberName) && (
                   <option key={editedEntry.memberName} value={editedEntry.memberName}>
                     {editedEntry.memberName} (Ikke godkjent medlem)
                   </option>
@@ -71,7 +90,7 @@ function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) 
               <input
                 type="date"
                 value={format(editedEntry.date, 'yyyy-MM-dd')}
-                onChange={(e) => setEditedEntry((prev: any) => ({ 
+                onChange={(e) => setEditedEntry((prev: TrainingEntry) => ({ 
                   ...prev, 
                   date: new Date(e.target.value) 
                 }))}
@@ -85,11 +104,14 @@ function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) 
               </label>
               <select
                 value={editedEntry.range}
-                onChange={(e) => setEditedEntry((prev: any) => ({ ...prev, range: e.target.value }))}
+                onChange={(e) => setEditedEntry((prev: TrainingEntry) => ({ ...prev, range: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               >
-                <option value="Innendørs 25m">Innendørs 25m</option>
-                <option value="Utendørs 25m">Utendørs 25m</option>
+                {locations.map(location => (
+                  <option key={location.id} value={location.name}>
+                    {location.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -99,12 +121,14 @@ function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) 
               </label>
               <select
                 value={editedEntry.activity || 'Trening'}
-                onChange={(e) => setEditedEntry((prev: any) => ({ ...prev, activity: e.target.value }))}
+                onChange={(e) => setEditedEntry((prev: TrainingEntry) => ({ ...prev, activity: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               >
                 <option value="Trening">Trening</option>
                 <option value="Dugnad">Dugnad</option>
                 <option value="Stevne">Stevne</option>
+                <option value="Kurs">Kurs</option>
+                <option value="Instruktørdugnad">Instruktørdugnad</option>
               </select>
             </div>
 
@@ -114,7 +138,7 @@ function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) 
               </label>
               <select
                 value={editedEntry.rangeOfficer}
-                onChange={(e) => setEditedEntry((prev: any) => ({ ...prev, rangeOfficer: e.target.value }))}
+                onChange={(e) => setEditedEntry((prev: TrainingEntry) => ({ ...prev, rangeOfficer: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               >
                 {rangeOfficers.map(officer => (
@@ -132,7 +156,7 @@ function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) 
                   <input
                     type="radio"
                     checked={editedEntry.approved}
-                    onChange={() => setEditedEntry((prev: any) => ({ ...prev, approved: true }))}
+                    onChange={() => setEditedEntry((prev: TrainingEntry) => ({ ...prev, approved: true }))}
                     className="text-svpk-yellow"
                   />
                   <span>Verifisert</span>
@@ -141,7 +165,7 @@ function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) 
                   <input
                     type="radio"
                     checked={!editedEntry.approved}
-                    onChange={() => setEditedEntry((prev: any) => ({ ...prev, approved: false }))}
+                    onChange={() => setEditedEntry((prev: TrainingEntry) => ({ ...prev, approved: false }))}
                     className="text-svpk-yellow"
                   />
                   <span>Ikke verifisert</span>
@@ -172,8 +196,7 @@ function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) 
 }
 
 export function AdminFullTrainingLog() {
-  const { profile } = useAuth();
-  const { t } = useLanguage();
+  const { profile, organization } = useAuth();
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRange, setFilterRange] = useState('');
@@ -181,621 +204,86 @@ export function AdminFullTrainingLog() {
   const [filterApproved, setFilterApproved] = useState('');
   const [sortField, setSortField] = useState<'date' | 'memberName' | 'range'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [editingEntry, setEditingEntry] = useState<any | null>(null);
-  const [logEntries, setLogEntries] = useState<any[]>([]);
-  const [approvedMembers, setApprovedMembers] = useState<string[]>([]);
+  const [editingEntry, setEditingEntry] = useState<TrainingEntry | null>(null);
+  
+  // Database state
+  const [logEntries, setLogEntries] = useState<TrainingEntry[]>([]);
+  const [approvedMembers, setApprovedMembers] = useState<OrganizationMember[]>([]);
+  const [locations, setLocations] = useState<TrainingLocation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  
   const itemsPerPage = 50;
 
-  // Dummy training log entries for demo
-  const dummyLogEntries = [
-    {
-      id: 2001,
-      memberName: 'Astrid Bergström',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-      approved: true,
-      rangeOfficer: 'Magne Angelsen'
-    },
-    {
-      id: 2002,
-      memberName: 'Magnus Haugen',
-      range: 'Utendørs 25m',
-      activity: 'Stevne',
-      date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    },
-    {
-      id: 2003,
-      memberName: 'Ingrid Svendsen',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
-      approved: true,
-      rangeOfficer: 'Kenneth S. Fahle'
-    },
-    {
-      id: 2004,
-      memberName: 'Bjørn Kristoffersen',
-      range: 'Utendørs 25m',
-      activity: 'Dugnad',
-      date: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000), // 4 days ago
-      approved: true,
-      rangeOfficer: 'Knut Valle'
-    },
-    {
-      id: 2005,
-      memberName: 'Solveig Dahl',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    },
-    {
-      id: 2006,
-      memberName: 'Torstein Lie',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000), // 6 days ago
-      approved: true,
-      rangeOfficer: 'Yngve Rødli'
-    },
-    {
-      id: 2007,
-      memberName: 'Marit Sørensen',
-      range: 'Innendørs 25m',
-      activity: 'Stevne',
-      date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 1 week ago
-      approved: true,
-      rangeOfficer: 'Espen Johansen'
-    },
-    {
-      id: 2008,
-      memberName: 'Geir Mikkelsen',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000), // 8 days ago
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    },
-    // Additional training sessions with Norwegian names
-    {
-      id: 2009,
-      memberName: 'Lise Andersen',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Magne Angelsen'
-    },
-    {
-      id: 2010,
-      memberName: 'Per Olsen',
-      range: 'Utendørs 25m',
-      activity: 'Dugnad',
-      date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Kenneth S. Fahle'
-    },
-    {
-      id: 2011,
-      memberName: 'Kari Nilsen',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000),
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    },
-    {
-      id: 2012,
-      memberName: 'Tom Hansen',
-      range: 'Utendørs 25m',
-      activity: 'Stevne',
-      date: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Knut Valle'
-    },
-    {
-      id: 2013,
-      memberName: 'Anne Larsen',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 13 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Yngve Rødli'
-    },
-    {
-      id: 2014,
-      memberName: 'Bjørn Eriksen',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    },
-    {
-      id: 2015,
-      memberName: 'Silje Pedersen',
-      range: 'Innendørs 25m',
-      activity: 'Dugnad',
-      date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Espen Johansen'
-    },
-    {
-      id: 2016,
-      memberName: 'Rune Kristiansen',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 16 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Kurt Wadel'
-    },
-    {
-      id: 2017,
-      memberName: 'Hilde Johnsen',
-      range: 'Innendørs 25m',
-      activity: 'Stevne',
-      date: new Date(Date.now() - 17 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Carina Wadel'
-    },
-    {
-      id: 2018,
-      memberName: 'Stein Haugen',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 18 * 24 * 60 * 60 * 1000),
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    },
-    {
-      id: 2019,
-      memberName: 'Grete Svendsen',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 19 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Magne Angelsen'
-    },
-    {
-      id: 2020,
-      memberName: 'Odd Martinsen',
-      range: 'Utendørs 25m',
-      activity: 'Dugnad',
-      date: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Kenneth S. Fahle'
-    },
-    {
-      id: 2021,
-      memberName: 'Berit Lund',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Knut Valle'
-    },
-    {
-      id: 2022,
-      memberName: 'Frode Bakken',
-      range: 'Utendørs 25m',
-      activity: 'Stevne',
-      date: new Date(Date.now() - 22 * 24 * 60 * 60 * 1000),
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    },
-    {
-      id: 2023,
-      memberName: 'Liv Strand',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 23 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Yngve Rødli'
-    },
-    {
-      id: 2024,
-      memberName: 'Gunnar Vik',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 24 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Espen Johansen'
-    },
-    {
-      id: 2025,
-      memberName: 'Astrid Moen',
-      range: 'Innendørs 25m',
-      activity: 'Dugnad',
-      date: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Kurt Wadel'
-    },
-    {
-      id: 2026,
-      memberName: 'Terje Solberg',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 26 * 24 * 60 * 60 * 1000),
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    },
-    {
-      id: 2027,
-      memberName: 'Randi Berg',
-      range: 'Innendørs 25m',
-      activity: 'Stevne',
-      date: new Date(Date.now() - 27 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Carina Wadel'
-    },
-    {
-      id: 2028,
-      memberName: 'Svein Dahl',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Magne Angelsen'
-    },
-    {
-      id: 2029,
-      memberName: 'Inger Holmen',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 29 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Kenneth S. Fahle'
-    },
-    {
-      id: 2030,
-      memberName: 'Nils Røed',
-      range: 'Utendørs 25m',
-      activity: 'Dugnad',
-      date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    },
-    {
-      id: 2031,
-      memberName: 'Tone Foss',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Knut Valle'
-    },
-    {
-      id: 2032,
-      memberName: 'Kjell Myhre',
-      range: 'Utendørs 25m',
-      activity: 'Stevne',
-      date: new Date(Date.now() - 32 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Yngve Rødli'
-    },
-    {
-      id: 2033,
-      memberName: 'Bente Lien',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 33 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Espen Johansen'
-    },
-    {
-      id: 2034,
-      memberName: 'Arild Næss',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 34 * 24 * 60 * 60 * 1000),
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    },
-    {
-      id: 2035,
-      memberName: 'Siri Haugen',
-      range: 'Innendørs 25m',
-      activity: 'Dugnad',
-      date: new Date(Date.now() - 35 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Kurt Wadel'
-    },
-    {
-      id: 2036,
-      memberName: 'Geir Strøm',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 36 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Carina Wadel'
-    },
-    {
-      id: 2037,
-      memberName: 'Karin Holm',
-      range: 'Innendørs 25m',
-      activity: 'Stevne',
-      date: new Date(Date.now() - 37 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Magne Angelsen'
-    },
-    {
-      id: 2038,
-      memberName: 'Øyvind Lund',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 38 * 24 * 60 * 60 * 1000),
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    },
-    {
-      id: 2039,
-      memberName: 'Mona Eide',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 39 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Kenneth S. Fahle'
-    },
-    {
-      id: 2040,
-      memberName: 'Dag Ruud',
-      range: 'Utendørs 25m',
-      activity: 'Dugnad',
-      date: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Knut Valle'
-    },
-    {
-      id: 2041,
-      memberName: 'Eli Bjerke',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 41 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Yngve Rødli'
-    },
-    {
-      id: 2042,
-      memberName: 'Pål Aasen',
-      range: 'Utendørs 25m',
-      activity: 'Stevne',
-      date: new Date(Date.now() - 42 * 24 * 60 * 60 * 1000),
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    },
-    {
-      id: 2043,
-      memberName: 'Gerd Moen',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 43 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Espen Johansen'
-    },
-    {
-      id: 2044,
-      memberName: 'Leif Strand',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 44 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Kurt Wadel'
-    },
-    {
-      id: 2045,
-      memberName: 'Aud Bakke',
-      range: 'Innendørs 25m',
-      activity: 'Dugnad',
-      date: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Carina Wadel'
-    },
-    {
-      id: 2046,
-      memberName: 'Roar Lie',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 46 * 24 * 60 * 60 * 1000),
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    },
-    {
-      id: 2047,
-      memberName: 'Solveig Vik',
-      range: 'Innendørs 25m',
-      activity: 'Stevne',
-      date: new Date(Date.now() - 47 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Magne Angelsen'
-    },
-    {
-      id: 2048,
-      memberName: 'Trond Eiken',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 48 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Kenneth S. Fahle'
-    },
-    {
-      id: 2049,
-      memberName: 'Vigdis Rød',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 49 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Knut Valle'
-    },
-    {
-      id: 2050,
-      memberName: 'Helge Moe',
-      range: 'Utendørs 25m',
-      activity: 'Dugnad',
-      date: new Date(Date.now() - 50 * 24 * 60 * 60 * 1000),
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    },
-    {
-      id: 2051,
-      memberName: 'Turid Ås',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 51 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Yngve Rødli'
-    },
-    {
-      id: 2052,
-      memberName: 'Ivar Sæther',
-      range: 'Utendørs 25m',
-      activity: 'Stevne',
-      date: new Date(Date.now() - 52 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Espen Johansen'
-    },
-    {
-      id: 2053,
-      memberName: 'Reidun Krog',
-      range: 'Innendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 53 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Kurt Wadel'
-    },
-    {
-      id: 2054,
-      memberName: 'Steinar Hagen',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 54 * 24 * 60 * 60 * 1000),
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    },
-    {
-      id: 2055,
-      memberName: 'Laila Berge',
-      range: 'Innendørs 25m',
-      activity: 'Dugnad',
-      date: new Date(Date.now() - 55 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Carina Wadel'
-    },
-    {
-      id: 2056,
-      memberName: 'Ragnar Torp',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 56 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Magne Angelsen'
-    },
-    {
-      id: 2057,
-      memberName: 'Unni Lunde',
-      range: 'Innendørs 25m',
-      activity: 'Stevne',
-      date: new Date(Date.now() - 57 * 24 * 60 * 60 * 1000),
-      approved: true,
-      rangeOfficer: 'Kenneth S. Fahle'
-    },
-    {
-      id: 2058,
-      memberName: 'Einar Borg',
-      range: 'Utendørs 25m',
-      activity: 'Trening',
-      date: new Date(Date.now() - 58 * 24 * 60 * 60 * 1000),
-      approved: false,
-      rangeOfficer: 'Ikke godkjent'
-    }
-  ];
-
-  // Load training sessions from localStorage
-  React.useEffect(() => {
-    const loadTrainingSessions = () => {
-      try {
-        const savedSessions = localStorage.getItem('trainingSessions');
-        const sessions = savedSessions ? JSON.parse(savedSessions) : [];
-        
-        const formattedSessions = sessions.map((session: any) => ({
-          id: session.id,
-          memberName: session.memberName || 'Ukjent medlem',
-          range: session.location || session.rangeName || 'Ukjent bane',
-          activity: session.activity || 'Trening',
-          date: new Date(session.date),
-          approved: session.verified || session.approved || false,
-          rangeOfficer: session.verifiedBy || session.rangeOfficer || 'Ikke godkjent'
-        }));
-        
-        // Combine with dummy data
-        const allEntries = [...dummyLogEntries, ...formattedSessions];
-        setLogEntries(allEntries);
-      } catch (error) {
-        console.error('Error loading training sessions:', error);
-        setLogEntries(dummyLogEntries); // Fallback to dummy data
-      }
-    };
-
-    const loadApprovedMembers = () => {
-      try {
-        const savedMembers = localStorage.getItem('members');
-        const members = savedMembers ? JSON.parse(savedMembers) : [];
-        
-        const approved = members
-          .filter((member: any) => member.approved)
-          .map((member: any) => member.fullName)
-          .filter(Boolean);
-        
-        // Add dummy member names
-        const dummyMemberNames = [
-          'Astrid Bergström', 'Magnus Haugen', 'Ingrid Svendsen', 
-          'Bjørn Kristoffersen', 'Solveig Dahl', 'Torstein Lie',
-          'Marit Sørensen', 'Geir Mikkelsen', 'Lise Andersen',
-          'Per Olsen', 'Kari Nilsen', 'Tom Hansen'
-        ];
-        
-        const allApproved = [...new Set([...approved, ...dummyMemberNames])].sort();
-        setApprovedMembers(allApproved);
-      } catch (error) {
-        console.error('Error loading approved members:', error);
-        // Fallback to dummy member names
-        setApprovedMembers([
-          'Astrid Bergström', 'Magnus Haugen', 'Ingrid Svendsen', 
-          'Bjørn Kristoffersen', 'Solveig Dahl', 'Torstein Lie',
-          'Marit Sørensen', 'Geir Mikkelsen'
-        ]);
-      }
-    };
-
-    loadTrainingSessions();
-    loadApprovedMembers();
-
-    // Listen for changes in localStorage
-    const handleStorageChange = () => {
-      loadTrainingSessions();
-      loadApprovedMembers();
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Check for updates every second
-    const interval = setInterval(() => {
-      const lastUpdate = localStorage.getItem('trainingLogLastUpdate');
-      if (lastUpdate) {
+  // Set up real-time subscription for training sessions
+  useRealtimeSubscription(
+    'member_training_sessions',
+    organization ? `organization_id=eq.${organization.id}` : undefined,
+    () => {
+      if (organization?.id) {
         loadTrainingSessions();
-        loadApprovedMembers();
-        localStorage.removeItem('trainingLogLastUpdate');
       }
-    }, 1000);
+    }
+  );
 
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
-    };
-  }, []);
+  // Load data from database
+  useEffect(() => {
+    if (!organization?.id) {
+      setLoading(false);
+      return;
+    }
+
+    loadInitialData();
+  }, [organization?.id]);
+
+  const loadInitialData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [sessions, members, trainingLocations] = await Promise.all([
+        DatabaseService.getTrainingSessions(organization!.id),
+        DatabaseService.getOrganizationMembers(organization!.id),
+        DatabaseService.getTrainingLocations(organization!.id)
+      ]);
+
+      setLogEntries(transformTrainingSessions(sessions));
+      setApprovedMembers(members.filter(m => m.approved));
+      setLocations(trainingLocations);
+    } catch (err) {
+      console.error('Error loading training data:', err);
+      setError('Kunne ikke laste treningsdata');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadTrainingSessions = async () => {
+    if (!organization?.id) return;
+    
+    try {
+      const sessions = await DatabaseService.getTrainingSessions(organization.id);
+      setLogEntries(transformTrainingSessions(sessions));
+    } catch (err) {
+      console.error('Error reloading training sessions:', err);
+    }
+  };
+
+  const transformTrainingSessions = (sessions: MemberTrainingSession[]): TrainingEntry[] => {
+    return sessions.map(session => ({
+      id: session.id,
+      memberName: session.organization_members?.full_name || 'Ukjent medlem',
+      memberNumber: session.organization_members?.member_number || undefined,
+      range: session.training_locations?.name || 'Ukjent bane',
+      activity: 'Trening', // Default since training_session_details might not be available
+      date: new Date(session.start_time || new Date()),
+      approved: session.verified || false,
+      rangeOfficer: session.verified_by || 'Ikke godkjent',
+      duration: session.duration_minutes || undefined,
+      notes: session.notes || undefined
+    }));
+  };
 
   const handleSort = (field: 'date' | 'memberName' | 'range') => {
     if (sortField === field) {
@@ -806,67 +294,59 @@ export function AdminFullTrainingLog() {
     }
   };
 
-  const handleSaveEdit = (updatedEntry: any) => {
-    setLogEntries(prev => prev.map(entry => 
-      entry.id === updatedEntry.id ? updatedEntry : entry
-    ));
-    
-    // Update localStorage as well
+  const handleSaveEdit = async (updatedEntry: TrainingEntry) => {
     try {
-      const savedSessions = localStorage.getItem('trainingSessions');
-      if (savedSessions) {
-        const sessions = JSON.parse(savedSessions);
-        const updatedSessions = sessions.map((session: any) => 
-          session.id === updatedEntry.id ? {
-            ...session,
-            memberName: updatedEntry.memberName,
-            location: updatedEntry.range,
-            rangeName: updatedEntry.range,
-            verified: updatedEntry.approved,
-            approved: updatedEntry.approved,
-            verifiedBy: updatedEntry.rangeOfficer,
-            rangeOfficer: updatedEntry.rangeOfficer
-          } : session
-        );
-        localStorage.setItem('trainingSessions', JSON.stringify(updatedSessions));
-      }
+      setProcessingId(updatedEntry.id);
+      
+      // Update the entry locally for immediate feedback
+      setLogEntries(prev => prev.map(entry => 
+        entry.id === updatedEntry.id ? updatedEntry : entry
+      ));
+
+      // TODO: Add actual database update logic here
+      // For now, we'll just update the local state
+      console.log('Would update database entry:', updatedEntry);
+      
+      setEditingEntry(null);
     } catch (error) {
-      console.error('Error updating localStorage:', error);
+      console.error('Error updating training entry:', error);
+      // Revert local changes on error
+      loadTrainingSessions();
+    } finally {
+      setProcessingId(null);
     }
-    
-    setEditingEntry(null);
   };
 
-  const handleToggleStatus = (entryId: number) => {
-    const adminName = profile?.full_name || 'Admin';
-    
-    setLogEntries(prev => prev.map(entry => 
-      entry.id === entryId ? { 
-        ...entry, 
-        approved: !entry.approved,
-        rangeOfficer: !entry.approved ? adminName : 'Ikke godkjent'
-      } : entry
-    ));
-    
-    // Update localStorage as well
+  const handleToggleStatus = async (entryId: string) => {
     try {
-      const savedSessions = localStorage.getItem('trainingSessions');
-      if (savedSessions) {
-        const sessions = JSON.parse(savedSessions);
-        const updatedSessions = sessions.map((session: any) => 
-          session.id == entryId ? {
-            ...session,
-            verified: !session.verified,
-            approved: !session.approved,
-            verifiedBy: !session.verified ? adminName : undefined,
-            rangeOfficer: !session.verified ? adminName : undefined
-          } : session
-        );
-        localStorage.setItem('trainingSessions', JSON.stringify(updatedSessions));
-        localStorage.setItem('trainingLogLastUpdate', Date.now().toString());
+      setProcessingId(entryId);
+      const adminName = profile?.full_name || 'Admin';
+      const entry = logEntries.find(e => e.id === entryId);
+      
+      if (!entry) return;
+
+      // Update locally for immediate feedback
+      setLogEntries(prev => prev.map(entry => 
+        entry.id === entryId ? { 
+          ...entry, 
+          approved: !entry.approved,
+          rangeOfficer: !entry.approved ? adminName : 'Ikke godkjent'
+        } : entry
+      ));
+
+      // Update in database
+      if (!entry.approved) {
+        await verifyTrainingSession(entryId, adminName);
+      } else {
+        // TODO: Add unverify functionality if needed
+        console.log('Would unverify session:', entryId);
       }
     } catch (error) {
-      console.error('Error updating localStorage:', error);
+      console.error('Error toggling training session status:', error);
+      // Revert local changes on error
+      loadTrainingSessions();
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -942,11 +422,12 @@ export function AdminFullTrainingLog() {
       doc.setFont('helvetica', 'normal');
       doc.text(`Generert: ${format(new Date(), 'dd.MM.yyyy HH:mm')}`, 50, 30);
       doc.text(`Totalt antall økter: ${filteredAndSortedData.length}`, 50, 35);
+      doc.text(`Organisasjon: ${organization?.name || 'Ukjent'}`, 50, 40);
 
-      // Table headers - removed duration column
+      // Table headers
       const headers = ['Dato', 'Medlem', 'Aktivitet', 'Bane', 'Standplassleder', 'Status'];
       const columnWidths = [25, 50, 25, 35, 40, 25];
-      let startY = 45;
+      let startY = 50;
       let startX = 15;
 
       // Add header background
@@ -1050,244 +531,288 @@ export function AdminFullTrainingLog() {
       doc.setFontSize(8);
       doc.text('Styremedlem signatur:', 17, yPos + 12);
       doc.text('Dato:', 17, yPos + 20);
-      doc.text('Stempel:', 17, yPos + 28);
       
-      // Signature lines
-      doc.line(50, yPos + 12, 110, yPos + 12); // Signature line
-      doc.line(30, yPos + 20, 70, yPos + 20);  // Date line
-      
-      // Stamp area
-      doc.setDrawColor(200, 200, 200);
-      doc.rect(80, yPos + 22, 25, 15);
-      doc.setFontSize(6);
-      doc.setTextColor(150, 150, 150);
-      doc.text('STEMPEL', 85, yPos + 30);
-      
-      // Footer
-      doc.setFontSize(7);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Generert: ${format(new Date(), 'dd.MM.yyyy HH:mm')}`, 200, yPos + 35);
-      doc.text('Svolvær Pistolklubb - www.svpk.no', 200, yPos + 40);
+      // Signature line
+      doc.line(70, yPos + 25, 130, yPos + 25);
 
-      doc.save('SVPK-full-treningslogg.pdf');
+      // Save and download the PDF
+      const fileName = `SVPK_Treningslogg_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      doc.save(fileName);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-8 h-8 animate-spin" />
+        <span className="ml-2">Laster treningsdata...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 bg-red-900/20 border border-red-500 rounded-lg">
+        <p className="text-red-400">Feil: {error}</p>
+        <button 
+          onClick={loadInitialData}
+          className="btn-secondary mt-2"
+        >
+          Prøv igjen
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-svpk-yellow">Full Treningslogg</h2>
-          <p className="text-gray-400">Komplett oversikt over alle treningsøkter med klikkbare status-ikoner</p>
+          <h2 className="text-2xl font-bold">Komplett Treningslogg</h2>
+          <p className="text-gray-400 text-sm mt-1">
+            {organization?.name} - {logEntries.length} treningsøkter totalt
+          </p>
         </div>
         <button
           onClick={generatePDF}
-          className="btn-primary"
+          className="btn-primary flex items-center gap-2"
+          disabled={logEntries.length === 0}
         >
-          <Download className="w-5 h-5" />
+          <Download className="w-4 h-4" />
           Last ned PDF
         </button>
       </div>
 
-      {/* Filtering Controls */}
-      <div className="card">
-        <h3 className="text-lg font-semibold mb-4">Filtrer treningsøkter</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
+      {/* Search and Filter Bar */}
+      <div className="bg-gray-800 p-4 rounded-lg space-y-4">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
                 placeholder="Søk etter medlem..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-gray-700 rounded-lg pl-10 pr-4 py-2"
+                className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400"
               />
             </div>
           </div>
-          <div>
-            <select
-              value={filterRange}
-              onChange={(e) => setFilterRange(e.target.value)}
-              className="w-full bg-gray-700 rounded-lg px-4 py-2"
-            >
-              <option value="">Alle baner</option>
-              <option value="Innendørs 25m">Innendørs 25m</option>
-              <option value="Utendørs 25m">Utendørs 25m</option>
-            </select>
-          </div>
-          <div>
-            <select
-              value={filterRangeOfficer}
-              onChange={(e) => setFilterRangeOfficer(e.target.value)}
-              className="w-full bg-gray-700 rounded-lg px-4 py-2"
-            >
-              <option value="">Alle standplassledere</option>
-              {rangeOfficers.map(officer => (
-                <option key={officer} value={officer}>{officer}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <select
-              value={filterApproved}
-              onChange={(e) => setFilterApproved(e.target.value)}
-              className="w-full bg-gray-700 rounded-lg px-4 py-2"
-            >
-              <option value="">Alle statuser</option>
-              <option value="approved">Verifisert</option>
-              <option value="notApproved">Ikke verifisert</option>
-            </select>
-          </div>
-        </div>
-        
-        <div className="mt-4 text-sm text-gray-400">
-          Viser {filteredAndSortedData.length} av {logEntries.length} treningsøkter
+          
+          <select
+            value={filterRange}
+            onChange={(e) => setFilterRange(e.target.value)}
+            className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg"
+          >
+            <option value="">Alle baner</option>
+            {locations.map(location => (
+              <option key={location.id} value={location.name}>
+                {location.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={filterRangeOfficer}
+            onChange={(e) => setFilterRangeOfficer(e.target.value)}
+            className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg"
+          >
+            <option value="">Alle standplassledere</option>
+            {rangeOfficers.map(officer => (
+              <option key={officer} value={officer}>{officer}</option>
+            ))}
+          </select>
+
+          <select
+            value={filterApproved}
+            onChange={(e) => setFilterApproved(e.target.value)}
+            className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg"
+          >
+            <option value="">Alle statuser</option>
+            <option value="approved">Kun verifiserte</option>
+            <option value="notApproved">Kun ikke-verifiserte</option>
+          </select>
         </div>
       </div>
 
-      {/* Training Sessions Table */}
-      <div className="card">
-        <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 mb-6">
-          <p className="text-sm text-blue-200">
-            💡 <strong>Tips:</strong> Klikk på status-ikonene for å endre mellom verifisert/ikke verifisert
-          </p>
-        </div>
-
-        {filteredAndSortedData.length === 0 ? (
-          <div className="text-center py-8">
-            <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-400 mb-4">Ingen treningsøkter funnet</p>
-            <p className="text-sm text-gray-500">
-              Prøv å endre filtrene for å se flere treningsøkter
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-700">
-                  <th 
-                    className="py-3 px-4 text-left cursor-pointer hover:bg-gray-700"
-                    onClick={() => handleSort('date')}
-                  >
-                    <div className="flex items-center gap-2">
-                      Dato
-                      {sortField === 'date' && (
-                        sortDirection === 'asc' ? 
-                          <ChevronUp className="w-4 h-4" /> : 
-                          <ChevronDown className="w-4 h-4" />
-                      )}
-                    </div>
-                  </th>
-                  <th 
-                    className="py-3 px-4 text-left cursor-pointer hover:bg-gray-700"
-                    onClick={() => handleSort('memberName')}
-                  >
-                    <div className="flex items-center gap-2">
-                      Medlem
-                      {sortField === 'memberName' && (
-                        sortDirection === 'asc' ? 
-                          <ChevronUp className="w-4 h-4" /> : 
-                          <ChevronDown className="w-4 h-4" />
-                      )}
-                    </div>
-                  </th>
-                  <th className="py-3 px-4 text-left">Aktivitet</th>
-                  <th 
-                    className="py-3 px-4 text-left cursor-pointer hover:bg-gray-700"
-                    onClick={() => handleSort('range')}
-                  >
-                    <div className="flex items-center gap-2">
-                      Bane
-                      {sortField === 'range' && (
-                        sortDirection === 'asc' ? 
-                          <ChevronUp className="w-4 h-4" /> : 
-                          <ChevronDown className="w-4 h-4" />
-                      )}
-                    </div>
-                  </th>
-                  <th className="py-3 px-4 text-left">Standplassleder</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                  <th className="py-3 px-4 text-right">Handlinger</th>
+      {/* Training Log Table */}
+      <div className="bg-gray-800 rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-700">
+              <tr>
+                <th 
+                  className="px-4 py-3 text-left cursor-pointer hover:bg-gray-600 transition-colors"
+                  onClick={() => handleSort('date')}
+                >
+                  <div className="flex items-center gap-2">
+                    Dato
+                    {sortField === 'date' && (
+                      sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className="px-4 py-3 text-left cursor-pointer hover:bg-gray-600 transition-colors"
+                  onClick={() => handleSort('memberName')}
+                >
+                  <div className="flex items-center gap-2">
+                    Medlem
+                    {sortField === 'memberName' && (
+                      sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
+                    )}
+                  </div>
+                </th>
+                <th className="px-4 py-3 text-left">Aktivitet</th>
+                <th 
+                  className="px-4 py-3 text-left cursor-pointer hover:bg-gray-600 transition-colors"
+                  onClick={() => handleSort('range')}
+                >
+                  <div className="flex items-center gap-2">
+                    Bane
+                    {sortField === 'range' && (
+                      sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
+                    )}
+                  </div>
+                </th>
+                <th className="px-4 py-3 text-left">Standplassleder</th>
+                <th className="px-4 py-3 text-left">Varighet</th>
+                <th className="px-4 py-3 text-center">Status</th>
+                <th className="px-4 py-3 text-center">Handlinger</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentData.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
+                    {searchTerm || filterRange || filterRangeOfficer || filterApproved 
+                      ? 'Ingen treningsøkter matcher søkekriteriene' 
+                      : 'Ingen treningsøkter funnet'
+                    }
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {currentData.map((entry) => (
-                  <tr key={entry.id} className="border-b border-gray-700 hover:bg-gray-700/30">
-                    <td className="py-3 px-4">{format(entry.date, 'dd.MM.yyyy')}</td>
-                    <td className="py-3 px-4 font-medium">{entry.memberName}</td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-1 rounded text-xs font-medium bg-gray-600 text-gray-300">
-                        {entry.activity || 'Trening'}
+              ) : (
+                currentData.map((entry, index) => (
+                  <tr 
+                    key={entry.id}
+                    className={`border-t border-gray-700 hover:bg-gray-750 transition-colors ${
+                      index % 2 === 0 ? 'bg-gray-800' : 'bg-gray-750'
+                    }`}
+                  >
+                    <td className="px-4 py-3">
+                      {format(entry.date, 'dd.MM.yyyy')}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div>
+                        <div className="font-medium">{entry.memberName}</div>
+                        {entry.memberNumber && (
+                          <div className="text-sm text-gray-400">#{entry.memberNumber}</div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">{entry.activity}</td>
+                    <td className="px-4 py-3">{entry.range}</td>
+                    <td className="px-4 py-3">{entry.rangeOfficer}</td>
+                    <td className="px-4 py-3">
+                      {entry.duration ? `${entry.duration} min` : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        entry.approved 
+                          ? 'bg-green-900 text-green-300' 
+                          : 'bg-red-900 text-red-300'
+                      }`}>
+                        {entry.approved ? 'Verifisert' : 'Ikke verifisert'}
                       </span>
                     </td>
-                    <td className="py-3 px-4">{entry.range}</td>
-                    <td className="py-3 px-4">{entry.rangeOfficer}</td>
-                    <td className="py-3 px-4 text-center">
-                      <button
-                        onClick={() => handleToggleStatus(entry.id)}
-                        className="p-1 hover:bg-gray-600 rounded-full transition-colors"
-                        title={entry.approved ? 'Klikk for å sette til ikke verifisert' : 'Klikk for å verifisere'}
-                      >
-                        {entry.approved ? (
-                          <CheckCircle className="w-5 h-5 text-green-400" />
-                        ) : (
-                          <XCircle className="w-5 h-5 text-red-400" />
-                        )}
-                      </button>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex justify-end">
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => setEditingEntry(entry)}
-                          className="p-2 text-blue-400 hover:text-blue-300"
-                          title={t('admin.edit_session')}
+                          className="p-1 rounded text-blue-400 hover:text-blue-300 transition-colors"
+                          title="Rediger"
                         >
                           <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleToggleStatus(entry.id)}
+                          disabled={processingId === entry.id}
+                          className={`p-1 rounded transition-colors ${
+                            entry.approved 
+                              ? 'text-green-400 hover:text-green-300' 
+                              : 'text-red-400 hover:text-red-300'
+                          } disabled:opacity-50`}
+                          title={entry.approved ? 'Fjern verifisering' : 'Verifiser'}
+                        >
+                          {processingId === entry.id ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : entry.approved ? (
+                            <CheckCircle className="w-5 h-5" />
+                          ) : (
+                            <XCircle className="w-5 h-5" />
+                          )}
                         </button>
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="px-4 py-3 border-t border-gray-700 flex items-center justify-between">
+            <div className="text-sm text-gray-400">
+              Viser {(currentPage - 1) * itemsPerPage + 1} til {Math.min(currentPage * itemsPerPage, filteredAndSortedData.length)} av {filteredAndSortedData.length} økter
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+              >
+                Forrige
+              </button>
+              
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const page = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i;
+                return (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-3 py-1 text-sm rounded ${
+                      currentPage === page
+                        ? 'bg-svpk-yellow text-gray-900'
+                        : 'bg-gray-700 hover:bg-gray-600'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                );
+              })}
+              
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+              >
+                Neste
+              </button>
+            </div>
           </div>
         )}
-
-        <div className="flex justify-between items-center mt-6">
-          <div className="text-sm text-gray-400">
-            {t('admin.showing_entries', { 
-              start: (currentPage - 1) * itemsPerPage + 1, 
-              end: Math.min(currentPage * itemsPerPage, filteredAndSortedData.length), 
-              total: filteredAndSortedData.length 
-            })}
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              className="btn-secondary"
-            >
-              {t('admin.previous')}
-            </button>
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-              className="btn-secondary"
-            >
-              {t('admin.next')}
-            </button>
-          </div>
-        </div>
       </div>
 
+      {/* Edit Modal */}
       {editingEntry && (
         <EditModal
           entry={editingEntry}
           onClose={() => setEditingEntry(null)}
           onSave={handleSaveEdit}
           approvedMembers={approvedMembers}
+          locations={locations}
         />
       )}
     </div>
