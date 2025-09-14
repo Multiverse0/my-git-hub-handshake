@@ -1,6 +1,6 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, Image, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { Image, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { updateOrganizationLogo } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 

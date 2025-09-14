@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Palette, Building2, Mail, Phone, Globe, MapPin, FileText, Upload, Loader2, AlertCircle, CheckCircle, X, Plus, Trash2, Edit2 } from 'lucide-react';
+import { Save, Palette, Building2, Mail, Globe, FileText, Upload, Loader2, AlertCircle, CheckCircle, X, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { languages } from '../lib/translations';
@@ -32,7 +32,7 @@ interface SalesBanner {
 }
 
 export function OrganizationSettings() {
-  const { user, organization, branding } = useAuth();
+  const { user, branding } = useAuth();
   const { currentLanguage, setLanguage, isTranslating, t } = useLanguage();
   const [orgData, setOrgData] = useState<OrganizationData>({
     name: '',

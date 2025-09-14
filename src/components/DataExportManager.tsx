@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Download, Package, AlertTriangle, CheckCircle, Loader2, FileText, Database, Archive } from 'lucide-react';
+import { useState } from 'react';
+import { Package, AlertTriangle, CheckCircle, Loader2, FileText, Database, Archive } from 'lucide-react';
 import { format } from 'date-fns';
 import JSZip from 'jszip';
 
@@ -75,7 +75,7 @@ export function DataExportManager({ organizationId, organizationName, onClose }:
     }
   };
 
-  const convertToCSV = (data: any[], filename: string): string => {
+  const convertToCSV = (data: any[]): string => {
     if (data.length === 0) return '';
 
     const headers = Object.keys(data[0]);
@@ -98,7 +98,6 @@ export function DataExportManager({ organizationId, organizationName, onClose }:
 
   const createCustomerExportZip = async (data: ExportData): Promise<Blob> => {
     const zip = new JSZip();
-    const exportDate = format(new Date(), 'yyyy-MM-dd');
 
     // Add README file for customer
     const readmeContent = `AKTIVLOGG Data Export - ${organizationName}
@@ -140,7 +139,7 @@ For spørsmål om dataene, kontakt: yngve@promonorge.no
         'Registrert_dato': member.created_at || member.registrationDate,
         'Telefon': member.phone || '',
         'Adresse': member.address || ''
-      })), 'medlemmer.csv');
+      })));
       zip.file('medlemmer.csv', membersCSV);
     }
 
@@ -157,7 +156,7 @@ For spørsmål om dataene, kontakt: yngve@promonorge.no
         'Godkjent': session.approved || session.verified ? 'Ja' : 'Nei',
         'Godkjent_av': session.verifiedBy || session.rangeOfficer || '',
         'Notater': session.notes || ''
-      })), 'treningsokter.csv');
+      })));
       zip.file('treningsokter.csv', sessionsCSV);
     }
 
@@ -169,7 +168,7 @@ For spørsmål om dataene, kontakt: yngve@promonorge.no
         'Rolle': admin.role,
         'Aktiv': admin.active ? 'Ja' : 'Nei',
         'Opprettet': admin.created_at || admin.addedDate
-      })), 'standplassledere.csv');
+      })));
       zip.file('standplassledere.csv', adminsCSV);
     }
 
@@ -180,7 +179,7 @@ For spørsmål om dataene, kontakt: yngve@promonorge.no
         'QR_kode': location.qr_code_id,
         'Beskrivelse': location.description || '',
         'Aktiv': location.active !== false ? 'Ja' : 'Nei'
-      })), 'skytebaner.csv');
+      })));
       zip.file('skytebaner.csv', locationsCSV);
     }
 
@@ -196,7 +195,7 @@ For spørsmål om dataene, kontakt: yngve@promonorge.no
         'Primaerfarge': data.organization.primary_color,
         'Sekundaerfarge': data.organization.secondary_color,
         'Opprettet': data.organization.created_at
-      }], 'organisasjon.csv');
+      }]);
       zip.file('organisasjon.csv', orgCSV);
     }
 
@@ -205,7 +204,6 @@ For spørsmål om dataene, kontakt: yngve@promonorge.no
 
   const createSystemBackupZip = async (data: ExportData): Promise<Blob> => {
     const zip = new JSZip();
-    const exportDate = format(new Date(), 'yyyy-MM-dd');
 
     // Add system restore instructions
     const restoreInstructions = `AKTIVLOGG System Backup - ${organizationName}

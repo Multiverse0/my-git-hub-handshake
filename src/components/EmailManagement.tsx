@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Mail, Save, TestTube, Settings, Edit3, Eye, EyeOff, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { testEmailConfiguration, sendEmail } from '../lib/emailService';
 

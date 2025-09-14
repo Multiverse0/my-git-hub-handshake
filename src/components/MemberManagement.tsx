@@ -1,139 +1,15 @@
-import React, { useState } from 'react';
-import { Search, ChevronUp, ChevronDown, XCircle, CheckCircle, AlertCircle, Edit2, PlusCircle, Shield, ShieldOff, Trash2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, ChevronUp, ChevronDown, XCircle, CheckCircle, AlertCircle, Edit2, Shield, ShieldOff, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
-import { getOrganizationMembers, approveMember, updateMemberRole, addOrganizationMember, updateOrganizationMember, deleteOrganizationMember } from '../lib/supabase';
+import { getOrganizationMembers, approveMember, updateMemberRole, updateOrganizationMember, deleteOrganizationMember } from '../lib/supabase';
 import { sendMemberApprovalEmail, generateLoginUrl } from '../lib/emailService';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { isAdmin, canManageMembers } from '../lib/authHelpers';
+import { canManageMembers } from '../lib/authHelpers';
 import type { OrganizationMember } from '../lib/types';
 
 interface MemberManagementProps {
   onMemberCountChange?: (count: number) => void;
-}
-
-interface AddMemberModalProps {
-  onClose: () => void;
-  onAdd: (memberData: { full_name: string; email: string; member_number: string }) => void;
-}
-
-function AddMemberModal({ onClose, onAdd }: AddMemberModalProps) {
-  const [newMember, setNewMember] = useState({
-    full_name: '',
-    email: '',
-    member_number: ''
-  });
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!newMember.full_name.trim() || !newMember.email.trim() || !newMember.member_number.trim()) {
-      setError('Alle felt må fylles ut');
-      return;
-    }
-
-    if (!newMember.email.includes('@')) {
-      setError('Vennligst skriv inn en gyldig e-postadresse');
-      return;
-    }
-
-    onAdd(newMember);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-gray-800 rounded-lg max-w-md w-full">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-xl font-semibold">Legg til nytt medlem</h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white"
-            >
-              <XCircle className="w-6 h-6" />
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Navn
-              </label>
-              <input
-                type="text"
-                value={newMember.full_name}
-                onChange={(e) => setNewMember(prev => ({ ...prev, full_name: e.target.value }))}
-                className="w-full bg-gray-700 rounded-md px-3 py-2"
-                placeholder="Fullt navn"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                E-post
-              </label>
-              <input
-                type="email"
-                value={newMember.email}
-                onChange={(e) => setNewMember(prev => ({ ...prev, email: e.target.value }))}
-                className="w-full bg-gray-700 rounded-md px-3 py-2"
-                placeholder="navn@example.com"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                SkytterID
-              </label>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm text-gray-400">
-                  <a
-                    href="https://app.skyting.no/user"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-svpk-yellow hover:text-yellow-400"
-                  >
-                    (Link SkytterID)
-                  </a>
-                </span>
-              </div>
-              <input
-                type="text"
-                value={newMember.member_number}
-                onChange={(e) => setNewMember(prev => ({ ...prev, member_number: e.target.value }))}
-                className="w-full bg-gray-700 rounded-md px-3 py-2"
-                placeholder="12345"
-              />
-            </div>
-
-            {error && (
-              <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg flex items-center gap-2 text-red-200">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <p className="text-sm">{error}</p>
-              </div>
-            )}
-
-            <div className="flex gap-3 justify-end pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="btn-secondary"
-              >
-                Avbryt
-              </button>
-              <button
-                type="submit"
-                className="btn-primary"
-              >
-                Legg til
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 interface EditModalProps {
@@ -193,18 +69,6 @@ function EditModal({ member, onClose, onSave }: EditModalProps) {
               <label className="block text-sm font-medium text-gray-300 mb-1">
                 SkytterID
               </label>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm text-gray-400">
-                  <a
-                    href="https://app.skyting.no/user"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-svpk-yellow hover:text-yellow-400"
-                  >
-                    (Link SkytterID)
-                  </a>
-                </span>
-              </div>
               <input
                 type="text"
                 value={editedMember.member_number}
@@ -254,13 +118,11 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
   const { user, organization } = useAuth();
   const { t } = useLanguage();
   const [members, setMembers] = useState<OrganizationMember[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<'created_at' | 'full_name'>('created_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [error, setError] = useState<string | null>(null);
   const [editingMember, setEditingMember] = useState<OrganizationMember | null>(null);
-  const [showAddModal, setShowAddModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;
 
@@ -268,12 +130,11 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
   const canManageAdmins = canManageMembers(user);
 
   // Load members from database
-  React.useEffect(() => {
+  useEffect(() => {
     if (!organization?.id) return;
     
     const loadMembers = async () => {
       try {
-        setLoading(true);
         const result = await getOrganizationMembers(organization.id);
         if (result.error) {
           throw new Error(result.error);
@@ -290,8 +151,6 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
         console.error('Error loading members:', error);
         setError('Kunne ikke laste medlemmer');
         setMembers([]);
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -301,7 +160,7 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
     const interval = setInterval(loadMembers, 30000);
     
     return () => clearInterval(interval);
-  }, [organization?.id]);
+  }, [organization?.id, onMemberCountChange]);
 
   const handleSort = (field: 'created_at' | 'full_name') => {
     if (sortField === field) {
@@ -359,6 +218,8 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
       setError(error instanceof Error ? error.message : 'Kunne ikke godkjenne medlem');
     }
   };
+
+  const pendingMembers = members.filter(member => !member.approved);
 
   const handleApproveAll = async () => {
     if (pendingMembers.length === 0) return;
@@ -428,29 +289,6 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
     }
   };
 
-  const handleAddMember = async (memberData: { full_name: string; email: string; member_number: string }) => {
-    if (!organization?.id) return;
-    
-    try {
-      setError(null);
-      const result = await addOrganizationMember(organization.id, {
-        ...memberData,
-        role: 'member',
-        approved: false
-      });
-      
-      if (result.error) {
-        throw new Error(result.error);
-      }
-      
-      setMembers(prev => [...prev, result.data!]);
-      setShowAddModal(false);
-    } catch (error) {
-      console.error('Error adding member:', error);
-      setError(error instanceof Error ? error.message : 'Kunne ikke legge til medlem');
-    }
-  };
-
   const handleToggleAdmin = async (memberId: string) => {
     if (!canManageAdmins) return;
     
@@ -497,47 +335,48 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
       }
     }
   };
-  
-  const filteredAndSortedMembers = members
-    .filter(member => 
-      member.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (member.member_number || '').includes(searchTerm)
-    )
-    .sort((a, b) => {
-      let comparison = 0;
-      if (sortField === 'created_at') {
-        comparison = new Date(a.created_at!).getTime() - new Date(b.created_at!).getTime();
-      } else if (sortField === 'full_name') {
-        comparison = a.full_name.localeCompare(b.full_name);
+
+  // Filter and sort members
+  const filteredMembers = members.filter(member =>
+    member.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (member.member_number && member.member_number.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const sortedMembers = [...filteredMembers].sort((a, b) => {
+    if (sortField === 'created_at') {
+      const aDate = new Date(a.created_at || 0);
+      const bDate = new Date(b.created_at || 0);
+      return sortDirection === 'asc' ? aDate.getTime() - bDate.getTime() : bDate.getTime() - aDate.getTime();
+    } else {
+      const aName = a.full_name?.toLowerCase() || '';
+      const bName = b.full_name?.toLowerCase() || '';
+      if (sortDirection === 'asc') {
+        return aName.localeCompare(bName);
+      } else {
+        return bName.localeCompare(aName);
       }
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
+    }
+  });
 
-  const pendingMembers = filteredAndSortedMembers.filter(member => !member.approved);
-  const approvedMembers = filteredAndSortedMembers.filter(member => member.approved);
-
-  const totalPages = Math.ceil(approvedMembers.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentApprovedMembers = approvedMembers.slice(startIndex, endIndex);
+  // Pagination
+  const totalPages = Math.ceil(sortedMembers.length / itemsPerPage);
+  const paginatedMembers = sortedMembers.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6">
+      <div className="flex justify-between items-start">
         <div>
-          <h2 className="text-2xl font-bold text-svpk-yellow">{t('admin.member_management')}</h2>
+          <h2 className="text-2xl font-bold text-svpk-yellow mb-2">
+            {t('admin.member_management')}
+          </h2>
           <p className="text-gray-400">
             {t('admin.description')}
           </p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="btn-primary"
-        >
-          <PlusCircle className="w-5 h-5" />
-          {t('admin.add_member')}
-        </button>
       </div>
 
       <div className="card space-y-6">
@@ -563,271 +402,159 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
           </div>
         )}
 
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-svpk-yellow">
-            {t('admin.pending_approvals')} ({pendingMembers.length})
-          </h3>
-          
-          {pendingMembers.length === 0 ? (
-            <p className="text-gray-400 text-center py-4">
-              {t('admin.no_pending_members')}
-            </p>
-          ) : (
-            <>
-              <div className="flex justify-end mb-4">
-                <button
-                  onClick={handleApproveAll}
-                  className="btn-primary flex items-center gap-2"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  {t('admin.approve_all')} ({pendingMembers.length})
-                </button>
+        {pendingMembers.length > 0 && (
+          <div className="bg-yellow-900/20 border border-yellow-700 rounded-lg p-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="font-medium text-yellow-400">Ventende godkjenninger</h3>
+                <p className="text-sm text-yellow-200">
+                  {pendingMembers.length} medlem{pendingMembers.length === 1 ? '' : 'mer'} venter på godkjenning
+                </p>
               </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-700">
-                    <th 
-                      className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base"
-                      onClick={() => handleSort('full_name')}
-                    >
-                      <div className="flex items-center gap-2">
-                        {t('admin.name')}
-                        {sortField === 'full_name' && (
-                          sortDirection === 'asc' ? 
-                            <ChevronUp className="w-4 h-4" /> : 
-                            <ChevronDown className="w-4 h-4" />
-                        )}
-                      </div>
-                    </th>
-                    <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base hidden sm:table-cell">{t('admin.email')}</th>
-                    <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base">{t('admin.member_id')}</th>
-                    <th 
-                      className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base hidden md:table-cell"
-                      onClick={() => handleSort('created_at')}
-                    >
-                      <div className="flex items-center gap-2">
-                        {t('admin.registered')}
-                        {sortField === 'created_at' && (
-                          sortDirection === 'asc' ? 
-                            <ChevronUp className="w-4 h-4" /> : 
-                            <ChevronDown className="w-4 h-4" />
-                        )}
-                      </div>
-                    </th>
-                    {canManageAdmins && <th className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">{t('admin.role')}</th>}
-                    <th className="py-2 px-2 sm:py-3 sm:px-4 text-right text-sm sm:text-base">{t('admin.actions')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingMembers.map((member) => (
-                    <tr key={member.id} className="border-b border-gray-700">
-                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">
-                        <div>
-                          <div className="font-medium">{member.full_name}</div>
-                          <div className="text-xs text-gray-400 sm:hidden">{member.email}</div>
-                        </div>
-                      </td>
-                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden sm:table-cell">{member.email}</td>
-                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">{member.member_number}</td>
-                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden md:table-cell">
-                        {format(new Date(member.created_at!), 'dd.MM.yyyy')}
-                      </td>
-                      {canManageAdmins && (
-                        <td className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            member.role === 'admin' 
-                              ? 'bg-svpk-yellow text-black' 
-                              : 'bg-gray-600 text-gray-300'
-                          }`}>
-                            {member.role === 'admin' ? t('admin.admin_role') : t('admin.user_role')}
-                          </span>
-                        </td>
-                      )}
-                      <td className="py-2 px-2 sm:py-3 sm:px-4">
-                        <div className="flex justify-end items-center gap-1 sm:gap-2">
-                          <button
-                            onClick={() => handleApprove(member.id)}
-                            className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-green-400"
-                            title={t('admin.approve_member')}
-                          >
-                            <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </button>
-                          {canManageAdmins && (
-                            <button
-                              onClick={() => handleToggleAdmin(member.id)}
-                              className={`p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors ${
-                                member.role === 'admin' ? 'text-svpk-yellow' : 'text-gray-400'
-                              }`}
-                              title={t('admin.toggle_admin')}
-                            >
-                              {member.role === 'admin' ? <Shield className="w-4 h-4 sm:w-5 sm:h-5" /> : <ShieldOff className="w-4 h-4 sm:w-5 sm:h-5" />}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setEditingMember(member)}
-                            className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors"
-                            title={t('admin.edit_member')}
-                          >
-                            <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteMember(member.id, member.full_name)}
-                            className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-red-400"
-                            title="Slett medlem"
-                          >
-                            <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <button
+                onClick={handleApproveAll}
+                className="btn-primary text-sm"
+              >
+                Godkjenn alle
+              </button>
             </div>
-            </>
-          )}
+          </div>
+        )}
+
+        {/* Table Header */}
+        <div className="grid grid-cols-12 gap-4 pb-3 border-b border-gray-700 text-sm font-medium text-gray-300">
+          <div className="col-span-3 flex items-center gap-2">
+            <button
+              onClick={() => handleSort('full_name')}
+              className="flex items-center gap-1 hover:text-white"
+            >
+              Navn
+              {sortField === 'full_name' && (
+                sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+          <div className="col-span-3">E-post</div>
+          <div className="col-span-2">SkytterID</div>
+          <div className="col-span-1">Rolle</div>
+          <div className="col-span-2 flex items-center gap-2">
+            <button
+              onClick={() => handleSort('created_at')}
+              className="flex items-center gap-1 hover:text-white"
+            >
+              Registrert
+              {sortField === 'created_at' && (
+                sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+          <div className="col-span-1">Handlinger</div>
         </div>
 
-        <div>
-          <h3 className="text-lg font-semibold">
-            Godkjente medlemmer ({approvedMembers.length})
-          </h3>
-          
-          <div>
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-700">
-                  <th 
-                    className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base"
-                    onClick={() => handleSort('full_name')}
+        {/* Member List */}
+        <div className="space-y-2">
+          {paginatedMembers.map((member) => (
+            <div
+              key={member.id}
+              className={`grid grid-cols-12 gap-4 p-3 rounded-lg ${
+                member.approved ? 'bg-gray-700/50' : 'bg-yellow-900/20 border border-yellow-700'
+              }`}
+            >
+              <div className="col-span-3 flex items-center gap-2">
+                <span className="font-medium">{member.full_name}</span>
+                {!member.approved && <span className="text-yellow-400 text-xs">(Venter)</span>}
+              </div>
+              <div className="col-span-3 text-gray-300">{member.email}</div>
+              <div className="col-span-2 text-gray-300">{member.member_number || 'N/A'}</div>
+              <div className="col-span-1">
+                <span className={`px-2 py-1 rounded text-xs ${
+                  member.role === 'admin' ? 'bg-purple-500/20 text-purple-300' :
+                  member.role === 'range_officer' ? 'bg-blue-500/20 text-blue-300' :
+                  'bg-green-500/20 text-green-300'
+                }`}>
+                  {member.role === 'admin' ? 'Admin' :
+                   member.role === 'range_officer' ? 'Baneansv.' : 'Medlem'}
+                </span>
+              </div>
+              <div className="col-span-2 text-sm text-gray-400">
+                {member.created_at ? format(new Date(member.created_at), 'dd.MM.yyyy') : 'N/A'}
+              </div>
+              <div className="col-span-1 flex items-center gap-1">
+                {!member.approved ? (
+                  <button
+                    onClick={() => handleApprove(member.id)}
+                    className="p-1 text-green-400 hover:text-green-300"
+                    title="Godkjenn medlem"
                   >
-                    <div className="flex items-center gap-2">
-                      {t('admin.name')}
-                      {sortField === 'full_name' && (
-                        sortDirection === 'asc' ? 
-                          <ChevronUp className="w-4 h-4" /> : 
-                          <ChevronDown className="w-4 h-4" />
-                      )}
-                    </div>
-                  </th>
-                  <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base hidden sm:table-cell">{t('admin.email')}</th>
-                  <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base">{t('admin.member_id')}</th>
-                  <th 
-                    className="py-2 px-2 sm:py-3 sm:px-4 text-left cursor-pointer hover:bg-gray-700 text-sm sm:text-base hidden md:table-cell"
-                    onClick={() => handleSort('created_at')}
-                  >
-                    <div className="flex items-center gap-2">
-                      {t('admin.registered')}
-                      {sortField === 'created_at' && (
-                        sortDirection === 'asc' ? 
-                          <ChevronUp className="w-4 h-4" /> : 
-                          <ChevronDown className="w-4 h-4" />
-                      )}
-                    </div>
-                  </th>
-                  {canManageAdmins && <th className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">{t('admin.role')}</th>}
-                  <th className="py-2 px-2 sm:py-3 sm:px-4 text-right text-sm sm:text-base">{t('admin.actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentApprovedMembers.map((member) => (
-                  <tr key={member.id} className="border-b border-gray-700">
-                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">
-                      <div>
-                        <div className="font-medium">{member.full_name}</div>
-                        <div className="text-xs text-gray-400 sm:hidden">{member.email}</div>
-                        <div className="text-xs text-gray-400 md:hidden">
-                          {format(new Date(member.created_at!), 'dd.MM.yyyy')}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden sm:table-cell">{member.email}</td>
-                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">{member.member_number}</td>
-                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden md:table-cell">
-                      {format(new Date(member.created_at!), 'dd.MM.yyyy')}
-                    </td>
+                    <CheckCircle className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => handleUnapprove(member.id)}
+                      className="p-1 text-yellow-400 hover:text-yellow-300"
+                      title="Fjern godkjenning"
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setEditingMember(member)}
+                      className="p-1 text-blue-400 hover:text-blue-300"
+                      title="Rediger medlem"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
                     {canManageAdmins && (
-                      <td className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base hidden lg:table-cell">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          member.role === 'admin' 
-                            ? 'bg-svpk-yellow text-black' 
-                            : 'bg-gray-600 text-gray-300'
-                        }`}>
-                          {member.role === 'admin' ? t('admin.admin_role') : t('admin.user_role')}
-                        </span>
-                      </td>
+                      <>
+                        <button
+                          onClick={() => handleToggleAdmin(member.id)}
+                          className={`p-1 ${
+                            member.role === 'admin' 
+                              ? 'text-purple-400 hover:text-purple-300' 
+                              : 'text-gray-400 hover:text-gray-300'
+                          }`}
+                          title={member.role === 'admin' ? 'Fjern admin' : 'Gi admin-rettigheter'}
+                        >
+                          {member.role === 'admin' ? <Shield className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteMember(member.id, member.full_name)}
+                          className="p-1 text-red-400 hover:text-red-300"
+                          title="Slett medlem"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
                     )}
-                    <td className="py-2 px-2 sm:py-3 sm:px-4">
-                      <div className="flex justify-end items-center gap-1 sm:gap-2">
-                        <button
-                          onClick={() => handleUnapprove(member.id)}
-                          className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-green-400"
-                          title={t('admin.unapprove_member')}
-                        >
-                          <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </button>
-                        {canManageAdmins && (
-                          <button
-                            onClick={() => handleToggleAdmin(member.id)}
-                            className={`p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors ${
-                              member.role === 'admin' ? 'text-svpk-yellow' : 'text-gray-400'
-                            }`}
-                            title={t('admin.toggle_admin')}
-                          >
-                            {member.role === 'admin' ? <Shield className="w-4 h-4 sm:w-5 sm:h-5" /> : <ShieldOff className="w-4 h-4 sm:w-5 sm:h-5" />}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setEditingMember(member)}
-                          className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors"
-                          title={t('admin.edit_member')}
-                        >
-                          <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                        </button>
-                        {canManageAdmins && (
-                          <button
-                            onClick={() => handleDeleteMember(member.id, member.full_name)}
-                            className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-red-400"
-                            title="Slett medlem"
-                          >
-                            <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex justify-between items-center pt-4">
-            <div className="text-sm text-gray-400">
-              {t('admin.showing_members', { 
-                start: startIndex + 1, 
-                end: Math.min(endIndex, approvedMembers.length), 
-                total: approvedMembers.length 
-              })}
+                  </>
+                )}
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="btn-secondary"
-              >
-                {t('admin.previous')}
-              </button>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-                className="btn-secondary"
-              >
-                {t('admin.next')}
-              </button>
-            </div>
-          </div>
+          ))}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-2 pt-4 border-t border-gray-700">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1 bg-gray-700 rounded disabled:opacity-50"
+            >
+              Forrige
+            </button>
+            <span className="text-sm text-gray-400">
+              Side {currentPage} av {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 bg-gray-700 rounded disabled:opacity-50"
+            >
+              Neste
+            </button>
+          </div>
+        )}
       </div>
 
       {editingMember && (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Mail, CheckCircle, AlertCircle, Loader2, Send, Settings } from 'lucide-react';
 import { testEmailConfiguration, sendEmail } from '../lib/emailService';
 

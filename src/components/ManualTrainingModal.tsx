@@ -1,33 +1,22 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
 import { addManualTrainingSession, getOrganizationTrainingLocations, getOrganizationMembers } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useEffect } from 'react';
 
 interface Props {
   onClose: () => void;
   onSuccess: () => void;
 }
 
-// List of range officers
-const rangeOfficers = [
-  'Magne Angelsen',
-  'Kenneth S. Fahle',
-  'Knut Valle',
-  'Yngve Rødli',
-  'Bjørn-Kristian Pedersen',
-  'Espen Johansen',
-  'Kurt Wadel',
-  'Carina Wadel'
-].sort();
-
 export function ManualTrainingModal({ onClose, onSuccess }: Props) {
-  const { user, profile, organization } = useAuth();
+  const { profile, organization } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [trainingLocations, setTrainingLocations] = useState<Array<{id: string, name: string}>>([]);
   const [loadingRanges, setLoadingRanges] = useState(true);
   const [organizationMembers, setOrganizationMembers] = useState<Array<{id: string, full_name: string}>>([]);
-  const [activityTypes, setActivityTypes] = useState<string[]>(['Trening', 'Stevne', 'Dugnad']);
+  const activityTypes = ['Trening', 'Stevne', 'Dugnad'];
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     locationId: '',
@@ -37,7 +26,7 @@ export function ManualTrainingModal({ onClose, onSuccess }: Props) {
   });
 
   // Load training locations and organization members
-  React.useEffect(() => {
+  useEffect(() => {
     if (!organization?.id) return;
     
     const loadData = async () => {

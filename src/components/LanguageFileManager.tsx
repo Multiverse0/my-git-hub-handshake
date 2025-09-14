@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Download, Upload, Globe, FileText, Save, Trash2, Plus, AlertCircle, CheckCircle, Loader2, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Download, Upload, Globe, Trash2, Plus, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { translations, languages } from '../lib/translations';
 
 interface LanguageFile {
