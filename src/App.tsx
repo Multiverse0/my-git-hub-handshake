@@ -6,6 +6,7 @@ import { Register } from './pages/Register';
 import { ResetPassword } from './pages/ResetPassword';
 import { LandingPage } from './components/LandingPage';
 import { useAuth } from './contexts/AuthContext';
+import { ForgotPassword } from './pages/ForgotPassword';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading, initError } = useAuth();
@@ -107,6 +108,7 @@ function App() {
           {/* Public routes - accessible without authentication */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/landing" element={<LandingPage />} />
           
