@@ -271,7 +271,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       console.log('✅ Registration successful');
-      return result.data;
+      // Don't return the result, just complete successfully
 
     } catch (error) {
       console.error('❌ Registration error:', error);
