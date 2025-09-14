@@ -8,8 +8,10 @@ import { LandingPage } from './components/LandingPage';
 import { useAuth } from './contexts/AuthContext';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, initError } = useAuth();
   const [timeoutReached, setTimeoutReached] = useState(false);
+
+  console.log('[PrivateRoute] State:', { isAuthenticated, loading, initError, timeoutReached });
 
   // Set a timeout to prevent infinite loading on the main route
   useEffect(() => {
@@ -17,11 +19,41 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
       const timeoutId = setTimeout(() => {
         console.warn('⏰ Auth loading timeout reached');
         setTimeoutReached(true);
-      }, 8000);
+      }, 20000); // 20 second timeout
       
       return () => clearTimeout(timeoutId);
     }
   }, [loading]);
+
+  // Show error if there's an initialization error
+  if (initError) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 max-w-lg w-full text-center">
+          <div className="text-red-400 text-xl font-semibold mb-4">
+            Connection Error
+          </div>
+          <div className="text-gray-300 mb-4">
+            {initError}
+          </div>
+          <div className="space-y-2">
+            <button 
+              className="btn-primary w-full"
+              onClick={() => window.location.reload()}
+            >
+              Try Again
+            </button>
+            <button 
+              className="btn-secondary w-full"
+              onClick={() => window.location.href = '/login'}
+            >
+              Go to Login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading && !timeoutReached) {
     return (
@@ -66,6 +98,8 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  console.log('[App] Rendering...');
+  
   return (
     <ThemeProvider>
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

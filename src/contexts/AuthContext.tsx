@@ -19,6 +19,7 @@ interface AuthContextType {
   branding: OrganizationBranding;
   loading: boolean;
   needsSetup: boolean;
+  initError: string | null;
   login: (email: string, password: string, rememberMe: boolean, organizationSlug?: string) => Promise<void>;
   register: (organizationSlug: string, email: string, password: string, fullName: string, memberNumber?: string, role?: 'member' | 'admin' | 'range_officer') => Promise<void>;
   logout: () => void;
@@ -40,6 +41,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
   const [loading, setLoading] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
+
+  console.log('[AuthProvider] Render - loading:', loading, 'isAuthenticated:', isAuthenticated, 'user:', !!user, 'error:', initError);
 
   // Listen for branding updates from OrganizationSettings
   useEffect(() => {
@@ -68,10 +72,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Auth initialization timeout')), 10000)
+        setTimeout(() => reject(new Error('Auth initialization timeout')), 15000)
       );
 
       try {
+        console.log('[AuthProvider] Starting initialization...');
+        setInitError(null);
+        
+        // Test basic connectivity first
+        const { error: connectError } = await supabase.from('organizations').select('count').limit(1);
+        if (connectError) {
+          console.error('[AuthProvider] Database connectivity issue:', connectError);
+          setInitError(`Database connection failed: ${connectError.message}`);
+          setLoading(false);
+          return;
+        }
+
         // Run setup check with timeout
         await Promise.race([checkSetupStatus(), timeout]);
         
@@ -147,6 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
+        setInitError(`Initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         // Clear potentially corrupted auth state
         try {
           await supabase.auth.signOut();
@@ -410,6 +427,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       branding,
       loading,
       needsSetup,
+      initError,
       login, 
       register, 
       logout,
