@@ -23,7 +23,7 @@ export function Home() {
   return (
     <div className="space-y-8">
       {/* Show approval status banner for unapproved members */}
-      {profile && !profile.approved && (
+      {profile && (profile as any)?.approved === false && (
         <div className="bg-orange-900/20 border border-orange-700 rounded-lg p-6">
           <div className="flex items-center gap-3">
             <div className="bg-orange-500 p-2 rounded-full">

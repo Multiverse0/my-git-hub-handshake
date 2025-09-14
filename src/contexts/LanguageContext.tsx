@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from 'react';
-import { getCurrentLanguage, setCurrentLanguage, translateLanguage, t } from '../lib/translations';
+import { getCurrentLanguage, setCurrentLanguage, t } from '../lib/translations';
 
 interface LanguageContextType {
   currentLanguage: string;

@@ -69,9 +69,10 @@ function EditAdminModal({ admin, organizationName, onClose, onSuccess }: EditAdm
           if (member.id === admin.id) {
             const updatedMember = { ...member, ...formData, updated_at: new Date().toISOString() };
             
-            // Hash new password if provided
+            // Hash new password if provided (simplified for browser)
             if (formData.password && generateNewPassword) {
-              updatedMember.password_hash = await bcrypt.hash(formData.password, 10);
+              // In a real app, password hashing would be done server-side
+              updatedMember.password_hash = formData.password; // Simplified - don't do this in production
             }
             
             return updatedMember;

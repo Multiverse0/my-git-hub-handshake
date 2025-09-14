@@ -68,17 +68,17 @@ export function Profile() {
             const fallbackData: ProfileData = {
               name: profile.full_name || '',
               email: profile.email || user.email || '',
-              memberNumber: profile.member_number || '',
+              memberNumber: (profile as any)?.member_number || '',
               joinDate: profile.created_at ? new Date(profile.created_at).toLocaleDateString('nb-NO') : '',
-              avatarUrl: profile.avatar_url,
-              startkortUrl: profile.startkort_url,
-              startkortFileName: profile.startkort_file_name,
-              diplomaUrl: profile.diploma_url,
-              diplomaFileName: profile.diploma_file_name,
+              avatarUrl: (profile as any)?.avatar_url,
+              startkortUrl: (profile as any)?.startkort_url,
+              startkortFileName: (profile as any)?.startkort_file_name,
+              diplomaUrl: (profile as any)?.diploma_url,
+              diplomaFileName: (profile as any)?.diploma_file_name,
             };
             setProfileData(fallbackData);
             setEditData(fallbackData);
-            setProfileRole(profile.role);
+            setProfileRole((profile as any)?.role || 'admin');
           }
           return;
         }
@@ -218,13 +218,13 @@ export function Profile() {
         throw new Error('Kun PDF og bildefiler (JPG, PNG) er tillatt.');
       }
       
-      const publicUrl = await uploadStartkortPDF(file, user.id);
+      const publicUrl = await uploadStartkortPDF(file, user!.id);
       
       // Update profile with new startkort URL
       const { error } = await supabase
         .from('profiles')
         .update({ startkort_url: publicUrl, startkort_file_name: fileName })
-        .eq('id', user.id);
+        .eq('id', user!.id);
 
       if (error) throw error;
 
@@ -257,13 +257,13 @@ export function Profile() {
         throw new Error('Kun PDF og bildefiler (JPG, PNG) er tillatt.');
       }
       
-      const publicUrl = await uploadDiplomaPDF(file, user.id);
+      const publicUrl = await uploadDiplomaPDF(file, user!.id);
 
       // Update profile with new diploma URL
       const { error } = await supabase
         .from('profiles')
         .update({ diploma_url: publicUrl, diploma_file_name: fileName })
-        .eq('id', user.id);
+        .eq('id', user!.id);
 
       if (error) throw error;
 

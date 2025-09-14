@@ -139,6 +139,7 @@ export function LanguageFileManager() {
     const newLanguage = {
       code: newLanguageCode.toLowerCase(),
       name: newLanguageName,
+      nativeName: newLanguageName, // Add missing nativeName
       flag: newLanguageFlag || '🏳️'
     };
 
