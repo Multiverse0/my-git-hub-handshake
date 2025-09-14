@@ -15,67 +15,65 @@ export function DashboardRouter() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [routingComplete, setRoutingComplete] = useState(false);
+  const [initialRoutingDone, setInitialRoutingDone] = useState(false);
   const [routingTimeout, setRoutingTimeout] = useState(false);
 
   useEffect(() => {
     // Set a timeout for routing to prevent infinite loading
     const timeoutId = setTimeout(() => {
-      console.warn('⏰ Routing timeout reached, defaulting to home');
+      console.warn('⏰ Routing timeout reached, allowing access');
       setRoutingTimeout(true);
-      setRoutingComplete(true);
+      setInitialRoutingDone(true);
     }, 5000);
 
-    // Don't redirect if still loading or no user
+    // Don't do initial routing if still loading or no user
     if (loading || !user) {
       return () => clearTimeout(timeoutId);
     }
 
-    // If we have a user but no user_type, default to home to prevent infinite loading
+    // If we have a user but no user_type, allow access to home
     if (!user.user_type) {
-      console.warn('⚠️ User has no user_type, defaulting to home');
-      if (location.pathname !== '/') {
-        navigate('/', { replace: true });
-      }
-      setRoutingComplete(true);
+      console.warn('⚠️ User has no user_type, allowing home access');
+      setInitialRoutingDone(true);
       clearTimeout(timeoutId);
       return;
     }
 
-    console.log('🧭 Determining dashboard route for user:', user.user_type, user.member_profile?.role);
-    
-    // Determine the target path based on user role
-    let targetPath = '/';
-    
-    if (user.user_type === 'super_user') {
-      targetPath = '/super-admin';
-      console.log('👑 Target path for super user: /super-admin');
-    } else if (user.user_type === 'organization_member') {
-      const memberRole = user.member_profile?.role;
+    // Only do initial routing if we haven't done it yet and we're on root path
+    if (!initialRoutingDone && location.pathname === '/') {
+      console.log('🧭 Performing initial routing for user:', user.user_type, user.member_profile?.role);
       
-      if (memberRole === 'admin' || memberRole === 'range_officer') {
-        targetPath = '/admin';
-        console.log('🛡️ Target path for admin/range officer: /admin');
-      } else {
-        targetPath = '/';
-        console.log('👤 Target path for regular member: /');
+      // Determine the target path based on user role for initial routing only
+      let targetPath = '/';
+      
+      if (user.user_type === 'super_user') {
+        targetPath = '/super-admin';
+        console.log('👑 Initial route for super user: /super-admin');
+      } else if (user.user_type === 'organization_member') {
+        const memberRole = user.member_profile?.role;
+        
+        if (memberRole === 'admin' || memberRole === 'range_officer') {
+          targetPath = '/admin';
+          console.log('🛡️ Initial route for admin/range officer: /admin');
+        } else {
+          targetPath = '/';
+          console.log('👤 Initial route for regular member: /');
+        }
+      }
+      
+      // Navigate to target path for initial routing
+      if (targetPath !== '/') {
+        console.log(`🔄 Initial navigation to ${targetPath}`);
+        navigate(targetPath, { replace: true });
       }
     }
     
-    // Only navigate if we're not already on the target path
-    if (location.pathname !== targetPath) {
-      console.log(`🔄 Navigating from ${location.pathname} to ${targetPath}`);
-      navigate(targetPath, { replace: true });
-    } else {
-      console.log(`✅ Already on correct path: ${location.pathname}`);
-    }
-    
-    setRoutingComplete(true);
+    setInitialRoutingDone(true);
     clearTimeout(timeoutId);
-  }, [user, loading, navigate, location.pathname]);
+  }, [user, loading, navigate, location.pathname, initialRoutingDone]);
 
   // Show loading while determining route (with timeout fallback)
-  if (!routingTimeout && (loading || !user || (!user.user_type && !routingComplete))) {
+  if (!routingTimeout && (loading || !user || (!user.user_type && !initialRoutingDone))) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
