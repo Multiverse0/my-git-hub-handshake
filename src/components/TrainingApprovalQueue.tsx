@@ -5,53 +5,17 @@ import { getOrganizationTrainingSessions, verifyTrainingSession, supabase } from
 import { useAuth } from '../contexts/AuthContext';
 import type { MemberTrainingSession } from '../lib/types';
 
-interface PendingTraining {
-  id: string;
-  sessionId: string;
-  memberName: string;
-  memberNumber: string;
-  date: string;
-  location: string;
-  duration: string;
-  approved: boolean;
-  createdAt: string;
-}
-
 interface TrainingApprovalQueueProps {
   onCountChange?: (count: number) => void;
 }
 
-// Generate dummy pending training approvals for demo
-const generateDummyApprovals = (): PendingTraining[] => {
-  const members = [
-    'Astrid Bergström', 'Magnus Haugen', 'Ingrid Svendsen', 'Bjørn Kristoffersen',
-    'Solveig Dahl', 'Torstein Lie', 'Marit Sørensen', 'Geir Mikkelsen',
-    'Lise Andersen', 'Per Olsen', 'Kari Nilsen', 'Tom Hansen',
-    'Anne Larsen', 'Bjørn Eriksen', 'Silje Pedersen'
-  ];
-  
-  const locations = ['Innendørs 25m', 'Utendørs 25m'];
-  const durations = ['1.5 timer', '2 timer', '2.5 timer'];
-  
-  return members.map((member, index) => ({
-    id: `dummy-${index + 1}`,
-    sessionId: `session-${index + 1}`,
-    memberName: member,
-    memberNumber: `${10001 + index}`,
-    date: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString(), // Random time today
-    location: locations[Math.floor(Math.random() * locations.length)],
-    duration: durations[Math.floor(Math.random() * durations.length)],
-    approved: false,
-    createdAt: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString()
-  }));
-};
 
 export function TrainingApprovalQueue({ onCountChange }: TrainingApprovalQueueProps) {
-  const { user, profile, organization } = useAuth();
+  const { profile, organization } = useAuth();
   const [pendingTrainings, setPendingTrainings] = useState<MemberTrainingSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
 
   // Load pending training sessions from database
   useEffect(() => {

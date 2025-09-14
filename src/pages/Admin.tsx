@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Shield, Users, Settings, ClipboardList, Plus, Bell, AlertCircle, CheckCircle, Loader2, Building2, CreditCard, Mail, Save, Info, QrCode, Calendar } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Shield, Plus, Calendar, CheckCircle } from 'lucide-react';
 import { MemberManagement } from '../components/MemberManagement';
 import { TrainingApprovalQueue } from '../components/TrainingApprovalQueue';
 import { QRCodeManagement } from '../components/QRCodeManagement';
@@ -10,15 +10,14 @@ import { RangeOfficerManagement } from '../components/RangeOfficerManagement';
 import { EmailManagement } from '../components/EmailManagement';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { languages, setCurrentLanguage } from '../lib/translations';
 import { SupabaseStatus } from '../components/SupabaseStatus';
 
 export function Admin() {
-  const { user, organization, branding, profile } = useAuth();
-  const { currentLanguage, setLanguage, t, isTranslating } = useLanguage();
+  const { user, profile } = useAuth();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'approvals' | 'qr' | 'log' | 'officers' | 'settings' | 'email'>('overview');
   const [showManualModal, setShowManualModal] = useState(false);
-  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
+  const [, setPendingApprovalsCount] = useState(0);
   const [pendingMembersCount, setPendingMembersCount] = useState(0);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [todaysUnapprovedCount, setTodaysUnapprovedCount] = useState(0);
@@ -332,7 +331,6 @@ export function Admin() {
                   <button
                     onClick={handleBulkApproveSelectedDate}
                     className="btn-secondary whitespace-nowrap flex items-center gap-2"
-                    disabled={isTranslating}
                   >
                     <Calendar className="w-4 h-4" />
                     Velg dato ({selectedDateUnapprovedCount})

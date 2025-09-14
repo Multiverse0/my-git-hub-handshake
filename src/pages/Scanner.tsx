@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { QrCode, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
 import QrScanner from 'qr-scanner';
@@ -269,31 +269,6 @@ export function Scanner() {
       setError(errorMsg);
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  const handleManualInput = () => {
-    if (isProcessing) {
-      return;
-    }
-    
-    // Stop scanning first
-    setScanning(false);
-    cleanup();
-    
-    const code = prompt('Skriv inn QR-kode manuelt:\n\nGyldige koder:\n• svpk-innendors-25m\n• svpk-utendors-25m');
-    
-    if (code && code.trim()) {
-      const trimmedCode = code.trim();
-      
-      // Reset states before processing
-      setError(null);
-      setSuccess(false);
-      
-      handleQRCode(trimmedCode);
-    } else {
-      // Restart scanning if user cancelled
-      setScanning(true);
     }
   };
 

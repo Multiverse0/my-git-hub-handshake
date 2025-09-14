@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Download, Calendar, Target, CheckCircle, Clock, Award, TrendingUp, Plus, Edit2, X, Save, Upload, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Download, Calendar, Target, CheckCircle, Plus, Edit2, X, Save, Upload, Trash2 } from 'lucide-react';
 import { format, subMonths, isAfter } from 'date-fns';
 import { jsPDF } from 'jspdf';
 import { useDropzone } from 'react-dropzone';
-import { getMemberTrainingSessions, updateTrainingDetails, uploadTargetImage } from '../lib/supabase';
+import { getMemberTrainingSessions, updateTrainingDetails } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ManualTrainingModal } from '../components/ManualTrainingModal';
@@ -245,7 +245,7 @@ export function TrainingLog() {
     dfs_enabled: true,
     dssn_enabled: true
   });
-  const [availableActivities, setAvailableActivities] = useState(['Trening', 'Stevne', 'Dugnad']);
+  const [, setAvailableActivities] = useState(['Trening', 'Stevne', 'Dugnad']);
 
   useEffect(() => {
     const loadTrainingSessions = async () => {

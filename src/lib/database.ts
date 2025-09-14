@@ -169,7 +169,7 @@ export class DatabaseService {
   // Health check
   static async healthCheck(): Promise<boolean> {
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('organizations')
         .select('id')
         .limit(1);

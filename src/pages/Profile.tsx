@@ -1,6 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { useEffect } from 'react';
-import { User, Mail, Hash, Calendar, Camera, Pencil, X, Check, Loader2, ExternalLink, FileText, Download, Upload, AlertCircle, Shield } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { User, Mail, Hash, Calendar, Camera, Pencil, X, Check, Loader2, ExternalLink, FileText, Download, Upload, Shield } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { supabase, uploadProfileImage, uploadStartkortPDF, uploadDiplomaPDF } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';

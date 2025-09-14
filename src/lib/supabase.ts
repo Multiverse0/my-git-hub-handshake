@@ -516,7 +516,7 @@ export async function addOrganizationMember(
   try {
     // If password is provided, create auth user first
     if (memberData.password) {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const { error: authError } = await supabase.auth.signUp({
         email: memberData.email,
         password: memberData.password
       });

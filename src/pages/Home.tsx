@@ -1,5 +1,4 @@
-import React from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { QrCode, ClipboardList, Download, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -7,7 +6,6 @@ import { SalesBannerCarousel } from '../components/SalesBannerCarousel';
 
 export function Home() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { profile } = useAuth();
   const { t } = useLanguage();
 

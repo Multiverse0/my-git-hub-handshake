@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Database, CheckCircle, XCircle, AlertTriangle, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { DatabaseService } from '../lib/database';
@@ -38,7 +38,7 @@ export function SupabaseStatus({ showDetails = false }: SupabaseStatusProps) {
       const dbHealth = await DatabaseService.healthCheck();
       
       // Test auth
-      const { data: { session } } = await supabase.auth.getSession();
+      await supabase.auth.getSession();
       const authWorking = true; // Auth endpoint responded
       
       // Test storage

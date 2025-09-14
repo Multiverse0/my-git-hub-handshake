@@ -194,7 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
       
 
-  const login = async (email: string, password: string, rememberMe: boolean, organizationSlug?: string) => {
+  const login = async (email: string, password: string, _rememberMe: boolean, organizationSlug?: string) => {
     try {
       setLoading(true);
       

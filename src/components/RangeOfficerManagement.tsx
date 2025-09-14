@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
-import { Shield, Edit2, Trash2, X, CheckCircle, XCircle, PlusCircle, AlertCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { useState, useEffect } from 'react';
+import { Edit2, Trash2, X, CheckCircle, XCircle, PlusCircle, AlertCircle } from 'lucide-react';
 
 interface RangeOfficer {
   id: number;
@@ -176,7 +175,7 @@ export function RangeOfficerManagement() {
   const [loading, setLoading] = useState(true);
 
   // Load officers from localStorage on component mount
-  React.useEffect(() => {
+  useEffect(() => {
     const loadOfficers = () => {
       try {
         const savedOfficers = localStorage.getItem('rangeOfficers');
@@ -202,7 +201,7 @@ export function RangeOfficerManagement() {
   }, []);
 
   // Save officers to localStorage whenever officers change
-  React.useEffect(() => {
+  useEffect(() => {
     if (!loading && officers.length > 0) {
       localStorage.setItem('rangeOfficers', JSON.stringify(officers));
     }

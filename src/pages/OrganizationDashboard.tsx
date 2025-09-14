@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, Users, Settings, UserPlus, Mail, Eye, EyeOff, Copy, Send, CheckCircle, AlertCircle, Loader2, Shield, Edit2, Trash2, Save, X, Plus } from 'lucide-react';
+import { ArrowLeft, Building2, Users, Settings, UserPlus, Eye, EyeOff, Copy, CheckCircle, AlertCircle, Loader2, Shield, Edit2, Trash2, Save, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { addOrganizationMember, updateMemberRole, supabase } from '../lib/supabase';
 import { OrganizationSettings } from '../components/OrganizationSettings';
-import { sendAdminWelcomeEmail, generateLoginUrl } from '../lib/emailService';
 
 interface OrganizationAdmin {
   id: string;

@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Users, Settings, Plus, Edit2, Trash2, Shield, ShieldOff, UserPlus, AlertCircle, CheckCircle, X, Loader2, Eye, EyeOff, Copy, Save, Package, Download, Globe } from 'lucide-react';
+import { Building2, Plus, Edit2, Trash2, Shield, AlertCircle, X, Loader2, Eye, EyeOff, Copy, Save, Package, Globe } from 'lucide-react';
 import { supabase, createOrganization } from '../lib/supabase';
 import bcrypt from 'bcryptjs';
 import { useAuth } from '../contexts/AuthContext';
-import type { Organization, OrganizationMember } from '../lib/types';
+import type { Organization } from '../lib/types';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { DataExportManager } from '../components/DataExportManager';
 import { LanguageFileManager } from '../components/LanguageFileManager';
@@ -667,7 +667,7 @@ export function SuperAdmin() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCreateSuperUser, setShowCreateSuperUser] = useState(false);
   const [superUsers, setSuperUsers] = useState<any[]>([]);
-  const [selectedOrg, setSelectedOrg] = useState<string | null>(null);
+  const [, setSelectedOrg] = useState<string | null>(null);
   const [editingSuperUser, setEditingSuperUser] = useState<any | null>(null);
   const [exportingOrg, setExportingOrg] = useState<{ id: string; name: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'organizations' | 'languages'>('organizations');
@@ -750,7 +750,8 @@ export function SuperAdmin() {
     }
   };
 
-  const handleCreateOrganization = async (orgData: any) => {
+  // Commented out unused functions
+  // const _handleCreateOrganization = async (orgData: any) => {
     try {
       const result = await createOrganization(orgData);
       if (result.error) {
@@ -788,7 +789,7 @@ export function SuperAdmin() {
     };
   }, []);
 
-  const handleSwitchToOrg = async (orgSlug: string) => {
+  // const _handleSwitchToOrg = async (orgSlug: string) => {
     try {
       setSelectedOrg(orgSlug);
       await switchOrganization(orgSlug);

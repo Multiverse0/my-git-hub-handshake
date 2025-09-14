@@ -1,6 +1,4 @@
 // Authentication helper functions for AKTIVLOGG
-
-import { supabase } from './supabase';
 import type { AuthUser } from './types';
 
 /**

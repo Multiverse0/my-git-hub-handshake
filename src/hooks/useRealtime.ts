@@ -7,8 +7,8 @@ export function useRealtimeSubscription<T>(
   filter?: string,
   onUpdate?: (payload: any) => void
 ) {
-  const [data, setData] = useState<T[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [,] = useState<T[]>([]);
+  const [,] = useState(true);
   const [channel, setChannel] = useState<RealtimeChannel | null>(null);
 
   useEffect(() => {
@@ -52,8 +52,6 @@ export function useRealtimeSubscription<T>(
   }, [table, filter]);
 
   return {
-    data,
-    loading,
     channel
   };
 }
