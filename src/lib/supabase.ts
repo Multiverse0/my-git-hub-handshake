@@ -276,8 +276,8 @@ export async function createOrganization(orgData: Partial<Organization>): Promis
     const { data, error } = await supabase
       .from('organizations')
       .insert({
-        name: orgData.name,
-        slug: orgData.slug,
+        name: orgData.name || '',
+        slug: orgData.slug || '',
         description: orgData.description,
         email: orgData.email,
         phone: orgData.phone,

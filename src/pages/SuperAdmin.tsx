@@ -406,7 +406,7 @@ function CreateOrgModal({ onClose, onSuccess }: CreateOrgModalProps) {
                 </label>
                 <input
                   type="color"
-                  value={formData.primary_color}
+                  value={formData.primary_color || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, primary_color: e.target.value }))}
                   className="w-full bg-gray-700 rounded-md px-3 py-2 h-10"
                 />
@@ -418,7 +418,7 @@ function CreateOrgModal({ onClose, onSuccess }: CreateOrgModalProps) {
                 </label>
                 <input
                   type="color"
-                  value={formData.secondary_color}
+                  value={formData.secondary_color || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, secondary_color: e.target.value }))}
                   className="w-full bg-gray-700 rounded-md px-3 py-2 h-10"
                 />
@@ -1062,8 +1062,8 @@ export function SuperAdmin() {
                             <div 
                               className="w-12 h-12 rounded flex items-center justify-center text-sm font-bold"
                               style={{ 
-                                backgroundColor: org.primary_color,
-                                color: org.secondary_color 
+                                backgroundColor: org.primary_color || '#FFD700',
+                                color: org.secondary_color || '#1F2937'
                               }}
                             >
                               {org.name.split(' ').map(word => word[0]).join('').toUpperCase()}

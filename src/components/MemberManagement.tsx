@@ -5,7 +5,7 @@ import { getOrganizationMembers, approveMember, updateMemberRole, updateOrganiza
 import { sendMemberApprovalEmail, generateLoginUrl } from '../lib/emailService';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { nullToEmptyString, nullToUndefined, nullToFalse } from '../lib/typeUtils';
+import { nullToEmptyString } from '../lib/typeUtils';
 import { canManageMembers } from '../lib/authHelpers';
 import type { OrganizationMember } from '../lib/types';
 
@@ -48,7 +48,7 @@ function EditModal({ member, onClose, onSave }: EditModalProps) {
               </label>
               <input
                 type="text"
-                value={editedMember.full_name}
+                value={nullToEmptyString(editedMember.full_name)}
                 onChange={(e) => setEditedMember(prev => ({ ...prev, full_name: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               />
@@ -60,7 +60,7 @@ function EditModal({ member, onClose, onSave }: EditModalProps) {
               </label>
               <input
                 type="email"
-                value={editedMember.email}
+                value={nullToEmptyString(editedMember.email)}
                 onChange={(e) => setEditedMember(prev => ({ ...prev, email: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               />
@@ -72,7 +72,7 @@ function EditModal({ member, onClose, onSave }: EditModalProps) {
               </label>
               <input
                 type="text"
-                value={editedMember.member_number}
+                value={nullToEmptyString(editedMember.member_number)}
                 onChange={(e) => setEditedMember(prev => ({ ...prev, member_number: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               />
@@ -83,7 +83,7 @@ function EditModal({ member, onClose, onSave }: EditModalProps) {
                 Rolle
               </label>
               <select
-                value={editedMember.role}
+                value={nullToEmptyString(editedMember.role)}
                 onChange={(e) => setEditedMember(prev => ({ ...prev, role: e.target.value as 'member' | 'admin' | 'range_officer' }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               >

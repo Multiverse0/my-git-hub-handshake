@@ -127,12 +127,12 @@ function EditModal({ location, onClose, onSave }: EditModalProps) {
 
             <div>
               <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={formData.active}
-                  onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))}
-                  className="rounded border-gray-600"
-                />
+              <input
+                type="checkbox"
+                checked={formData.active ?? true}
+                onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))}
+                className="rounded border-gray-600"
+              />
                 <span className="text-sm font-medium text-gray-300">Aktiv skytebane</span>
               </label>
               <p className="text-xs text-gray-400 mt-1">
@@ -202,7 +202,7 @@ export function QRCodeManagement() {
         const result = await updateTrainingLocation(locationData.id, {
           name: locationData.name,
           qr_code_id: locationData.qr_code_id,
-          description: locationData.description,
+          description: locationData.description || undefined,
           active: locationData.active
         });
         
@@ -218,7 +218,7 @@ export function QRCodeManagement() {
         const result = await createTrainingLocation(organization.id, {
           name: locationData.name,
           qr_code_id: locationData.qr_code_id,
-          description: locationData.description
+          description: locationData.description || undefined
         });
         
         if (result.error) {

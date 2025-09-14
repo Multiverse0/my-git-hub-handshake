@@ -64,8 +64,11 @@ export interface OrganizationAdmin {
   organization_id: string;
   member_id: string;
   permissions: any;
-  created_at: string;
-  updated_at: string;
+  created_at: string | null;
+  updated_at: string | null;
+  email?: string;
+  full_name?: string;
+  active?: boolean | null;
 }
 
 export interface TrainingLocation {
@@ -99,6 +102,12 @@ export interface MemberTrainingSession {
   organization_members?: OrganizationMember;
   training_locations?: TrainingLocation;
   session_target_images?: SessionTargetImage[];
+  details?: {
+    training_type?: string;
+    results?: string;
+    notes?: string;
+    target_images?: string[];
+  };
 }
 
 export interface TrainingSession {

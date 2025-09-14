@@ -572,7 +572,7 @@ export function OrganizationDashboard() {
         const { data: members, error } = await supabase
           .from('organization_members')
           .select('*')
-          .eq('organization_id', orgId);
+          .eq('organization_id', orgId || '');
 
         if (error) {
           console.error('Error loading members:', error);
@@ -587,7 +587,19 @@ export function OrganizationDashboard() {
           });
 
           // Set admins
-          const adminUsers = orgMembers.filter((m: any) => m.role === 'admin');
+          const adminUsers: OrganizationAdmin[] = orgMembers
+            .filter((m: any) => m.role === 'admin')
+            .map((m: any) => ({
+              id: m.id,
+              organization_id: m.organization_id,
+              member_id: m.id,
+              permissions: { manage_members: true, manage_settings: false, manage_training: true },
+              created_at: m.created_at || new Date().toISOString(),
+              updated_at: m.updated_at || new Date().toISOString(),
+              email: m.email,
+              full_name: m.full_name,
+              active: m.active
+            }));
           setAdmins(adminUsers);
         }
       } catch (error) {

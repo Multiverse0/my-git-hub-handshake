@@ -7,6 +7,7 @@ import { getMemberTrainingSessions, updateTrainingDetails } from '../lib/supabas
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ManualTrainingModal } from '../components/ManualTrainingModal';
+import { safeDate } from '../lib/typeUtils';
 import type { MemberTrainingSession } from '../lib/types';
 
 interface TrainingEntry {
@@ -278,9 +279,10 @@ export function TrainingLog() {
   // Calculate requirements
   const calculateRequirements = () => {
     const twoYearsAgo = subMonths(new Date(), 24);
-    const recentSessions = trainingSessions.filter(session =>
-      isAfter(new Date(session.start_time), twoYearsAgo) && session.verified
-    );
+    const recentSessions = trainingSessions.filter(session => {
+      const sessionDate = safeDate(session.start_time);
+      return sessionDate && isAfter(sessionDate, twoYearsAgo) && session.verified;
+    });
 
     // Standard requirements (NSF/DFS)
     const standardSessions = recentSessions.filter(session =>
@@ -451,7 +453,8 @@ export function TrainingLog() {
         
         // Date
         doc.setTextColor(0, 0, 0);
-        doc.text(format((session as any).date || new Date(session.created_at), 'dd.MM.yyyy'), startX + 1, yPos);
+        const sessionDate = safeDate((session as any).date) || safeDate(session.created_at) || new Date();
+        doc.text(format(sessionDate, 'dd.MM.yyyy'), startX + 1, yPos);
         startX += columnWidths[0];
         
         // Activity - color code DSSN activities
@@ -657,9 +660,12 @@ export function TrainingLog() {
   });
   
   // Apply sorting - always newest first
-  filteredSessions = filteredSessions.sort((a, b) => 
-    new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
-  );
+  filteredSessions = filteredSessions.sort((a, b) => {
+    const aDate = safeDate(b.start_time);
+    const bDate = safeDate(a.start_time);
+    if (!aDate || !bDate) return 0;
+    return aDate.getTime() - bDate.getTime();
+  });
 
   return (
     <div className="space-y-8">
@@ -976,7 +982,8 @@ export function TrainingLog() {
                     <div className="flex items-center gap-3 mb-2">
                       <Calendar className="w-5 h-5 text-svpk-yellow" />
                       <span className="font-medium">
-                        {format((session as any).date || new Date(session.created_at), 'dd.MM.yyyy')}
+                        {safeDate((session as any).date) ? format(safeDate((session as any).date)!, 'dd.MM.yyyy') : 
+                         safeDate(session.created_at) ? format(safeDate(session.created_at)!, 'dd.MM.yyyy') : 'Ukjent dato'}
                       </span>
                       <span 
                         className={`px-2 py-1 rounded text-xs font-medium ${orgBgColor} ${orgBorderColor}`}

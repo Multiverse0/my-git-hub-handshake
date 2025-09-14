@@ -32,7 +32,7 @@ export function Navigation() {
           <div className="flex items-center">
             {(branding.logo_url || organization?.logo_url) ? (
               <img 
-                src={branding.logo_url || organization?.logo_url} 
+                src={branding.logo_url || organization?.logo_url || ''} 
                 alt={`${branding.organization_name} Logo`} 
                 className="h-10 max-w-[120px] object-contain"
               />

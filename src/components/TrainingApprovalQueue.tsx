@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, Clock, User, MapPin, Calendar, AlertCircle, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { CheckCircle, XCircle, Clock, MapPin, User, Loader2, Calendar, AlertCircle } from 'lucide-react';
 import { getOrganizationTrainingSessions, verifyTrainingSession, supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { format } from 'date-fns';
+import { safeDate } from '../lib/typeUtils';
 import type { MemberTrainingSession } from '../lib/types';
 
 interface TrainingApprovalQueueProps {
@@ -162,7 +163,7 @@ export function TrainingApprovalQueue({ onCountChange }: TrainingApprovalQueuePr
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div className="flex items-center gap-2">
                       <Calendar className="w-4 h-4 text-gray-400" />
-                      <span>{format(new Date(training.start_time), 'dd.MM.yyyy HH:mm')}</span>
+                      <span>{safeDate(training.start_time) ? format(safeDate(training.start_time)!, 'dd.MM.yyyy HH:mm') : 'Ukjent tid'}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-gray-400" />
