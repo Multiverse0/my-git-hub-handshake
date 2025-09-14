@@ -72,7 +72,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await checkSetupStatus();
         
         // Check if user is already authenticated with Supabase
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        // Handle invalid refresh token errors
+        if (sessionError && sessionError.message?.includes('refresh_token_not_found')) {
+          console.warn('Invalid refresh token detected, clearing auth state');
+          await supabase.auth.signOut();
+          setUser(null);
+          setOrganization(null);
+          setIsAuthenticated(false);
+          setBranding({
+            organization_name: 'Idrettsklubb',
+            primary_color: '#FFD700',
+            secondary_color: '#1F2937'
+          });
+          setLoading(false);
+          return;
+        }
         
         if (session?.user) {
           const currentUser = await getCurrentUser();
@@ -95,6 +111,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
+        // Clear potentially corrupted auth state
+        await supabase.auth.signOut();
+        setUser(null);
+        setOrganization(null);
+        setIsAuthenticated(false);
+        setBranding({
+          organization_name: 'Idrettsklubb',
+          primary_color: '#FFD700',
+          secondary_color: '#1F2937'
+        });
       } finally {
         setLoading(false);
       }
@@ -118,7 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setBranding(brandingData);
           }
         }
-      } else if (event === 'SIGNED_OUT') {
+      } else if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
         setUser(null);
         setOrganization(null);
         setIsAuthenticated(false);
