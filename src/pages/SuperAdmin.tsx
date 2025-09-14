@@ -789,7 +789,7 @@ export function SuperAdmin() {
     };
   }, []);
 
-  // const _handleSwitchToOrg = async (orgSlug: string) => {
+  const handleSwitchToOrg = async (orgSlug: string) => {
     try {
       setSelectedOrg(orgSlug);
       await switchOrganization(orgSlug);
@@ -1205,16 +1205,6 @@ export function SuperAdmin() {
             organizationName={exportingOrg.name}
             onClose={() => setExportingOrg(null)}
           />
-        )}
-
-        {exportingOrg && (
-          <DataExportManager
-            organizationId={exportingOrg.id}
-            organizationName={exportingOrg.name}
-            onClose={() => setExportingOrg(null)}
-          />
-        )}
-          </>
         )}
       </div>
     </div>
