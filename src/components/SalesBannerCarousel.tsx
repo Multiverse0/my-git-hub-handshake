@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 interface SalesBanner {
   id: string;
@@ -6,6 +6,7 @@ interface SalesBanner {
   fileName: string;
   uploadDate: string;
   active: boolean;
+  linkUrl?: string;
 }
 
 export function SalesBannerCarousel() {

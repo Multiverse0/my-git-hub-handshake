@@ -219,11 +219,12 @@ function EditModal({ member, onClose, onSave }: EditModalProps) {
               </label>
               <select
                 value={editedMember.role}
-                onChange={(e) => setEditedMember(prev => ({ ...prev, role: e.target.value as 'user' | 'admin' }))}
+                onChange={(e) => setEditedMember(prev => ({ ...prev, role: e.target.value as 'member' | 'admin' | 'range_officer' }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               >
-                <option value="user">Bruker</option>
+                <option value="member">Medlem</option>
                 <option value="admin">Administrator</option>
+                <option value="range_officer">Baneansvarlig</option>
               </select>
             </div>
 

@@ -46,12 +46,10 @@ export function ManualTrainingModal({ onClose, onSuccess }: Props) {
         
         // Load training locations
         const locationsResult = await getOrganizationTrainingLocations(organization.id);
-        if (locationsResult.data) {
+        if (locationsResult.data && locationsResult.data.length > 0) {
           setTrainingLocations(locationsResult.data);
-          if (locationsResult.data.length > 0) {
-            setFormData(prev => ({ ...prev, locationId: locationsResult.data[0].id }));
+          setFormData(prev => ({ ...prev, locationId: locationsResult.data![0].id }));
           }
-        }
 
         // Load organization members
         const membersResult = await getOrganizationMembers(organization.id);

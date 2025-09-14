@@ -1176,7 +1176,7 @@ export function getDemoOrganization(): Organization {
     address: 'Svolværgata 1, 8300 Svolvær',
     primary_color: '#FFD700',
     secondary_color: '#1F2937',
-    logo_url: null,
+    logo_url: undefined,
     active: true,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()

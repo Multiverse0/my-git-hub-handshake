@@ -80,7 +80,6 @@ export const translations: Translations = {
     'log.dssn_requirement_text': 'Krav: 10 treninger + 10 åpne stevner (DSSN)',
     'log.trainings_colon': 'Treninger:',
     'log.open_competitions_colon': 'Åpne stevner:',
-    'log.fulfilled': 'OPPFYLT',
     'log.trainings_remaining': '{count} treninger igjen',
     'log.competitions_remaining': '{count} stevner igjen',
     'log.nsf_info_title': 'NSF - Treningsvåpen',
@@ -113,20 +112,7 @@ export const translations: Translations = {
     'log.results': 'Resultater:',
     'log.target_images': 'Målbilder:',
     'log.images': 'bilde(r)',
-    'log.verified': 'Verifisert',
     'log.edit_session': 'Rediger treningsøkt',
-    'log.nsf_info_title': 'NSF - Treningsvåpen',
-    'log.nsf_info_requirement': 'Krav for treningsvåpen (NSF):',
-    'log.nsf_info_10_trainings': '• Minst 10 treninger siste 24 måneder',
-    'log.nsf_info_all_types': '• Alle typer treningsaktiviteter teller',
-    'log.nsf_info_weapons': '• Gjelder pistol, revolver og rifle',
-    'log.nsf_info_documented': '• Dokumentert aktivitet i godkjent skytterklubb',
-    'log.dfs_info_title': 'DFS - Feltskytting',
-    'log.dfs_info_requirement': 'Krav for feltskytting (DFS):',
-    'log.dfs_info_10_trainings': '• Minst 10 treninger siste 24 måneder',
-    'log.dfs_info_field_hunting': '• Feltskytting og jaktrelaterte aktiviteter',
-    'log.dfs_info_weapons': '• Gjelder rifle og hagle',
-    'log.dfs_info_documented': '• Dokumentert aktivitet i godkjent skytterklubb',
     'log.dssn_info_title': 'DSSN - Dynamisk',
     'log.dssn_info_requirement': 'Krav for dynamisk skyting (DSSN):',
     'log.dssn_info_weapons': '• Våpen kan anskaffes gjennom DSSN og deres skyteprogrammer',
@@ -320,8 +306,6 @@ export const translations: Translations = {
     'common.no': 'Nei'
   },
   
-  // Other languages will be populated by Google Translate
-  en: {},
   en: {
     // Navigation
     'nav.home': 'Home',
