@@ -130,7 +130,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (session?.user) {
+          try {
+            const currentUser = await getCurrentUser();
+            if (currentUser) {
+              setUser(currentUser);
+              setIsAuthenticated(true);
+              await setUserContext(currentUser.email);
+              
+              // Load organization data
+              if (currentUser.user_type === 'organization_member' && currentUser.organization) {
+                setOrganization(currentUser.organization);
+                const brandingData = await getOrganizationBranding(currentUser.organization.id);
+                setBranding(brandingData);
+              }
+            }
+          } catch (error) {
+            console.error('Error handling auth state change:', error);
+            // Clear auth state on error
+            setUser(null);
+            setOrganization(null);
+            setIsAuthenticated(false);
+            setBranding({
+              organization_name: 'Idrettsklubb',
+              primary_color: '#FFD700',
+              secondary_color: '#1F2937'
+            });
+          } finally {
+            setLoading(false);
+          }
+        } else {
+          setLoading(false);
+        }
+      } else if (event === 'SIGNED_OUT') {
         const currentUser = await getCurrentUser();
         if (currentUser) {
           setUser(currentUser);
@@ -144,21 +177,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setBranding(brandingData);
           }
         }
-      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-        // Handle token refreshed: re-fetch user data to ensure state is up-to-date
-        const currentUser = await getCurrentUser();
-        if (currentUser) {
-          setUser(currentUser);
-          setIsAuthenticated(true);
-          await setUserContext(currentUser.email);
-          
-          if (currentUser.user_type === 'organization_member' && currentUser.organization) {
-            setOrganization(currentUser.organization);
-            const brandingData = await getOrganizationBranding(currentUser.organization.id);
-            setBranding(brandingData);
-          }
-        }
-      } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setOrganization(null);
         setIsAuthenticated(false);
@@ -167,6 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           primary_color: '#FFD700',
           secondary_color: '#1F2937'
         });
+        setLoading(false);
       }
     });
     
