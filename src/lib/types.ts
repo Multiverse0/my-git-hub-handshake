@@ -132,7 +132,7 @@ export interface Profile {
   avatar_url?: string | null;
   startkort_url?: string | null;
   diploma_url?: string | null;
-  role?: string;
+  role?: string | null;
   other_files?: any;
   startkort_file_name?: string | null;
   diploma_file_name?: string | null;

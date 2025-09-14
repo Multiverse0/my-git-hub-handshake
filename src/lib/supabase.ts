@@ -284,8 +284,7 @@ export async function createOrganization(orgData: Partial<Organization>): Promis
         website: orgData.website,
         address: orgData.address,
         primary_color: orgData.primary_color || '#FFD700',
-        secondary_color: orgData.secondary_color || '#1F2937',
-        active: true
+        secondary_color: orgData.secondary_color || '#1F2937'
       })
       .select()
       .single();
@@ -451,7 +450,7 @@ export async function approveMember(memberId: string): Promise<ApiResponse<Organ
       return { error: error.message };
     }
 
-    return { data } as ApiResponse<SuperUser>;
+    return { data } as ApiResponse<OrganizationMember>;
   } catch (error) {
     console.error('Error approving member:', error);
     return { error: 'Kunne ikke godkjenne medlem' };

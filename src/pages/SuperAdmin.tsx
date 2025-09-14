@@ -693,8 +693,8 @@ export function SuperAdmin() {
         // Add member and admin counts from Supabase
         orgsWithStats = await Promise.all(orgsData.map(async (org) => {
           const [memberResult, adminResult] = await Promise.all([
-            supabase.from('members').select('id', { count: 'exact' }).eq('organization_id', org.id),
-            supabase.from('users').select('id', { count: 'exact' }).eq('organization_id', org.id).eq('role', 'admin')
+            supabase.from('organization_members').select('id', { count: 'exact' }).eq('organization_id', org.id),
+            supabase.from('organization_members').select('id', { count: 'exact' }).eq('organization_id', org.id).eq('role', 'admin')
           ]);
           
           return {

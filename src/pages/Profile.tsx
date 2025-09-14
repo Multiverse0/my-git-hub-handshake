@@ -88,20 +88,20 @@ export function Profile() {
           email: profileData.email || '',
           memberNumber: profileData.member_number || '',
           joinDate: profileData.created_at ? new Date(profileData.created_at).toLocaleDateString('nb-NO') : '',
-          avatarUrl: profileData.avatar_url,
-          startkortUrl: profileData.startkort_url,
-          startkortFileName: profileData.startkort_file_name,
-          diplomaUrl: profileData.diploma_url,
-          diplomaFileName: profileData.diploma_file_name,
+          avatarUrl: profileData.avatar_url || undefined,
+          startkortUrl: profileData.startkort_url || undefined,
+          startkortFileName: profileData.startkort_file_name || undefined,
+          diplomaUrl: profileData.diploma_url || undefined,
+          diplomaFileName: profileData.diploma_file_name || undefined,
         };
         
         setProfileData(newProfileData);
         setEditData(newProfileData);
-        setProfileRole(profileData.role);
+        setProfileRole(profileData.role as 'super_user' | 'member' | 'admin' | 'range_officer' || 'member');
         
         // Load other files from profiles table
         if (profileData.other_files && Array.isArray(profileData.other_files)) {
-          setOtherFiles(profileData.other_files);
+          setOtherFiles(profileData.other_files as { url: string; name: string; }[]);
         } else {
           setOtherFiles([]);
         }
@@ -374,7 +374,7 @@ export function Profile() {
         const { error } = await supabase
           .from('profiles')
           .update({ other_files: updatedFiles })
-          .eq('id', user?.id);
+          .eq('id', user?.id || '');
 
         if (error) {
           throw new Error(`Kunne ikke slette filen fra profilen: ${error.message}`);

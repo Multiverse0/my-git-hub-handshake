@@ -5,6 +5,7 @@ import { getOrganizationMembers, approveMember, updateMemberRole, updateOrganiza
 import { sendMemberApprovalEmail, generateLoginUrl } from '../lib/emailService';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { nullToEmptyString, nullToUndefined, nullToFalse } from '../lib/typeUtils';
 import { canManageMembers } from '../lib/authHelpers';
 import type { OrganizationMember } from '../lib/types';
 
