@@ -7,9 +7,9 @@ import {
   getOrganizationBranding,
   checkSuperUsersExist,
   getCurrentUser,
-  signOut,
-  supabase
+  signOut
 } from '../lib/supabase';
+import { supabase } from '../integrations/supabase/client';
 import type { AuthUser, Organization, OrganizationBranding } from '../lib/types';
 
 interface AuthContextType {

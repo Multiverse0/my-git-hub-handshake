@@ -4,19 +4,20 @@ export interface Organization {
   id: string;
   name: string;
   slug: string;
-  description?: string;
-  website?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  logo_url?: string;
-  primary_color: string;
-  secondary_color: string;
-  created_at: string;
-  updated_at: string;
-  active: boolean;
+  description?: string | null;
+  website?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  logo_url?: string | null;
+  primary_color: string | null;
+  secondary_color: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  active: boolean | null;
   subscription_plan?: 'starter' | 'professional';
   admin_notes?: string;
+  background_color?: string; // Legacy property
 }
 
 export interface OrganizationSettings {
@@ -24,17 +25,17 @@ export interface OrganizationSettings {
   organization_id: string;
   setting_key: string;
   setting_value: any;
-  created_at: string;
-  updated_at: string;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface SuperUser {
   id: string;
   email: string;
   full_name: string;
-  active: boolean;
-  created_at: string;
-  updated_at: string;
+  active: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface OrganizationMember {
@@ -42,27 +43,29 @@ export interface OrganizationMember {
   organization_id: string;
   email: string;
   full_name: string;
-  member_number?: string;
-  avatar_url?: string;
-  startkort_url?: string;
-  diploma_url?: string;
-  role: 'member' | 'admin' | 'range_officer';
-  approved: boolean;
-  active: boolean;
-  created_at: string;
-  updated_at: string;
+  member_number?: string | null;
+  avatar_url?: string | null;
+  startkort_url?: string | null;
+  diploma_url?: string | null;
+  role: string | null;  // Allow null for database compatibility
+  approved: boolean | null;
+  active: boolean | null;
+  password_hash?: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  startkort_file_name?: string | null;
+  diploma_file_name?: string | null;
+  other_files?: any;
+  organizations?: Organization;
 }
 
 export interface OrganizationAdmin {
   id: string;
   organization_id: string;
   member_id: string;
-  permissions: {
-    manage_members?: boolean;
-    manage_training?: boolean;
-    manage_settings?: boolean;
-  };
+  permissions: any;
   created_at: string;
+  updated_at: string;
 }
 
 export interface TrainingLocation {
@@ -70,10 +73,10 @@ export interface TrainingLocation {
   organization_id: string;
   name: string;
   qr_code_id: string;
-  description?: string;
-  active: boolean;
-  created_at: string;
-  updated_at: string;
+  description?: string | null;
+  active: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface MemberTrainingSession {
@@ -81,70 +84,22 @@ export interface MemberTrainingSession {
   organization_id: string;
   member_id: string;
   location_id: string;
-  start_time: string;
-  end_time?: string;
-  duration_minutes?: number;
-  verified: boolean;
-  verified_by?: string;
-  verification_time?: string;
-  manual_entry: boolean;
-  notes?: string;
-  created_at: string;
-  updated_at: string;
-  
-  // Joined data
+  start_time: string | null;
+  end_time?: string | null;
+  duration_minutes?: number | null;
+  verified: boolean | null;
+  verified_by?: string | null;
+  verification_time?: string | null;
+  manual_entry: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+  notes?: string | null;
   member?: OrganizationMember;
   location?: TrainingLocation;
-  details?: TrainingSessionDetails;
-  target_images?: SessionTargetImage[];
+  organization_members?: OrganizationMember;
+  training_locations?: TrainingLocation;
+  session_target_images?: SessionTargetImage[];
 }
-
-export interface TrainingSessionDetails {
-  id: string;
-  session_id: string;
-  training_type?: string;
-  results?: string;
-  notes?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface SessionTargetImage {
-  id: string;
-  session_id: string;
-  image_url: string;
-  filename?: string;
-  created_at: string;
-}
-
-// Auth context types
-export interface AuthUser {
-  id: string;
-  email: string;
-  user_type: 'super_user' | 'organization_member';
-  organization_id?: string;
-  organization?: Organization;
-  member_profile?: OrganizationMember;
-  super_user_profile?: SuperUser;
-}
-
-// Legacy types for backward compatibility (will be removed)
-export interface Profile {
-  id: string;
-  full_name: string;
-  email: string;
-  member_number: string;
-  join_date: string;
-  avatar_url?: string;
-  startkort_url?: string;
-  diploma_url?: string;
-  // This role is for the legacy profiles table, not the organization_members role
-  role?: 'member' | 'admin' | 'range_officer' | 'super_user';
-  created_at?: string;
-  updated_at?: string;
-}
-
-export type ProfileFormData = Omit<Profile, 'id' | 'created_at' | 'updated_at'>;
 
 export interface TrainingSession {
   id: string;
@@ -155,64 +110,55 @@ export interface TrainingSession {
   verified: boolean;
   verified_by?: string;
   verification_time?: string;
-  manual_entry?: boolean;
-  range_officer_approval?: boolean;
-  range_officer_name?: string;
-  details?: TrainingDetails;
-  target_images?: TargetImage[];
-}
-
-export interface TrainingDetails {
-  id: string;
-  training_session_id: string;
-  training_type: string;
-  results: string;
-  notes: string;
   created_at: string;
   updated_at: string;
 }
 
-export interface TargetImage {
+export interface SessionTargetImage {
   id: string;
-  training_session_id: string;
+  session_id: string;
   image_url: string;
-  created_at: string;
+  filename?: string | null;
+  created_at: string | null;
 }
 
-export interface RangeLocation {
+export interface Profile {
   id: string;
-  name: string;
-  qr_code_id: string;
+  email: string;
+  full_name: string;
+  member_number?: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  avatar_url?: string | null;
+  startkort_url?: string | null;
+  diploma_url?: string | null;
+  role?: string;
+  other_files?: any;
+  startkort_file_name?: string | null;
+  diploma_file_name?: string | null;
 }
 
-export interface ManualTrainingSession {
-  date: string;
-  location: string;
-  branch: string;
-  activity: string;
-  notes: string;
-}
-
-// Branding and theming
 export interface OrganizationBranding {
+  organization_name: string;
   primary_color: string;
   secondary_color: string;
-  background_color?: string;
-  logo_url?: string;
-  organization_name: string;
+  logo_url?: string | null;
+  background_color?: string; // Legacy property
 }
 
-// API Response types
+// Authentication types
+export interface AuthUser {
+  id: string;
+  email: string;
+  user_type: 'super_user' | 'organization_member';
+  organization_id?: string;
+  organization?: Organization;
+  member_profile?: OrganizationMember;
+  super_user_profile?: SuperUser;
+}
+
+// API Response wrapper
 export interface ApiResponse<T> {
   data?: T;
   error?: string;
-  message?: string;
-}
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  per_page: number;
-  total_pages: number;
 }

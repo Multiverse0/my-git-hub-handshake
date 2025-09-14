@@ -1,4 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../integrations/supabase/client';
+export { supabase };
 import type { 
   AuthUser, 
   Organization, 
@@ -9,19 +10,6 @@ import type {
   OrganizationBranding,
   ApiResponse
 } from './types';
-
-// Initialize Supabase client
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('⚠️ Supabase environment variables not found. Using demo mode.');
-}
-
-export const supabase = createClient(
-  supabaseUrl || 'https://demo.supabase.co',
-  supabaseAnonKey || 'demo-key'
-);
 
 // =============================================================================
 // AUTHENTICATION FUNCTIONS
@@ -50,7 +38,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
     const { data: { user }, error } = await supabase.auth.getUser();
     
-    if (error || !user) {
+    if (error || !user?.email) {
       return null;
     }
 
@@ -62,14 +50,14 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       .eq('active', true)
       .maybeSingle();
 
-    if (superUser) {
-      return {
-        id: user.id,
-        email: user.email!,
-        user_type: 'super_user',
-        super_user_profile: superUser
-      };
-    }
+      if (superUser) {
+        return {
+          id: user.id,
+          email: user.email!,
+          user_type: 'super_user',
+          super_user_profile: superUser as any
+        };
+      }
 
     // Check if user is an organization member
     const { data: orgMember } = await supabase
@@ -79,16 +67,16 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       .eq('active', true)
       .maybeSingle();
 
-    if (orgMember) {
-      return {
-        id: user.id,
-        email: user.email!,
-        user_type: 'organization_member',
-        organization_id: orgMember.organization_id,
-        organization: orgMember.organizations,
-        member_profile: orgMember
-      };
-    }
+      if (orgMember) {
+        return {
+          id: user.id,
+          email: user.email!,
+          user_type: 'organization_member',
+          organization_id: orgMember.organization_id,
+          organization: orgMember.organizations as any,
+          member_profile: orgMember as any
+        };
+      }
 
     return null;
   } catch (error) {
@@ -237,7 +225,7 @@ export async function getOrganizationBySlug(slug: string): Promise<ApiResponse<O
       return { error: 'Organisasjon ikke funnet' };
     }
 
-    return { data };
+    return { data: data as any } as ApiResponse<Organization>;
   } catch (error) {
     console.error('Error getting organization by slug:', error);
     return { error: 'Kunne ikke hente organisasjon' };
@@ -257,9 +245,9 @@ export async function getOrganizationBranding(organizationId: string): Promise<O
 
     if (data) {
       return {
-        organization_name: data.name,
-        primary_color: data.primary_color,
-        secondary_color: data.secondary_color,
+        organization_name: data.name || 'Idrettsklubb',
+        primary_color: data.primary_color || '#FFD700',
+        secondary_color: data.secondary_color || '#1F2937',
         logo_url: data.logo_url
       };
     }
@@ -306,7 +294,7 @@ export async function createOrganization(orgData: Partial<Organization>): Promis
       return { error: error.message };
     }
 
-    return { data };
+    return { data: data as any } as ApiResponse<Organization>;
   } catch (error) {
     console.error('Error creating organization:', error);
     return { error: 'Kunne ikke opprette organisasjon' };
@@ -437,7 +425,7 @@ export async function getOrganizationMembers(organizationId: string): Promise<Ap
       return { error: error.message };
     }
 
-    return { data: data || [] };
+    return { data: data || [] } as ApiResponse<OrganizationMember[]>;
   } catch (error) {
     console.error('Error getting organization members:', error);
     return { error: 'Kunne ikke hente medlemmer' };
@@ -463,7 +451,7 @@ export async function approveMember(memberId: string): Promise<ApiResponse<Organ
       return { error: error.message };
     }
 
-    return { data };
+    return { data } as ApiResponse<SuperUser>;
   } catch (error) {
     console.error('Error approving member:', error);
     return { error: 'Kunne ikke godkjenne medlem' };
@@ -492,7 +480,7 @@ export async function updateMemberRole(
       return { error: error.message };
     }
 
-    return { data };
+    return { data } as ApiResponse<OrganizationMember>;
   } catch (error) {
     console.error('Error updating member role:', error);
     return { error: 'Kunne ikke oppdatere medlemsrolle' };
@@ -545,7 +533,7 @@ export async function addOrganizationMember(
       return { error: error.message };
     }
 
-    return { data };
+    return { data } as ApiResponse<OrganizationMember>;
   } catch (error) {
     console.error('Error adding organization member:', error);
     return { error: 'Kunne ikke legge til medlem' };
@@ -574,7 +562,7 @@ export async function updateOrganizationMember(
       return { error: error.message };
     }
 
-    return { data };
+    return { data } as ApiResponse<OrganizationMember>;
   } catch (error) {
     console.error('Error updating organization member:', error);
     return { error: 'Kunne ikke oppdatere medlem' };
@@ -1107,9 +1095,7 @@ export async function uploadTargetImage(file: File, sessionId: string): Promise<
  * Check if Supabase is properly configured
  */
 export function isSupabaseConfigured(): boolean {
-  return !!(supabaseUrl && supabaseAnonKey && 
-           supabaseUrl !== 'https://demo.supabase.co' && 
-           supabaseAnonKey !== 'demo-key');
+  return true; // Using integrated client, always configured
 }
 
 /**
