@@ -487,7 +487,9 @@ function EditSuperUserModal({ superUser, onClose, onSuccess }: EditSuperUserModa
   };
 
   const copyPassword = () => {
-    navigator.clipboard.writeText(formData.password);
+    if (formData.password) {
+      navigator.clipboard.writeText(formData.password);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -496,30 +498,35 @@ function EditSuperUserModal({ superUser, onClose, onSuccess }: EditSuperUserModa
     setError(null);
 
     try {
-      // Update super user
-      const savedSuperUsers = localStorage.getItem('superUsers');
-      if (savedSuperUsers) {
-        const superUsers = JSON.parse(savedSuperUsers);
-        const updatedSuperUsers = await Promise.all(superUsers.map(async (user: any) => {
+      const existingSuperUsers = localStorage.getItem('superUsers');
+      if (existingSuperUsers) {
+        const superUsers = JSON.parse(existingSuperUsers);
+        const updatedSuperUsers = superUsers.map((user: any) => {
           if (user.id === superUser.id) {
-            const updatedUser = { ...user, ...formData, updated_at: new Date().toISOString() };
+            const updatedUser = {
+              ...user,
+              email: formData.email,
+              full_name: formData.full_name,
+              active: formData.active,
+              updated_at: new Date().toISOString()
+            };
             
-            // Hash new password if provided
+            // Only update password if new one is provided
             if (formData.password && generateNewPassword) {
-              updatedUser.password_hash = await bcrypt.hash(formData.password, 10);
+              updatedUser.password_hash = bcrypt.hashSync(formData.password, 10);
             }
             
             return updatedUser;
           }
           return user;
-        }));
+        });
         localStorage.setItem('superUsers', JSON.stringify(updatedSuperUsers));
       }
 
       onSuccess();
     } catch (error) {
       console.error('Error updating super user:', error);
-      setError('Kunne ikke oppdatere super-bruker');
+      setError(error instanceof Error ? error.message : 'Kunne ikke oppdatere super-bruker');
     } finally {
       setIsSubmitting(false);
     }
@@ -564,18 +571,15 @@ function EditSuperUserModal({ superUser, onClose, onSuccess }: EditSuperUserModa
             </div>
 
             <div>
-              <label className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-300">
                 <input
                   type="checkbox"
                   checked={formData.active}
                   onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))}
-                  className="rounded border-gray-600"
+                  className="rounded"
                 />
-                <span className="text-sm font-medium text-gray-300">Aktiv super-bruker</span>
+                Aktiv bruker
               </label>
-              <p className="text-xs text-gray-400 mt-1">
-                Inaktive super-brukere kan ikke logge inn eller administrere systemet
-              </p>
             </div>
 
             <div>
@@ -622,9 +626,6 @@ function EditSuperUserModal({ superUser, onClose, onSuccess }: EditSuperUserModa
                   )}
                 </div>
               </div>
-              <p className="text-xs text-gray-400 mt-1">
-                La feltet stå tomt for å beholde eksisterende passord
-              </p>
             </div>
 
             {error && (
@@ -660,7 +661,7 @@ function EditSuperUserModal({ superUser, onClose, onSuccess }: EditSuperUserModa
 }
 
 export function SuperAdmin() {
-  const { user, switchOrganization } = useAuth();
+  const { switchOrganization } = useAuth();
   const navigate = useNavigate();
   const [organizations, setOrganizations] = useState<OrganizationWithStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -669,59 +670,60 @@ export function SuperAdmin() {
   const [superUsers, setSuperUsers] = useState<any[]>([]);
   const [, setSelectedOrg] = useState<string | null>(null);
   const [editingSuperUser, setEditingSuperUser] = useState<any | null>(null);
-  const [exportingOrg, setExportingOrg] = useState<{ id: string; name: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'organizations' | 'languages'>('organizations');
-
-  // Only allow super users
-  if (!user || user.user_type !== 'super_user') {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <Shield className="w-16 h-16 text-red-400 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-red-400 mb-2">Ingen tilgang</h1>
-          <p className="text-gray-400">Kun super-brukere har tilgang til dette området</p>
-        </div>
-      </div>
-    );
-  }
+  const [exportingOrg, setExportingOrg] = useState<{ id: string; name: string } | null>(null);
 
   const loadOrganizations = async () => {
     try {
       setLoading(true);
       
-      // Load organizations from database
-      const { data: allOrganizations, error } = await supabase
+      // First try to load from Supabase
+      const { data: orgsData, error: orgsError } = await supabase
         .from('organizations')
         .select('*')
         .order('created_at', { ascending: false });
-      
-      if (error) {
-        throw new Error(error.message);
+
+      if (orgsError && orgsError.code !== 'PGRST116') {
+        throw new Error(orgsError.message);
       }
       
-      // Get member counts for each organization from database
-      const organizationsWithStats = await Promise.all(
-        (allOrganizations || []).map(async (org: Organization) => {
-          const { data: members } = await supabase
-            .from('organization_members')
-            .select('id, role')
-            .eq('organization_id', org.id);
-          
-          const memberCount = members?.length || 0;
-          const adminCount = members?.filter(m => m.role === 'admin').length || 0;
+      let orgsWithStats: OrganizationWithStats[];
+      
+      if (orgsData && orgsData.length > 0) {
+        // Add member and admin counts from Supabase
+        orgsWithStats = await Promise.all(orgsData.map(async (org) => {
+          const [memberResult, adminResult] = await Promise.all([
+            supabase.from('members').select('id', { count: 'exact' }).eq('organization_id', org.id),
+            supabase.from('users').select('id', { count: 'exact' }).eq('organization_id', org.id).eq('role', 'admin')
+          ]);
           
           return {
             ...org,
-            member_count: memberCount,
-            admin_count: adminCount
+            member_count: memberResult.count || 0,
+            admin_count: adminResult.count || 0
           };
-        })
-      );
+        }));
+      } else {
+        // Fallback to localStorage
+        const savedOrgs = localStorage.getItem('organizations');
+        const savedMembers = localStorage.getItem('members');
+        const savedUsers = localStorage.getItem('users');
         
-      setOrganizations(organizationsWithStats);
+        const orgs = savedOrgs ? JSON.parse(savedOrgs) : [];
+        const members = savedMembers ? JSON.parse(savedMembers) : [];
+        const users = savedUsers ? JSON.parse(savedUsers) : [];
+        
+        orgsWithStats = orgs.map((org: any) => ({
+          ...org,
+          member_count: members.filter((m: any) => m.organization_id === org.id).length,
+          admin_count: users.filter((u: any) => u.organization_id === org.id && u.role === 'admin').length
+        }));
+      }
+      
+      setOrganizations(orgsWithStats);
     } catch (error) {
       console.error('Error loading organizations:', error);
-      setOrganizations([]);
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -729,56 +731,33 @@ export function SuperAdmin() {
 
   const loadSuperUsers = () => {
     try {
-      const loadUsers = async () => {
-        const { data: users, error } = await supabase
-          .from('super_users')
-          .select('*')
-          .order('created_at', { ascending: false });
-        
-        if (error) {
-          console.error('Error loading super users:', error);
-          setSuperUsers([]);
-        } else {
-          setSuperUsers(users || []);
-        }
-      };
-      
-      loadUsers();
+      const savedSuperUsers = localStorage.getItem('superUsers');
+      if (savedSuperUsers) {
+        const users = JSON.parse(savedSuperUsers);
+        setSuperUsers(users || []);
+      } else {
+        setSuperUsers([]);
+      }
     } catch (error) {
-      console.error('Error in loadSuperUsers:', error);
+      console.error('Error loading super users:', error);
       setSuperUsers([]);
     }
   };
 
-  // Commented out unused functions
-  // const _handleCreateOrganization = async (orgData: any) => {
-    try {
-      const result = await createOrganization(orgData);
-      if (result.error) {
-        throw new Error(result.error);
-      }
-      
-      // Refresh organizations list
-      loadOrganizations();
-      return result.data;
-    } catch (error) {
-      console.error('Error creating organization:', error);
-      throw error;
-    }
-  };
 
   useEffect(() => {
     loadOrganizations();
     loadSuperUsers();
-    
-    // Listen for changes in localStorage to update stats
+
+    // Listen for localStorage changes
     const handleStorageChange = () => {
       loadOrganizations();
+      loadSuperUsers();
     };
-    
+
     window.addEventListener('storage', handleStorageChange);
     
-    // Also check for updates periodically
+    // Refresh data periodically
     const interval = setInterval(() => {
       loadOrganizations();
     }, 5000);
@@ -820,19 +799,18 @@ export function SuperAdmin() {
       return;
     }
 
-    performOrgDeletion(orgId);
-  };
-
-  const performOrgDeletion = async (orgId: string) => {
     try {
-      // Delete from localStorage
+      // Delete from Supabase first
+      await supabase.from('organizations').delete().eq('id', orgId);
+      
+      // Also remove from localStorage
       const savedOrgs = localStorage.getItem('organizations');
       if (savedOrgs) {
-        const organizations = JSON.parse(savedOrgs);
-        const updatedOrganizations = organizations.filter((org: any) => org.id !== orgId);
-        localStorage.setItem('organizations', JSON.stringify(updatedOrganizations));
+        const orgs = JSON.parse(savedOrgs);
+        const updatedOrgs = orgs.filter((org: any) => org.id !== orgId);
+        localStorage.setItem('organizations', JSON.stringify(updatedOrgs));
         
-        // Also remove any members associated with this organization
+        // Clean up related data
         const savedMembers = localStorage.getItem('members');
         if (savedMembers) {
           const members = JSON.parse(savedMembers);
@@ -841,47 +819,48 @@ export function SuperAdmin() {
         }
       }
       
-      loadOrganizations();
+      await loadOrganizations();
+      alert(`Organisasjonen "${orgName}" ble slettet.`);
     } catch (error) {
       console.error('Error deleting organization:', error);
       alert('Kunne ikke slette organisasjon');
     }
   };
 
-  const handleToggleSuperUserActive = (userId: string) => {
-    const superUser = superUsers.find(u => u.id === userId);
-    if (!superUser) return;
-    
-    const action = superUser.active ? 'deaktivere' : 'aktivere';
-    
-    if (window.confirm(`Er du sikker på at du vil ${action} super-brukeren "${superUser.full_name}"?`)) {
-      try {
-        const savedSuperUsers = localStorage.getItem('superUsers');
-        if (savedSuperUsers) {
-          const users = JSON.parse(savedSuperUsers);
-          const updatedUsers = users.map((u: any) => 
-            u.id === userId ? { ...u, active: !u.active, updated_at: new Date().toISOString() } : u
-          );
-          localStorage.setItem('superUsers', JSON.stringify(updatedUsers));
-          setSuperUsers(updatedUsers);
-        }
-      } catch (error) {
-        console.error('Error toggling super user status:', error);
-        alert('Kunne ikke endre status for super-bruker');
+  const handleToggleSuperUserStatus = async (userId: string, currentStatus: boolean) => {
+    try {
+      const existingSuperUsers = localStorage.getItem('superUsers');
+      if (existingSuperUsers) {
+        const superUsers = JSON.parse(existingSuperUsers);
+        const updatedUsers = superUsers.map((user: any) => {
+          if (user.id === userId) {
+            return {
+              ...user,
+              active: !currentStatus,
+              updated_at: new Date().toISOString()
+            };
+          }
+          return user;
+        });
+        localStorage.setItem('superUsers', JSON.stringify(updatedUsers));
+        setSuperUsers(updatedUsers);
       }
+    } catch (error) {
+      console.error('Error toggling super user status:', error);
+      alert('Kunne ikke endre status for super-bruker');
     }
   };
 
-  const handleDeleteSuperUser = (userId: string, userName: string) => {
-    if (!window.confirm(`Er du sikker på at du vil slette super-brukeren "${userName}"? Dette kan ikke angres.`)) {
+  const handleDeleteSuperUser = async (userId: string, userName: string) => {
+    if (!window.confirm(`Er du sikker på at du vil slette super-brukeren "${userName}"?\n\nDette kan ikke angres.`)) {
       return;
     }
 
     try {
-      const savedSuperUsers = localStorage.getItem('superUsers');
-      if (savedSuperUsers) {
-        const users = JSON.parse(savedSuperUsers);
-        const updatedUsers = users.filter((u: any) => u.id !== userId);
+      const existingSuperUsers = localStorage.getItem('superUsers');
+      if (existingSuperUsers) {
+        const superUsers = JSON.parse(existingSuperUsers);
+        const updatedUsers = superUsers.filter((user: any) => user.id !== userId);
         localStorage.setItem('superUsers', JSON.stringify(updatedUsers));
         setSuperUsers(updatedUsers);
       }
@@ -946,17 +925,6 @@ export function SuperAdmin() {
               <Globe className="w-4 h-4 inline mr-2" />
               Språkfiler
             </button>
-            <button
-              onClick={() => setActiveTab('languages')}
-              className={`px-4 py-2 text-sm font-medium ${
-                activeTab === 'languages'
-                  ? 'text-svpk-yellow border-b-2 border-svpk-yellow'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <Globe className="w-4 h-4 inline mr-2" />
-              Språkfiler
-            </button>
           </div>
         </header>
 
@@ -964,209 +932,197 @@ export function SuperAdmin() {
           <LanguageFileManager />
         )}
 
-        {activeTab === 'languages' && (
-          <LanguageFileManager />
-        )}
-
         {activeTab === 'organizations' && (
           <>
-
-        {/* Super Users Section */}
-        <div className="mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <h2 className="text-xl font-bold text-svpk-yellow">Super-brukere</h2>
-              <p className="text-gray-400">Administrer brukere med full systemtilgang</p>
-            </div>
-          </div>
-
-          <div className="card">
-            {superUsers.length === 0 ? (
-              <div className="text-center py-8">
-                <Shield className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-400 mb-4">Ingen super-brukere funnet</p>
+            {/* Super Users Section */}
+            <div className="mb-8">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-svpk-yellow">Super-brukere</h2>
+                  <p className="text-gray-400">Administrer brukere med full systemtilgang</p>
+                </div>
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-700">
-                      <th className="py-3 px-4 text-left">Navn</th>
-                      <th className="py-3 px-4 text-left">E-post</th>
-                      <th className="py-3 px-4 text-left">Opprettet</th>
-                      <th className="py-3 px-4 text-left">Status</th>
-                      <th className="py-3 px-4 text-right">Handlinger</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {superUsers.map((superUser) => (
-                      <tr key={superUser.id} className="border-b border-gray-700">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-3">
-                            <Shield className="w-5 h-5 text-svpk-yellow" />
-                            <span className="font-medium">{superUser.full_name}</span>
+
+              <div className="card">
+                {superUsers.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Shield className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-400 mb-4">Ingen super-brukere funnet</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-700">
+                          <th className="py-3 px-4 text-left">Navn</th>
+                          <th className="py-3 px-4 text-left">E-post</th>
+                          <th className="py-3 px-4 text-left">Opprettet</th>
+                          <th className="py-3 px-4 text-left">Status</th>
+                          <th className="py-3 px-4 text-right">Handlinger</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {superUsers.map((superUser) => (
+                          <tr key={superUser.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                            <td className="py-3 px-4 font-medium">{superUser.full_name}</td>
+                            <td className="py-3 px-4 text-gray-300">{superUser.email}</td>
+                            <td className="py-3 px-4 text-gray-400">
+                              {new Date(superUser.created_at).toLocaleDateString('no-NO')}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                superUser.active
+                                  ? 'bg-green-900/50 text-green-300 border border-green-700'
+                                  : 'bg-red-900/50 text-red-300 border border-red-700'
+                              }`}>
+                                {superUser.active ? 'Aktiv' : 'Inaktiv'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex gap-2 justify-end">
+                                <button
+                                  onClick={() => setEditingSuperUser(superUser)}
+                                  className="p-2 text-gray-400 hover:text-svpk-yellow transition-colors"
+                                  title="Rediger super-bruker"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleToggleSuperUserStatus(superUser.id, superUser.active)}
+                                  className={`p-2 transition-colors ${
+                                    superUser.active
+                                      ? 'text-yellow-400 hover:text-yellow-300'
+                                      : 'text-green-400 hover:text-green-300'
+                                  }`}
+                                  title={superUser.active ? 'Deaktiver' : 'Aktiver'}
+                                >
+                                  <Shield className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteSuperUser(superUser.id, superUser.full_name)}
+                                  className="p-2 text-red-400 hover:text-red-300 transition-colors"
+                                  title="Slett super-bruker"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Organizations Section */}
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-svpk-yellow">Organisasjoner</h2>
+                  <p className="text-gray-400">Administrer alle organisasjoner i systemet</p>
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="card">
+                  <div className="text-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-svpk-yellow mx-auto mb-4" />
+                    <p className="text-gray-400">Laster organisasjoner...</p>
+                  </div>
+                </div>
+              ) : organizations.length === 0 ? (
+                <div className="card">
+                  <div className="text-center py-8">
+                    <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-400 mb-4">Ingen organisasjoner funnet</p>
+                    <button
+                      onClick={() => setShowCreateModal(true)}
+                      className="btn-primary"
+                    >
+                      <Plus className="w-5 h-5" />
+                      Opprett første organisasjon
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {organizations.map((org) => (
+                    <div key={org.id} className="card">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          {org.logo_url ? (
+                            <img
+                              src={org.logo_url}
+                              alt={`${org.name} logo`}
+                              className="w-12 h-12 object-contain rounded"
+                            />
+                          ) : (
+                            <div 
+                              className="w-12 h-12 rounded flex items-center justify-center text-sm font-bold"
+                              style={{ 
+                                backgroundColor: org.primary_color,
+                                color: org.secondary_color 
+                              }}
+                            >
+                              {org.name.split(' ').map(word => word[0]).join('').toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <h3 className="font-semibold text-lg">{org.name}</h3>
+                            <p className="text-sm text-gray-400">/{org.slug}</p>
                           </div>
-                        </td>
-                        <td className="py-3 px-4">{superUser.email}</td>
-                        <td className="py-3 px-4">
-                          {new Date(superUser.created_at).toLocaleDateString('nb-NO')}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            superUser.active 
-                              ? 'bg-green-900/50 text-green-400' 
-                              : 'bg-red-900/50 text-red-400'
-                          }`}>
-                            {superUser.active ? 'Aktiv' : 'Inaktiv'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex justify-end gap-2">
+                        </div>
+                        
+                        <div className="flex items-center gap-6">
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-svpk-yellow">{org.member_count}</div>
+                            <div className="text-xs text-gray-400">Medlemmer</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-lg font-bold text-svpk-yellow">{org.admin_count}</div>
+                            <div className="text-xs text-gray-400">Admins</div>
+                          </div>
+                          
+                          <div className="flex gap-2">
                             <button
-                              onClick={() => setEditingSuperUser(superUser)}
-                              className="p-2 text-blue-400 hover:text-blue-300"
-                              title="Rediger super-bruker"
+                              onClick={() => handleSwitchToOrg(org.slug)}
+                              className="btn-secondary"
                             >
-                              <Edit2 className="w-4 h-4" />
+                              <Building2 className="w-4 h-4" />
+                              Åpne
                             </button>
                             <button
-                              onClick={() => handleToggleSuperUserActive(superUser.id)}
-                              className={`p-2 transition-colors ${
-                                superUser.active 
-                                  ? 'text-green-400 hover:text-green-300' 
-                                  : 'text-red-400 hover:text-red-300'
-                              }`}
-                              title={superUser.active ? 'Aktiv super-bruker' : 'Inaktiv super-bruker'}
+                              onClick={() => setExportingOrg({ id: org.id, name: org.name })}
+                              className="p-2 text-blue-400 hover:text-blue-300 transition-colors"
+                              title="Eksporter data"
                             >
-                              <Shield className="w-4 h-4" />
+                              <Package className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => handleDeleteSuperUser(superUser.id, superUser.full_name)}
-                              className="p-2 text-red-400 hover:text-red-300"
-                              title="Slett super-bruker"
+                              onClick={() => handleDeleteOrg(org.id, org.name)}
+                              className="p-2 text-red-400 hover:text-red-300 transition-colors"
+                              title="Slett organisasjon"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="mb-4">
-          <h2 className="text-xl font-bold text-svpk-yellow">Organisasjoner</h2>
-          <p className="text-gray-400">Administrer alle organisasjoner i systemet</p>
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center p-8">
-            <Loader2 className="w-8 h-8 text-svpk-yellow animate-spin" />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {organizations.map((org) => (
-              <div key={org.id} className="card">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    {org.logo_url ? (
-                      <img 
-                        src={org.logo_url} 
-                        alt={`${org.name} logo`}
-                        className="w-12 h-12 object-contain rounded"
-                      />
-                    ) : (
-                      <div 
-                        className="w-12 h-12 rounded flex items-center justify-center text-sm font-bold"
-                        style={{ 
-                          backgroundColor: org.primary_color,
-                          color: org.secondary_color 
-                        }}
-                      >
-                        {org.name.split(' ').map(word => word[0]).join('').toUpperCase()}
+                        </div>
                       </div>
-                    )}
-                    <div>
-                      <h3 className="font-semibold text-lg">{org.name}</h3>
-                      <p className="text-sm text-gray-400">/{org.slug}</p>
+                      
+                      {org.admin_notes && (
+                        <div className="mt-4 p-3 bg-blue-900/20 border border-blue-700 rounded-lg">
+                          <h4 className="text-sm font-medium text-blue-400 mb-1">Admin-notater</h4>
+                          <p className="text-sm text-blue-200 whitespace-pre-wrap">{org.admin_notes}</p>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleDeleteOrg(org.id, org.name)}
-                      className="p-1 text-red-400 hover:text-red-300"
-                      title="Slett organisasjon"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  ))}
                 </div>
-
-                {org.description && (
-                  <p className="text-gray-300 text-sm mb-4">{org.description}</p>
-                )}
-
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">Medlemmer:</span>
-                    <span className="font-medium">{org.member_count}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">Admins:</span>
-                    <span className="font-medium">{org.admin_count}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">Status:</span>
-                    <span className={`font-medium ${org.active ? 'text-green-400' : 'text-red-400'}`}>
-                      {org.active ? 'Aktiv' : 'Inaktiv'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">Abonnement:</span>
-                    <span className="font-medium text-svpk-yellow">
-                      {org.subscription_plan === 'starter' ? 'Starter (Kr 299)' : 'Professional (Kr 599)'}
-                    </span>
-                  </div>
-                  {org.admin_notes && (
-                    <div className="mt-4 pt-4 border-t border-gray-600">
-                      <div className="text-xs text-gray-400 mb-2">Admin-notater:</div>
-                      <div className="text-xs text-gray-300 bg-gray-700 p-2 rounded whitespace-pre-line">
-                        {org.admin_notes}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => navigate(`/organization/${org.id}`)}
-                    className="btn-primary"
-                  >
-                    <Settings className="w-4 h-4" />
-                    Administrer
-                  </button>
-                  <button
-                    onClick={() => setExportingOrg({ id: org.id, name: org.name })}
-                    className="btn-secondary"
-                    title="Eksporter organisasjonsdata"
-                  >
-                    <Package className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setExportingOrg({ id: org.id, name: org.name })}
-                    className="btn-secondary"
-                    title="Eksporter organisasjonsdata"
-                  >
-                    <Package className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+              )}
+            </div>
+          </>
         )}
 
         {showCreateSuperUser && (
