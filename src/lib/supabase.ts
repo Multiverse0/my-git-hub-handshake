@@ -34,7 +34,12 @@ export async function setUserContext(email: string): Promise<void> {
   try {
     await supabase.rpc('set_user_context', { user_email: email });
   } catch (error) {
-    console.warn('Could not set user context:', error);
+    // Silently handle missing RLS function - it's optional for basic functionality
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'PGRST202') {
+      console.warn('RLS function set_user_context not found. Please run the create_rls_functions.sql migration.');
+    } else {
+      console.warn('Could not set user context:', error);
+    }
   }
 }
 
