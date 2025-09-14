@@ -26,9 +26,17 @@ export function Navigation() {
                      user?.member_profile?.role === 'range_officer';
   
   return (
-    <nav className="bg-gray-800 border-b border-gray-700" style={{ borderBottomColor: branding.primary_color + '20' }}>
+    <nav 
+      className="bg-gray-800 border-b border-gray-700 relative isolate will-change-auto"
+      style={{ 
+        borderBottomColor: branding.primary_color + '20',
+        zIndex: 1000,
+        contain: 'layout style',
+        transform: 'translateZ(0)'
+      }}
+    >
       <div className="container mx-auto px-4">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center h-16 relative">
           <div className="flex items-center">
             {(branding.logo_url || organization?.logo_url) ? (
               <img 
@@ -132,8 +140,16 @@ export function Navigation() {
 
       {/* Mobile Navigation */}
       {isMenuOpen && (
-        <div className="md:hidden">
-          <div className="px-2 pt-2 pb-3 space-y-1">
+        <div 
+          className="md:hidden relative isolate"
+          style={{
+            zIndex: 999,
+            contain: 'layout style',
+            transform: 'translateZ(0)',
+            willChange: 'auto'
+          }}
+        >
+          <div className="px-2 pt-2 pb-3 space-y-1 bg-gray-800">
             <div className="px-3 py-2">
               <OrganizationSelector />
             </div>
@@ -223,12 +239,16 @@ function NavLink({ to, active, children }: {
   return (
     <Link
       to={to}
-      className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium ${
+      className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium relative isolate ${
         active 
           ? 'bg-gray-900' 
           : 'text-gray-300 hover:bg-gray-700 hover:text-white'
       }`}
-      style={active ? { color: branding.primary_color } : {}}
+      style={{
+        ...(active ? { color: branding.primary_color } : {}),
+        contain: 'layout style',
+        willChange: 'auto'
+      }}
     >
       {children}
     </Link>
@@ -247,12 +267,16 @@ function MobileNavLink({ to, active, children, onClick }: {
     <Link
       to={to}
       onClick={onClick}
-      className={`flex items-center gap-2 px-3 py-3 rounded-md text-base font-medium ${
+      className={`flex items-center gap-2 px-3 py-3 rounded-md text-base font-medium relative isolate ${
         active 
           ? 'bg-gray-900' 
           : 'text-gray-300 hover:bg-gray-700 hover:text-white'
       }`}
-      style={active ? { color: branding.primary_color } : {}}
+      style={{
+        ...(active ? { color: branding.primary_color } : {}),
+        contain: 'layout style',
+        willChange: 'auto'
+      }}
     >
       {children}
     </Link>
