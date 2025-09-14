@@ -175,6 +175,7 @@ export function QRCodeManagement() {
   const [editingLocation, setEditingLocation] = useState<TrainingLocation | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
 
   useEffect(() => {

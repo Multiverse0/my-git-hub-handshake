@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Clock, User, MapPin, Calendar, AlertCircle, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { getOrganizationTrainingSessions, verifyTrainingSession, supabase } from '../lib/supabase';
@@ -51,6 +51,7 @@ export function TrainingApprovalQueue({ onCountChange }: TrainingApprovalQueuePr
   const [pendingTrainings, setPendingTrainings] = useState<MemberTrainingSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Load pending training sessions from database
   useEffect(() => {

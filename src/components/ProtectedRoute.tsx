@@ -1,5 +1,6 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { AlertCircle, Shield } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { isAdmin, isSuperUser, needsApproval } from '../lib/authHelpers';
 

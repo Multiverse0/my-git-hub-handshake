@@ -20,7 +20,6 @@ interface AuthContextType {
   loading: boolean;
   needsSetup: boolean;
   login: (email: string, password: string, rememberMe: boolean, organizationSlug?: string) => Promise<void>;
-  register: (organizationSlug: string, email: string, password: string, fullName: string, memberNumber?: string) => Promise<void>;
   register: (organizationSlug: string, email: string, password: string, fullName: string, memberNumber?: string, role?: 'member' | 'admin' | 'range_officer') => Promise<void>;
   logout: () => void;
   switchOrganization: (organizationSlug: string) => Promise<void>;
