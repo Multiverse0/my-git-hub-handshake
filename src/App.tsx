@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { DashboardRouter } from './components/DashboardRouter';
 import { Login } from './pages/Login';
@@ -9,16 +9,38 @@ import { useAuth } from './contexts/AuthContext';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
+  const [timeoutReached, setTimeoutReached] = useState(false);
 
-  if (loading) {
+  // Set a timeout to prevent infinite loading on the main route
+  useEffect(() => {
+    if (loading) {
+      const timeoutId = setTimeout(() => {
+        console.warn('⏰ Auth loading timeout reached');
+        setTimeoutReached(true);
+      }, 8000);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [loading]);
+
+  if (loading && !timeoutReached) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mx-auto mb-4"></div>
-          <p className="text-gray-400">Laster...</p>
+          <p className="text-gray-400">Laster brukerdata...</p>
+          <p className="text-gray-500 text-sm mt-2">
+            Dette kan ta noen sekunder...
+          </p>
         </div>
       </div>
     );
+  }
+  
+  // If timeout reached and still not authenticated, redirect to login
+  if (timeoutReached && !isAuthenticated) {
+    console.warn('⏰ Auth timeout reached, redirecting to login');
+    return <Navigate to="/login" />;
   }
   
   return isAuthenticated ? children : <Navigate to="/login" />;

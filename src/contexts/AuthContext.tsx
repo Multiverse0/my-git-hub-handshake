@@ -64,14 +64,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Initialize auth state
+  // Initialize auth state with timeout and better error handling
   useEffect(() => {
     const initializeAuth = async () => {
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Auth initialization timeout')), 10000)
+      );
+
       try {
-        await checkSetupStatus();
+        // Run setup check with timeout
+        await Promise.race([checkSetupStatus(), timeout]);
         
         // Check if user is already authenticated with Supabase
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const sessionPromise = supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await Promise.race([
+          sessionPromise,
+          timeout
+        ]) as any;
         
         // Handle invalid refresh token errors
         if (sessionError && sessionError.message?.includes('refresh_token_not_found')) {
@@ -90,28 +99,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         if (session?.user) {
-          const currentUser = await getCurrentUser();
-          if (currentUser) {
-            setUser(currentUser);
-            setIsAuthenticated(true);
+          try {
+            // Add timeout for getCurrentUser to prevent hanging
+            const getUserPromise = getCurrentUser();
+            const currentUser = await Promise.race([getUserPromise, timeout]) as any;
             
-            // Set user context for RLS
-            await setUserContext(currentUser.email);
-            
-            // Load organization if user is organization member
-            if (currentUser.user_type === 'organization_member' && currentUser.organization) {
-              setOrganization(currentUser.organization);
+            if (currentUser) {
+              setUser(currentUser);
+              setIsAuthenticated(true);
               
-              // Load branding
-              const brandingData = await getOrganizationBranding(currentUser.organization.id);
-              setBranding(brandingData);
+              // Set user context for RLS (with timeout)
+              const setContextPromise = setUserContext(currentUser.email);
+              await Promise.race([setContextPromise, timeout]);
+              
+              // Load organization if user is organization member (with timeout)
+              if (currentUser.user_type === 'organization_member' && currentUser.organization) {
+                setOrganization(currentUser.organization);
+                
+                try {
+                  // Load branding with timeout
+                  const brandingPromise = getOrganizationBranding(currentUser.organization.id);
+                  const brandingData = await Promise.race([brandingPromise, timeout]) as any;
+                  setBranding(brandingData);
+                } catch (brandingError) {
+                  console.warn('Could not load branding, using defaults:', brandingError);
+                  // Keep default branding if branding load fails
+                }
+              }
+            } else {
+              console.log('No current user data available');
+              setUser(null);
+              setOrganization(null);
+              setIsAuthenticated(false);
             }
+          } catch (userError) {
+            console.warn('Error loading user data:', userError);
+            // If user data loading fails, still try to use the session
+            setUser(null);
+            setOrganization(null);
+            setIsAuthenticated(false);
           }
+        } else {
+          console.log('No active session found');
+          setUser(null);
+          setOrganization(null);
+          setIsAuthenticated(false);
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
         // Clear potentially corrupted auth state
-        await supabase.auth.signOut();
+        try {
+          await supabase.auth.signOut();
+        } catch (signOutError) {
+          console.warn('Error signing out during cleanup:', signOutError);
+        }
         setUser(null);
         setOrganization(null);
         setIsAuthenticated(false);
@@ -127,65 +168,89 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     initializeAuth();
     
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // Listen for auth state changes with timeout protection
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('🔄 Auth state change:', event, session?.user?.id);
       
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        if (session?.user) {
-          try {
-            console.log('👤 Processing user session for event:', event);
-            const currentUser = await getCurrentUser();
-            if (currentUser) {
-              console.log('✅ User data loaded:', currentUser.user_type, currentUser.email);
-              setUser(currentUser);
-              setIsAuthenticated(true);
-              await setUserContext(currentUser.email);
+      // Use setTimeout to prevent blocking the auth state change callback
+      setTimeout(async () => {
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Auth state change timeout')), 8000)
+        );
+
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          if (session?.user) {
+            try {
+              console.log('👤 Processing user session for event:', event);
               
-              // Load organization data
-              if (currentUser.user_type === 'organization_member' && currentUser.organization) {
-                setOrganization(currentUser.organization);
-                const brandingData = await getOrganizationBranding(currentUser.organization.id);
-                setBranding(brandingData);
+              // Get current user with timeout
+              const getUserPromise = getCurrentUser();
+              const currentUser = await Promise.race([getUserPromise, timeout]) as any;
+              
+              if (currentUser) {
+                console.log('✅ User data loaded:', currentUser.user_type, currentUser.email);
+                setUser(currentUser);
+                setIsAuthenticated(true);
+                
+                // Set user context with timeout
+                try {
+                  const setContextPromise = setUserContext(currentUser.email);
+                  await Promise.race([setContextPromise, timeout]);
+                } catch (contextError) {
+                  console.warn('Could not set user context:', contextError);
+                }
+                
+                // Load organization data with timeout
+                if (currentUser.user_type === 'organization_member' && currentUser.organization) {
+                  setOrganization(currentUser.organization);
+                  
+                  try {
+                    const brandingPromise = getOrganizationBranding(currentUser.organization.id);
+                    const brandingData = await Promise.race([brandingPromise, timeout]) as any;
+                    setBranding(brandingData);
+                  } catch (brandingError) {
+                    console.warn('Could not load branding:', brandingError);
+                    // Keep existing branding
+                  }
+                } else {
+                  console.log('🏢 No organization data for user type:', currentUser.user_type);
+                }
               } else {
-                console.log('🏢 No organization data for user type:', currentUser.user_type);
+                console.log('❌ Could not get current user data');
+                setUser(null);
+                setOrganization(null);
+                setIsAuthenticated(false);
               }
-            } else {
-              console.log('❌ Could not get current user data');
+            } catch (error) {
+              console.error('Error handling auth state change:', error);
+              // Clear auth state on error to prevent infinite loops
               setUser(null);
               setOrganization(null);
               setIsAuthenticated(false);
+              setBranding({
+                organization_name: 'Idrettsklubb',
+                primary_color: '#FFD700',
+                secondary_color: '#1F2937'
+              });
             }
-          } catch (error) {
-            console.error('Error handling auth state change:', error);
-            // Clear auth state on error to prevent infinite loops
-            setUser(null);
-            setOrganization(null);
-            setIsAuthenticated(false);
-            setBranding({
-              organization_name: 'Idrettsklubb',
-              primary_color: '#FFD700',
-              secondary_color: '#1F2937'
-            });
-          } finally {
-            setLoading(false);
+          } else {
+            console.log('⚠️ No user in session for event:', event);
           }
-        } else {
-          console.log('⚠️ No user in session for event:', event);
-          setLoading(false);
+        } else if (event === 'SIGNED_OUT') {
+          console.log('👋 User signed out');
+          setUser(null);
+          setOrganization(null);
+          setIsAuthenticated(false);
+          setBranding({
+            organization_name: 'Idrettsklubb',
+            primary_color: '#FFD700',
+            secondary_color: '#1F2937'
+          });
         }
-      } else if (event === 'SIGNED_OUT') {
-        console.log('👋 User signed out');
-        setUser(null);
-        setOrganization(null);
-        setIsAuthenticated(false);
-        setBranding({
-          organization_name: 'Idrettsklubb',
-          primary_color: '#FFD700',
-          secondary_color: '#1F2937'
-        });
+        
+        // Always clear loading after handling auth state change
         setLoading(false);
-      }
+      }, 0);
     });
     
     return () => {

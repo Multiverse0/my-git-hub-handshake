@@ -16,11 +16,29 @@ export function DashboardRouter() {
   const navigate = useNavigate();
   const location = useLocation();
   const [routingComplete, setRoutingComplete] = useState(false);
+  const [routingTimeout, setRoutingTimeout] = useState(false);
 
   useEffect(() => {
-    // Don't redirect if still loading, no user, or user_type not yet determined
-    if (loading || !user || !user.user_type) {
-      setRoutingComplete(false);
+    // Set a timeout for routing to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.warn('⏰ Routing timeout reached, defaulting to home');
+      setRoutingTimeout(true);
+      setRoutingComplete(true);
+    }, 5000);
+
+    // Don't redirect if still loading or no user
+    if (loading || !user) {
+      return () => clearTimeout(timeoutId);
+    }
+
+    // If we have a user but no user_type, default to home to prevent infinite loading
+    if (!user.user_type) {
+      console.warn('⚠️ User has no user_type, defaulting to home');
+      if (location.pathname !== '/') {
+        navigate('/', { replace: true });
+      }
+      setRoutingComplete(true);
+      clearTimeout(timeoutId);
       return;
     }
 
@@ -53,10 +71,11 @@ export function DashboardRouter() {
     }
     
     setRoutingComplete(true);
+    clearTimeout(timeoutId);
   }, [user, loading, navigate, location.pathname]);
 
-  // Show loading while determining route or user data is incomplete
-  if (loading || !user || !user.user_type || !routingComplete) {
+  // Show loading while determining route (with timeout fallback)
+  if (!routingTimeout && (loading || !user || (!user.user_type && !routingComplete))) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -64,9 +83,17 @@ export function DashboardRouter() {
           <p className="text-gray-400">
             {loading ? 'Laster...' : !user ? 'Autentiserer...' : 'Bestemmer rute...'}
           </p>
+          <p className="text-gray-500 text-sm mt-2">
+            Venter på brukerdata...
+          </p>
         </div>
       </div>
     );
+  }
+
+  // If we reach here, show the dashboard even if user data is incomplete
+  if (!user) {
+    console.warn('⚠️ Rendering dashboard without user data due to timeout');
   }
 
   return (
