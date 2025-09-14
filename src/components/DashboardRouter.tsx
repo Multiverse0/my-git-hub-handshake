@@ -15,10 +15,14 @@ export function DashboardRouter() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [routingComplete, setRoutingComplete] = useState(false);
 
   useEffect(() => {
-    // Don't redirect if still loading or no user
-    if (loading || !user) return;
+    // Don't redirect if still loading, no user, or user_type not yet determined
+    if (loading || !user || !user.user_type) {
+      setRoutingComplete(false);
+      return;
+    }
 
     console.log('🧭 Determining dashboard route for user:', user.user_type, user.member_profile?.role);
     
@@ -47,15 +51,19 @@ export function DashboardRouter() {
     } else {
       console.log(`✅ Already on correct path: ${location.pathname}`);
     }
+    
+    setRoutingComplete(true);
   }, [user, loading, navigate, location.pathname]);
 
-  // Show loading while determining route
-  if (loading) {
+  // Show loading while determining route or user data is incomplete
+  if (loading || !user || !user.user_type || !routingComplete) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mx-auto mb-4"></div>
-          <p className="text-gray-400">Laster...</p>
+          <p className="text-gray-400">
+            {loading ? 'Laster...' : !user ? 'Autentiserer...' : 'Bestemmer rute...'}
+          </p>
         </div>
       </div>
     );
