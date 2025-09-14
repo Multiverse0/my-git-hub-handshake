@@ -1,12 +1,11 @@
-```typescript
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext"; // Import useAuth from your project's context
-import { AlertCircle, Loader2, Eye, EyeOff } from "lucide-react"; // Import icons for better UI
+import { useAuth } from "../contexts/AuthContext";
+import { AlertCircle, Loader2, Eye, EyeOff } from "lucide-react";
 
 export function Login() {
   const navigate = useNavigate();
-  const { login, branding } = useAuth(); // Use the login function from AuthContext
+  const { login, branding } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,7 +16,7 @@ export function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      setError('Vennligst fyll ut alle felt');
+      setError('Please fill in all fields');
       return;
     }
 
@@ -25,15 +24,11 @@ export function Login() {
       setIsLoading(true);
       setError(null);
 
-      // Call the login function from AuthContext
-      // The rememberMe and orgSlug parameters are optional, depending on your Login page's full requirements
-      await login(email, password, false, 'svpk'); // Assuming 'svpk' as default org slug for demo
-
-      // After successful login, DashboardRouter will handle the role-based redirection
+      await login(email, password, false, 'svpk');
       navigate('/', { replace: true });
     } catch (err) {
       console.error("Login failed:", err);
-      setError(err instanceof Error ? err.message : 'Det oppstod en feil ved innlogging');
+      setError(err instanceof Error ? err.message : 'An error occurred during login');
     } finally {
       setIsLoading(false);
     }
@@ -43,30 +38,29 @@ export function Login() {
     <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
       <div className="bg-gray-800 rounded-lg p-8 max-w-md w-full">
         <div className="flex flex-col items-center mb-8">
-          {/* You can keep your organization logo/branding here */}
           <h1
             className="text-2xl font-bold"
             style={{ color: branding.primary_color }}
           >
-            Logg inn
+            Login
           </h1>
           <p className="text-gray-400 text-center mt-2">
-            Logg inn til {branding.organization_name}
+            Login to {branding.organization_name}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
-              E-post
+              Email
             </label>
             <div className="relative">
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-gray-700 rounded-lg pl-4 pr-4 py-2"
-                placeholder="navn@example.com"
+                className="w-full bg-gray-700 rounded-lg pl-4 pr-4 py-2 text-white"
+                placeholder="name@example.com"
                 disabled={isLoading}
               />
             </div>
@@ -74,14 +68,14 @@ export function Login() {
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
-              Passord
+              Password
             </label>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-gray-700 rounded-lg pl-4 pr-12 py-2"
+                className="w-full bg-gray-700 rounded-lg pl-4 pr-12 py-2 text-white"
                 placeholder="••••••••"
                 disabled={isLoading}
               />
@@ -105,16 +99,16 @@ export function Login() {
 
           <button
             type="submit"
-            className="btn-primary w-full"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             disabled={isLoading}
           >
             {isLoading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Logger inn...
+                Logging in...
               </>
             ) : (
-              'Logg inn'
+              'Login'
             )}
           </button>
         </form>
@@ -122,4 +116,3 @@ export function Login() {
     </div>
   );
 }
-```
