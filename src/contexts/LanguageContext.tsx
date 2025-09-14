@@ -18,11 +18,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsTranslating(true);
       
-      // Translate if not already cached
-      if (languageCode !== 'no') {
-        await translateLanguage(languageCode);
-      }
-      
       // Update language
       setCurrentLanguage(languageCode);
       setCurrentLanguageState(languageCode);

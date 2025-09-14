@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Search, ChevronDown, ChevronUp, CheckCircle, XCircle, Edit2, X, Calendar, Save, Target, Clock } from 'lucide-react';
+import { Download, Search, ChevronDown, ChevronUp, CheckCircle, XCircle, Edit2, X, Target } from 'lucide-react';
 import { format } from 'date-fns';
 import { jsPDF } from 'jspdf';
 import { useAuth } from '../contexts/AuthContext';
@@ -48,7 +48,7 @@ function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) 
               </label>
               <select
                 value={editedEntry.memberName}
-                onChange={(e) => setEditedEntry(prev => ({ ...prev, memberName: e.target.value }))}
+                onChange={(e) => setEditedEntry((prev: any) => ({ ...prev, memberName: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               >
                 <option value="">Velg medlem...</option>
@@ -71,7 +71,7 @@ function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) 
               <input
                 type="date"
                 value={format(editedEntry.date, 'yyyy-MM-dd')}
-                onChange={(e) => setEditedEntry(prev => ({ 
+                onChange={(e) => setEditedEntry((prev: any) => ({ 
                   ...prev, 
                   date: new Date(e.target.value) 
                 }))}
@@ -85,7 +85,7 @@ function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) 
               </label>
               <select
                 value={editedEntry.range}
-                onChange={(e) => setEditedEntry(prev => ({ ...prev, range: e.target.value }))}
+                onChange={(e) => setEditedEntry((prev: any) => ({ ...prev, range: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               >
                 <option value="Innendørs 25m">Innendørs 25m</option>
@@ -99,7 +99,7 @@ function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) 
               </label>
               <select
                 value={editedEntry.activity || 'Trening'}
-                onChange={(e) => setEditedEntry(prev => ({ ...prev, activity: e.target.value }))}
+                onChange={(e) => setEditedEntry((prev: any) => ({ ...prev, activity: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               >
                 <option value="Trening">Trening</option>
@@ -114,7 +114,7 @@ function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) 
               </label>
               <select
                 value={editedEntry.rangeOfficer}
-                onChange={(e) => setEditedEntry(prev => ({ ...prev, rangeOfficer: e.target.value }))}
+                onChange={(e) => setEditedEntry((prev: any) => ({ ...prev, rangeOfficer: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               >
                 {rangeOfficers.map(officer => (
@@ -132,7 +132,7 @@ function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) 
                   <input
                     type="radio"
                     checked={editedEntry.approved}
-                    onChange={() => setEditedEntry(prev => ({ ...prev, approved: true }))}
+                    onChange={() => setEditedEntry((prev: any) => ({ ...prev, approved: true }))}
                     className="text-svpk-yellow"
                   />
                   <span>Verifisert</span>
@@ -141,7 +141,7 @@ function EditModal({ entry, onClose, onSave, approvedMembers }: EditModalProps) 
                   <input
                     type="radio"
                     checked={!editedEntry.approved}
-                    onChange={() => setEditedEntry(prev => ({ ...prev, approved: false }))}
+                    onChange={() => setEditedEntry((prev: any) => ({ ...prev, approved: false }))}
                     className="text-svpk-yellow"
                   />
                   <span>Ikke verifisert</span>

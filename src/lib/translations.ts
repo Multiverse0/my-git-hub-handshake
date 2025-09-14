@@ -51,6 +51,8 @@ export const translations: Translations = {
     'scanner.waiting_approval': 'Din treningsøkt er nå registrert og venter på godkjenning fra skyteleder!',
     'scanner.redirecting': 'Du blir automatisk sendt til treningsloggen om 5 sekunder...',
     'scanner.go_to_log': 'Gå til Treningslogg',
+    'scanner.manual_input': 'Manuell innskriving',
+    'scanner.start_camera_description': 'Klikk på knappen under for å aktivere kamera og skanne QR-kode',
     
     // Training Log
     'log.title': 'Treningslogg',
@@ -74,7 +76,6 @@ export const translations: Translations = {
     'log.your_sessions': 'Dine Treningsøkter',
     'log.nsf_training_weapons': 'NSF Treningsvåpen',
     'log.nsf_requirement_text': 'Krav: 10 treninger siste 24 måneder (NSF)',
-    'log.dfs_field_shooting': 'DFS Feltskytting', 
     'log.dfs_requirement_text': 'Krav: 10 treninger siste 24 måneder (DFS)',
     'log.dynamic_weapon_application': 'Dynamisk Våpensøknad',
     'log.dssn_requirement_text': 'Krav: 10 treninger + 10 åpne stevner (DSSN)',
@@ -98,9 +99,9 @@ export const translations: Translations = {
     'log.dssn_info_requirement': 'Krav for dynamisk skyting (DSSN):',
     'log.dssn_info_weapons': '• Våpen kan anskaffes gjennom DSSN og deres skyteprogrammer',
     'log.dssn_info_same_rules': '• Samme regler som andre skytterorganisasjoner',
-    'log.dssn_info_rifle_exception': 'Unntak for rifle: 24 måneders karantenetid etter bestått godkjenningskurs',
+    'log.dssn_info_rifle_exception': '• Unntak for rifle: 24 måneders karantenetid etter bestått godkjenningskurs',
     'log.dssn_info_activity_requirement': '• Aktivitetskrav i tillegg til karantenetid',
-    'log.dssn_info_green_activities': 'Grønne aktiviteter teller for dynamisk skyting',
+    'log.dssn_info_green_activities': '• Grønne aktiviteter teller for dynamisk skyting',
     'log.no_sessions': 'Ingen verifiserte treningsøkter ennå',
     'log.no_filtered_sessions': 'Ingen treningsøkter matcher de valgte filtrene',
     'log.scan_first': 'Skann QR-koden på skytebanen for å registrere din første økt',
@@ -112,107 +113,13 @@ export const translations: Translations = {
     'log.results': 'Resultater:',
     'log.target_images': 'Målbilder:',
     'log.images': 'bilde(r)',
-    'log.edit_session': 'Rediger treningsøkt',
-    'log.dssn_info_title': 'DSSN - Dynamisk',
-    'log.dssn_info_requirement': 'Krav for dynamisk skyting (DSSN):',
-    'log.dssn_info_weapons': '• Våpen kan anskaffes gjennom DSSN og deres skyteprogrammer',
-    'log.dssn_info_same_rules': '• Samme regler som andre skytterorganisasjoner',
-    'log.dssn_info_rifle_exception': '• Unntak for rifle: 24 måneders karantenetid etter bestått godkjenningskurs',
-    'log.dssn_info_activity_requirement': '• Aktivitetskrav i tillegg til karantenetid',
-    'log.dssn_info_green_activities': '• Grønne aktiviteter teller for dynamisk skyting',
-    'log.no_sessions': 'Ingen verifiserte treningsøkter ennå',
-    'log.no_filtered_sessions': 'Ingen treningsøkter matcher de valgte filtrene',
-    'log.scan_first': 'Skann QR-koden på skytebanen for å registrere din første økt',
-    'log.change_filters': 'Prøv å endre filtrene for å se flere treningsøkter',
-    'log.range': 'Bane:',
-    'log.duration': 'Varighet:',
-    'log.verified_by': 'Verifisert av:',
     'log.verified': 'Verifisert',
+    'log.edit_session': 'Rediger treningsøkt',
     'log.training': 'Trening',
     'log.competition': 'Stevne',
     'log.volunteer_work': 'Dugnad',
     
     // Profile
-    'profile.title': 'Din Profil',
-    'profile.description': 'Se og administrer din medlemsprofil',
-    'profile.member': 'Medlem',
-    'profile.email': 'E-post',
-    'profile.member_id': 'Skytter ID',
-    'profile.find_id': 'Finn din ID',
-    'profile.member_since': 'Medlem siden',
-    'profile.not_specified': 'Ikke angitt',
-    'profile.edit_profile': 'Rediger Profil',
-    'profile.save': 'Lagre',
-    'profile.cancel': 'Avbryt',
-    
-    // Admin
-    'admin.title': 'Administrasjon',
-    'admin.description': 'Administrer medlemmer, treningsøkter og systeminnstillinger',
-    'admin.add_training': 'Registrer Trening',
-    'admin.member_management': 'Medlemsadministrasjon',
-    'admin.training_approvals': 'Treningsgodkjenninger',
-    'admin.settings': 'Innstillinger',
-    'admin.language_settings': 'Språkinnstillinger',
-    'admin.current_language': 'Nåværende språk',
-    'admin.select_language': 'Velg språk',
-    'admin.save_settings': 'Lagre innstillinger',
-    'admin.language_saved': 'Språkinnstillinger lagret! Siden oppdateres...',
-    'admin.request_language': 'Savner du et språk?',
-    'admin.request_description': 'Skriv inn ønsket språk og send forespørsel til oss:',
-    'admin.language_request_placeholder': 'F.eks. Nederlandsk, Russisk, Arabisk...',
-    'admin.send_request': 'Send forespørsel',
-    'admin.request_sent': 'Språkforespørsel sendt!',
-    'admin.member_management': 'Medlemsadministrasjon',
-    'admin.pending_approvals': 'Ventende godkjenninger',
-    'admin.approved_members': 'Godkjente medlemmer',
-    'admin.approve_all': 'Godkjenn alle',
-    'admin.add_member': 'Legg til medlem',
-    'admin.edit_member': 'Rediger medlem',
-    'admin.delete_member': 'Slett medlem',
-    'admin.approve_member': 'Godkjenn medlem',
-    'admin.unapprove_member': 'Fjern godkjenning',
-    'admin.toggle_admin': 'Bytt admin-rolle',
-    'admin.no_pending_members': 'Ingen ventende medlemmer å godkjenne',
-    'admin.search_members': 'Søk etter medlem...',
-    'admin.name': 'Navn',
-    'admin.email': 'E-post',
-    'admin.member_id': 'ID',
-    'admin.registered': 'Registrert',
-    'admin.role': 'Rolle',
-    'admin.actions': 'Handling',
-    'admin.user_role': 'Bruker',
-    'admin.admin_role': 'Admin',
-    'admin.showing_members': 'Viser {start} - {end} av {total} medlemmer',
-    'admin.previous': 'Forrige',
-    'admin.next': 'Neste',
-    'admin.organization_info': 'Grunnleggende informasjon',
-    'admin.organization_name': 'Organisasjonsnavn',
-    'admin.subscription_plan': 'Abonnementsplan',
-    'admin.description': 'Beskrivelse',
-    'admin.contact_info': 'Kontaktinformasjon',
-    'admin.phone': 'Telefon',
-    'admin.website': 'Nettside',
-    'admin.address': 'Adresse',
-    'admin.visual_profile': 'Visuell profil',
-    'admin.organization_logo': 'Organisasjonslogo',
-    'admin.current_logo': 'Nåværende logo',
-    'admin.upload_new_logo': 'Last opp ny logo',
-    'admin.primary_color': 'Primærfarge',
-    'admin.secondary_color': 'Sekundærfarge',
-    'admin.background_color': 'Bakgrunnsfarge (mørkt tema)',
-    'admin.color_preview': 'Forhåndsvisning av farger',
-    'admin.save_settings': 'Lagre innstillinger',
-    'admin.settings_saved': 'Innstillinger lagret! Siden oppdateres...',
-    
-    // Scanner page
-    'scanner.title': 'Skann QR-kode',
-    'scanner.description': 'Skann QR-koden på skytebanen for å registrere oppmøte på trening',
-    'scanner.start_scanning': 'Start Skanning',
-    'scanner.start_camera': 'Start Kamera',
-    'scanner.cancel_scanning': 'Avbryt skanning',
-    'scanner.manual_input': 'Manuell innskriving',
-    
-    // Profile page
     'profile.title': 'Din Profil',
     'profile.description': 'Se og administrer din medlemsprofil',
     'profile.member': 'Medlem',
@@ -246,12 +153,65 @@ export const translations: Translations = {
     'profile.startkort_membercard': 'Startkort og Medlemskort',
     'profile.optional': 'Valgfritt',
     
-    // Admin tabs and sections
+    // Admin
+    'admin.title': 'Administrasjon',
+    'admin.description': 'Administrer medlemmer, treningsøkter og systeminnstillinger',
+    'admin.add_training': 'Registrer Trening',
+    'admin.member_management': 'Medlemsadministrasjon',
+    'admin.training_approvals': 'Treningsgodkjenninger',
+    'admin.settings': 'Innstillinger',
+    'admin.language_settings': 'Språkinnstillinger',
+    'admin.current_language': 'Nåværende språk',
+    'admin.select_language': 'Velg språk',
+    'admin.save_settings': 'Lagre innstillinger',
+    'admin.language_saved': 'Språkinnstillinger lagret! Siden oppdateres...',
+    'admin.request_language': 'Savner du et språk?',
+    'admin.request_description': 'Skriv inn ønsket språk og send forespørsel til oss:',
+    'admin.language_request_placeholder': 'F.eks. Nederlandsk, Russisk, Arabisk...',
+    'admin.send_request': 'Send forespørsel',
+    'admin.request_sent': 'Språkforespørsel sendt!',
+    'admin.pending_approvals': 'Ventende godkjenninger',
+    'admin.approved_members': 'Godkjente medlemmer',
+    'admin.approve_all': 'Godkjenn alle',
+    'admin.add_member': 'Legg til medlem',
+    'admin.edit_member': 'Rediger medlem',
+    'admin.delete_member': 'Slett medlem',
+    'admin.approve_member': 'Godkjenn medlem',
+    'admin.unapprove_member': 'Fjern godkjenning',
+    'admin.toggle_admin': 'Bytt admin-rolle',
+    'admin.no_pending_members': 'Ingen ventende medlemmer å godkjenne',
+    'admin.search_members': 'Søk etter medlem...',
+    'admin.name': 'Navn',
+    'admin.email': 'E-post',
+    'admin.member_id': 'ID',
+    'admin.registered': 'Registrert',
+    'admin.role': 'Rolle',
+    'admin.actions': 'Handling',
+    'admin.user_role': 'Bruker',
+    'admin.admin_role': 'Admin',
+    'admin.showing_members': 'Viser {start} - {end} av {total} medlemmer',
+    'admin.previous': 'Forrige',
+    'admin.next': 'Neste',
+    'admin.organization_info': 'Grunnleggende informasjon',
+    'admin.organization_name': 'Organisasjonsnavn',
+    'admin.subscription_plan': 'Abonnementsplan',
+    'admin.contact_info': 'Kontaktinformasjon',
+    'admin.phone': 'Telefon',
+    'admin.website': 'Nettside',
+    'admin.address': 'Adresse',
+    'admin.visual_profile': 'Visuell profil',
+    'admin.organization_logo': 'Organisasjonslogo',
+    'admin.current_logo': 'Nåværende logo',
+    'admin.upload_new_logo': 'Last opp ny logo',
+    'admin.primary_color': 'Primærfarge',
+    'admin.secondary_color': 'Sekundærfarge',
+    'admin.background_color': 'Bakgrunnsfarge (mørkt tema)',
+    'admin.color_preview': 'Forhåndsvisning av farger',
+    'admin.settings_saved': 'Innstillinger lagret! Siden oppdateres...',
     'admin.overview': 'Dagens',
     'admin.members': 'Medlem',
     'admin.log': 'Logg',
     'admin.officers': 'Ledere',
-    'admin.settings': 'Innstillinger',
     'admin.qr_codes': 'QR-koder',
     'admin.all_training_registrations': 'Alle treningsregistreringer',
     'admin.overview_description': 'Oversikt over alle treningsregistreringer med klikkbare status-ikoner',
@@ -277,20 +237,12 @@ export const translations: Translations = {
     'admin.range': 'Bane',
     'admin.range_officer': 'Standplassleder',
     'admin.status': 'Status',
-    'admin.actions': 'Handlinger',
     'admin.no_sessions_found': 'Ingen treningsøkter funnet',
     'admin.change_filters': 'Prøv å endre filtrene for å se flere treningsøkter',
-    'admin.previous': 'Forrige',
-    'admin.next': 'Neste',
     'admin.showing_entries': 'Viser {start} - {end} av {total} oppføringer',
-    
-    // Additional admin translations
     'admin.indoor_25m': 'Innendørs 25m',
     'admin.outdoor_25m': 'Utendørs 25m',
     'admin.edit_session': 'Rediger treningsøkt',
-    
-    // Additional scanner translations
-    'scanner.start_camera_description': 'Klikk på knappen under for å aktivere kamera og skanne QR-kode',
     
     // Common
     'common.loading': 'Laster...',
@@ -365,213 +317,77 @@ export const translations: Translations = {
     // Scanner
     'scanner.title': 'Scan QR Code',
     'scanner.description': 'Scan the QR code at the shooting range to register attendance at training',
-    'scanner.start_scanning': 'Start Scanning',
-    'scanner.start_camera': 'Start Camera',
-    'scanner.cancel_scanning': 'Cancel scanning',
-    
-    // Profile
-    'profile.title': 'Your Profile',
-    'profile.description': 'View and manage your member profile',
-    'profile.member': 'Member',
-    'profile.email': 'Email',
-    'profile.member_id': 'Shooter ID',
-    'profile.find_id': 'Find your ID',
-    'profile.member_since': 'Member since',
-    'profile.not_specified': 'Not specified',
-    'profile.edit_profile': 'Edit Profile',
-    'profile.save': 'Save',
-    'profile.cancel': 'Cancel',
-    'profile.upload_startkort': 'Upload your Start Card',
-    'profile.find_startkort': 'Find your start card here',
-    'profile.upload_membercard': 'Upload your Member Card',
-    'profile.find_membercard': 'Find your member card here',
-    'profile.file_uploaded': 'File uploaded:',
-    'profile.download_file': 'Download file',
-    'profile.no_file_uploaded': 'No file uploaded',
-    'profile.change_file': 'Change file',
-    'profile.upload_file': 'Upload file',
-    'profile.uploading': 'Uploading...',
-    'profile.personal_settings': 'Personal settings',
-    'profile.theme_preference': 'Theme preference',
-    'profile.other_files': 'Other files (Weapon cards, gun safe, etc)',
-    'profile.upload_weapon_cards': 'Upload weapon cards and other relevant files',
-    'profile.upload_files': 'Upload files',
-    'profile.file_number': 'File {number}:',
-    'profile.download': 'Download',
-    'profile.delete': 'Delete',
-    'profile.no_files_uploaded': 'No files uploaded',
-    'profile.startkort_membercard': 'Start Card and Member Card',
-    'profile.optional': 'Optional',
-    
-    // Admin
-    'admin.title': 'Administration',
-    'admin.description': 'Manage members, training sessions and system settings',
-    'admin.add_training': 'Register Training',
-    'admin.member_management': 'Member Management',
-    'admin.pending_approvals': 'Pending approvals',
-    'admin.approve_all': 'Approve all',
-    'admin.add_member': 'Add member',
-    'admin.edit_member': 'Edit member',
-    'admin.approve_member': 'Approve member',
-    'admin.unapprove_member': 'Remove approval',
-    'admin.toggle_admin': 'Toggle admin role',
-    'admin.no_pending_members': 'No pending members to approve',
-    'admin.search_members': 'Search for member...',
-    'admin.name': 'Name',
-    'admin.email': 'Email',
-    'admin.member_id': 'ID',
-    'admin.registered': 'Registered',
-    'admin.role': 'Role',
-    'admin.actions': 'Actions',
-    'admin.user_role': 'User',
-    'admin.admin_role': 'Admin',
-    'admin.showing_members': 'Showing {start} - {end} of {total} members',
-    'admin.previous': 'Previous',
-    'admin.next': 'Next',
-    'admin.save_settings': 'Save settings',
-    'admin.settings_saved': 'Settings saved! Page updating...',
-    'admin.edit_session': 'Edit training session',
-    'admin.showing_entries': 'Showing {start} - {end} of {total} entries',
     
     // Common
     'common.loading': 'Loading...',
+    'common.error': 'Error',
+    'common.success': 'Success',
     'common.save': 'Save',
     'common.cancel': 'Cancel',
     'common.edit': 'Edit',
     'common.delete': 'Delete',
     'common.add': 'Add',
-    'common.close': 'Close'
-  },
-  sv: {},
-  da: {},
-  fi: {},
-  de: {},
-  fr: {},
-  es: {},
-  it: {},
-  pl: {}
+    'common.close': 'Close',
+    'common.yes': 'Yes',
+    'common.no': 'No'
+  }
 };
 
-// Language configuration
-export const languages = [
-  { code: 'no', name: 'Norsk', flag: '🇳🇴' },
-  { code: 'sv', name: 'Svenska', flag: '🇸🇪' },
-  { code: 'da', name: 'Dansk', flag: '🇩🇰' },
-  { code: 'fi', name: 'Suomi', flag: '🇫🇮' },
-  { code: 'en', name: 'English', flag: '🇬🇧' },
-  { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
-  { code: 'fr', name: 'Français', flag: '🇫🇷' },
-  { code: 'es', name: 'Español', flag: '🇪🇸' },
-  { code: 'it', name: 'Italiano', flag: '🇮🇹' },
-  { code: 'pl', name: 'Polski', flag: '🇵🇱' }
-];
+// Store current language in localStorage
+const STORAGE_KEY = 'aktivlogg_language';
 
-// Get current language from localStorage
+// Get current language (default to Norwegian)
 export function getCurrentLanguage(): string {
-  try {
-    const saved = localStorage.getItem('selectedLanguage');
-    return saved || 'no';
-  } catch {
-    return 'no';
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem(STORAGE_KEY) || 'no';
   }
+  return 'no';
 }
 
 // Set current language
-export function setCurrentLanguage(languageCode: string): void {
-  localStorage.setItem('selectedLanguage', languageCode);
+export function setCurrentLanguage(language: string): void {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY, language);
+  }
 }
 
-// Translation function
-export function t(key: string, params?: { [key: string]: string | number }): string {
-  const currentLang = getCurrentLanguage();
-  const translation = translations[currentLang]?.[key] || translations.no[key] || key;
+// Get available languages with flag property for compatibility
+export function getAvailableLanguages(): { code: string; name: string; nativeName: string; flag?: string }[] {
+  return [
+    { code: 'no', name: 'Norwegian', nativeName: 'Norsk', flag: '🇳🇴' },
+    { code: 'en', name: 'English', nativeName: 'English', flag: '🇺🇸' }
+  ];
+}
+
+// Translate a key
+export function t(key: string, params?: Record<string, string | number>): string {
+  const language = getCurrentLanguage();
+  const translation = translations[language]?.[key] || translations['no']?.[key] || key;
   
   if (params) {
-    return Object.entries(params).reduce((text, [param, value]) => {
-      return text.replace(new RegExp(`\\{${param}\\}`, 'g'), String(value));
+    return Object.entries(params).reduce((str, [paramKey, value]) => {
+      return str.replace(new RegExp(`\\{${paramKey}\\}`, 'g'), String(value));
     }, translation);
   }
   
   return translation;
 }
 
-// Google Translate API integration
-export async function translateText(text: string, targetLanguage: string): Promise<string> {
-  try {
-    // Use Google Translate API (free tier)
-    const response = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=no&tl=${targetLanguage}&dt=t&q=${encodeURIComponent(text)}`);
-    
-    if (!response.ok) {
-      throw new Error('Translation failed');
-    }
-    
-    const data = await response.json();
-    return data[0][0][0] || text;
-  } catch (error) {
-    console.warn('Translation failed, using original text:', error);
-    return text;
+// Translate to specific language
+export function translateLanguage(key: string, language: string, params?: Record<string, string | number>): string {
+  const translation = translations[language]?.[key] || translations['no']?.[key] || key;
+  
+  if (params) {
+    return Object.entries(params).reduce((str, [paramKey, value]) => {
+      return str.replace(new RegExp(`\\{${paramKey}\\}`, 'g'), String(value));
+    }, translation);
   }
+  
+  return translation;
 }
 
-// Translate all Norwegian texts to target language
-export async function translateLanguage(targetLanguage: string): Promise<void> {
-  if (targetLanguage === 'no' || translations[targetLanguage] && Object.keys(translations[targetLanguage]).length > 0) {
-    return; // Already translated or Norwegian
-  }
+// Export translations for external use
+export { translations as translationData };
 
-  try {
-    const norwegianTexts = translations.no;
-    const translatedTexts: TranslationKey = {};
-    
-    // Translate in batches to avoid rate limiting
-    const entries = Object.entries(norwegianTexts);
-    const batchSize = 10;
-    
-    for (let i = 0; i < entries.length; i += batchSize) {
-      const batch = entries.slice(i, i + batchSize);
-      
-      const translationPromises = batch.map(async ([key, text]) => {
-        const translated = await translateText(text, targetLanguage);
-        return [key, translated];
-      });
-      
-      const batchResults = await Promise.all(translationPromises);
-      batchResults.forEach(([key, translated]) => {
-        translatedTexts[key] = translated;
-      });
-      
-      // Small delay between batches
-      if (i + batchSize < entries.length) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    }
-    
-    translations[targetLanguage] = translatedTexts;
-    
-    // Save translations to localStorage for caching
-    localStorage.setItem(`translations_${targetLanguage}`, JSON.stringify(translatedTexts));
-    
-  } catch (error) {
-    console.error('Error translating language:', error);
-    throw error;
-  }
-}
-
-// Load cached translations from localStorage
-export function loadCachedTranslations(): void {
-  languages.forEach(lang => {
-    if (lang.code !== 'no') {
-      try {
-        const cached = localStorage.getItem(`translations_${lang.code}`);
-        if (cached) {
-          translations[lang.code] = JSON.parse(cached);
-        }
-      } catch (error) {
-        console.warn(`Failed to load cached translations for ${lang.code}:`, error);
-      }
-    }
-  });
-}
-
-// Initialize translations on app start
-loadCachedTranslations();
+// Export languages for compatibility
+export const languages = getAvailableLanguages();

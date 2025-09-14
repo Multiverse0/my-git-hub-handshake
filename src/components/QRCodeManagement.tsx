@@ -4,30 +4,23 @@ import { getOrganizationTrainingLocations, createTrainingLocation, updateTrainin
 import { useAuth } from '../contexts/AuthContext';
 import type { TrainingLocation } from '../lib/types';
 
-interface QRLocation {
-  id: string;
-  name: string;
-  qr_code_id: string;
-  description?: string;
-  active: boolean;
-  created_at: string;
-}
-
 interface EditModalProps {
-  location: QRLocation | null;
+  location: TrainingLocation | null;
   onClose: () => void;
-  onSave: (location: QRLocation) => void;
+  onSave: (location: TrainingLocation) => void;
 }
 
 function EditModal({ location, onClose, onSave }: EditModalProps) {
-  const [formData, setFormData] = useState(
+  const [formData, setFormData] = useState<TrainingLocation>(
     location || {
       id: '',
       name: '',
       qr_code_id: '',
       description: '',
       active: true,
-      created_at: new Date().toISOString()
+      organization_id: '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     }
   );
   const [error, setError] = useState<string | null>(null);
