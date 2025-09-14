@@ -1,87 +1,37 @@
 import { useState, useEffect } from 'react';
 import { Edit2, Trash2, X, CheckCircle, XCircle, PlusCircle, AlertCircle } from 'lucide-react';
-
-interface RangeOfficer {
-  id: number;
-  name: string;
-  email: string;
-  active: boolean;
-  addedDate: Date;
-}
-
-// Super user admin only
-const dummyRangeOfficers: RangeOfficer[] = [
-  {
-    id: 3001,
-    name: 'Magne Angelsen',
-    email: 'magne.angelsen@svpk.no',
-    active: true,
-    addedDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // 30 days ago
-  },
-  {
-    id: 3002,
-    name: 'Kenneth S. Fahle',
-    email: 'kenneth.fahle@svpk.no',
-    active: true,
-    addedDate: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000) // 25 days ago
-  },
-  {
-    id: 3003,
-    name: 'Knut Valle',
-    email: 'knut.valle@svpk.no',
-    active: true,
-    addedDate: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000) // 20 days ago
-  },
-  {
-    id: 3004,
-    name: 'Kurt Wadel',
-    email: 'kurt.wadel@svpk.no',
-    active: true,
-    addedDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000) // 15 days ago
-  },
-  {
-    id: 3005,
-    name: 'Carina Wadel',
-    email: 'carina.wadel@svpk.no',
-    active: true,
-    addedDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000) // 10 days ago
-  },
-  {
-    id: 3006,
-    name: 'Yngve Rødli',
-    email: 'yngve@promonorge.no',
-    active: true,
-    addedDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) // 5 days ago
-  }
-];
-
-const initialRangeOfficers: RangeOfficer[] = [];
+import { supabase } from '../integrations/supabase/client';
+import { useAuth } from '../contexts/AuthContext';
+import { DatabaseService } from '../lib/database';
+import type { OrganizationMember } from '../lib/types';
 
 interface EditModalProps {
-  officer: RangeOfficer | null;
+  officer: OrganizationMember | null;
   onClose: () => void;
-  onSave: (officer: RangeOfficer) => void;
+  onSave: (officer: Partial<OrganizationMember>) => void;
 }
 
 function EditModal({ officer, onClose, onSave }: EditModalProps) {
-  const [formData, setFormData] = useState(
-    officer || {
-      id: Date.now(),
-      name: '',
-      email: '',
-      active: true,
-      addedDate: new Date()
-    }
-  );
+  const [formData, setFormData] = useState({
+    full_name: officer?.full_name || '',
+    email: officer?.email || '',
+    active: officer?.active ?? true,
+  });
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.email.trim()) {
+    if (!formData.full_name.trim() || !formData.email.trim()) {
       setError('Alle felt må fylles ut');
       return;
     }
-    onSave(formData);
+    onSave({
+      ...(officer || {}),
+      full_name: formData.full_name,
+      email: formData.email,
+      active: formData.active,
+      role: 'range_officer'  // Ensure role is set to range_officer
+    });
   };
 
   return (
@@ -107,8 +57,8 @@ function EditModal({ officer, onClose, onSave }: EditModalProps) {
               </label>
               <input
                 type="text"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                value={formData.full_name}
+                onChange={(e) => setFormData(prev => ({ ...prev, full_name: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
                 placeholder="Fullt navn"
               />
@@ -169,67 +119,171 @@ function EditModal({ officer, onClose, onSave }: EditModalProps) {
 }
 
 export function RangeOfficerManagement() {
-  const [officers, setOfficers] = useState<RangeOfficer[]>(initialRangeOfficers);
-  const [editingOfficer, setEditingOfficer] = useState<RangeOfficer | null>(null);
+  const { organization } = useAuth();
+  const [officers, setOfficers] = useState<OrganizationMember[]>([]);
+  const [editingOfficer, setEditingOfficer] = useState<OrganizationMember | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load officers from localStorage on component mount
+  // Fetch range officers from database
+  const fetchRangeOfficers = async () => {
+    if (!organization?.id) return;
+    
+    try {
+      setError(null);
+      const members = await DatabaseService.getOrganizationMembers(organization.id);
+      
+      // Filter for range officers only
+      const rangeOfficers = members.filter(member => 
+        member.role === 'range_officer' && member.approved
+      );
+      
+      setOfficers(rangeOfficers);
+    } catch (error) {
+      console.error('Error fetching range officers:', error);
+      setError('Kunne ikke laste standplassledere');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load officers when component mounts or organization changes
   useEffect(() => {
-    const loadOfficers = () => {
-      try {
-        const savedOfficers = localStorage.getItem('rangeOfficers');
-        const savedOfficersData = savedOfficers ? JSON.parse(savedOfficers) : [];
-        
-        const parsedOfficers = savedOfficersData.map((officer: any) => ({
-          ...officer,
-          addedDate: new Date(officer.addedDate)
-        }));
-        
-        // Combine with dummy data
-        const allOfficers = [...dummyRangeOfficers, ...parsedOfficers];
-        setOfficers(allOfficers);
-      } catch (error) {
-        console.error('Error loading officers:', error);
-        setOfficers(dummyRangeOfficers); // Fallback to dummy data
-      } finally {
-        setLoading(false);
-      }
+    fetchRangeOfficers();
+  }, [organization?.id]);
+
+  // Set up real-time subscription for organization members
+  useEffect(() => {
+    if (!organization?.id) return;
+
+    const channel = supabase
+      .channel('range-officers-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'organization_members',
+          filter: `organization_id=eq.${organization.id}`,
+        },
+        (payload) => {
+          console.log('Range officer change detected:', payload);
+          // Refetch data when changes occur
+          fetchRangeOfficers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
     };
+  }, [organization?.id]);
 
-    loadOfficers();
-  }, []);
-
-  // Save officers to localStorage whenever officers change
-  useEffect(() => {
-    if (!loading && officers.length > 0) {
-      localStorage.setItem('rangeOfficers', JSON.stringify(officers));
+  const handleSave = async (updatedOfficer: Partial<OrganizationMember>) => {
+    if (!organization?.id) return;
+    
+    try {
+      setLoading(true);
+      
+      if (editingOfficer) {
+        // Update existing officer
+        const { error } = await supabase
+          .from('organization_members')
+          .update({
+            full_name: updatedOfficer.full_name,
+            email: updatedOfficer.email,
+            active: updatedOfficer.active,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingOfficer.id);
+        
+        if (error) throw error;
+      } else {
+        // Add new officer
+        const { error } = await supabase
+          .from('organization_members')
+          .insert([{
+            organization_id: organization.id,
+            full_name: updatedOfficer.full_name!,
+            email: updatedOfficer.email!,
+            role: 'range_officer',
+            active: updatedOfficer.active ?? true,
+            approved: true, // Auto-approve range officers added by admin
+          }]);
+        
+        if (error) throw error;
+      }
+      
+      // Refresh the list
+      await fetchRangeOfficers();
+      
+      setEditingOfficer(null);
+      setShowAddModal(false);
+    } catch (error) {
+      console.error('Error saving officer:', error);
+      setError('Kunne ikke lagre standplassleder');
+    } finally {
+      setLoading(false);
     }
-  }, [officers, loading]);
-
-  const handleSave = (updatedOfficer: RangeOfficer) => {
-    if (editingOfficer) {
-      setOfficers(prev => prev.map(officer => 
-        officer.id === updatedOfficer.id ? updatedOfficer : officer
-      ));
-    } else {
-      setOfficers(prev => [...prev, updatedOfficer]);
-    }
-    setEditingOfficer(null);
-    setShowAddModal(false);
   };
 
-  const handleDelete = (id: number) => {
-    if (window.confirm('Er du sikker på at du vil slette denne standplasslederen?')) {
-      setOfficers(prev => prev.filter(officer => officer.id !== id));
+  const handleDelete = async (officer: OrganizationMember) => {
+    if (!window.confirm('Er du sikker på at du vil slette denne standplasslederen?')) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      const { error } = await supabase
+        .from('organization_members')
+        .delete()
+        .eq('id', officer.id);
+      
+      if (error) throw error;
+      
+      // Refresh the list
+      await fetchRangeOfficers();
+    } catch (error) {
+      console.error('Error deleting officer:', error);
+      setError('Kunne ikke slette standplassleder');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleToggleActive = (id: number) => {
-    setOfficers(prev => prev.map(officer =>
-      officer.id === id ? { ...officer, active: !officer.active } : officer
-    ));
+  const handleToggleActive = async (officer: OrganizationMember) => {
+    try {
+      setLoading(true);
+      
+      const { error } = await supabase
+        .from('organization_members')
+        .update({
+          active: !officer.active,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', officer.id);
+      
+      if (error) throw error;
+      
+      // Refresh the list
+      await fetchRangeOfficers();
+    } catch (error) {
+      console.error('Error toggling officer status:', error);
+      setError('Kunne ikke oppdatere status');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (!organization) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <p className="text-gray-400">Ingen organisasjon valgt</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -243,84 +297,106 @@ export function RangeOfficerManagement() {
         <button
           onClick={() => setShowAddModal(true)}
           className="btn-primary"
+          disabled={loading}
         >
           <PlusCircle className="w-5 h-5" />
           Legg til ny
         </button>
       </div>
 
+      {error && (
+        <div className="p-4 bg-red-900/50 border border-red-700 rounded-lg flex items-center gap-2 text-red-200">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <p>{error}</p>
+        </div>
+      )}
+
       <div className="card">
         {loading ? (
           <div className="flex items-center justify-center p-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-svpk-yellow"></div>
           </div>
+        ) : officers.length === 0 ? (
+          <div className="text-center p-8">
+            <p className="text-gray-400 mb-4">Ingen standplassledere funnet</p>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="btn-primary"
+            >
+              <PlusCircle className="w-5 h-5" />
+              Legg til første standplassleder
+            </button>
+          </div>
         ) : (
-        <div>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-700">
-                <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base">Navn</th>
-                <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base hidden sm:table-cell">E-post</th>
-                <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base hidden md:table-cell">Lagt til</th>
-                <th className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base">Status</th>
-                <th className="py-2 px-2 sm:py-3 sm:px-4 text-right text-sm sm:text-base">Handling</th>
-              </tr>
-            </thead>
-            <tbody>
-              {officers.map((officer) => (
-                <tr key={officer.id} className="border-b border-gray-700">
-                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">
-                    <div>
-                      <div className="font-medium">{officer.name}</div>
-                      <div className="text-xs text-gray-400 sm:hidden">{officer.email}</div>
-                      <div className="text-xs text-gray-400 md:hidden">
-                        {officer.addedDate.toLocaleDateString('nb-NO')}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden sm:table-cell">{officer.email}</td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden md:table-cell">
-                    {officer.addedDate.toLocaleDateString('nb-NO')}
-                  </td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4">
-                    <div className="flex justify-center">
-                      <button
-                        onClick={() => handleToggleActive(officer.id)}
-                        className={`flex items-center gap-1 px-1 py-1 rounded ${
-                          officer.active 
-                            ? 'text-green-400 hover:bg-green-400/10' 
-                            : 'text-red-400 hover:bg-red-400/10'
-                        }`}
-                      >
-                        {officer.active ? (
-                          <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                        ) : (
-                          <XCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-                        )}
-                      </button>
-                    </div>
-                  </td>
-                  <td className="py-2 px-2 sm:py-3 sm:px-4">
-                    <div className="flex justify-end gap-1 sm:gap-2">
-                      <button
-                        onClick={() => setEditingOfficer(officer)}
-                        className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors"
-                      >
-                        <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(officer.id)}
-                        className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-red-400"
-                      >
-                        <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                      </button>
-                    </div>
-                  </td>
+          <div>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-700">
+                  <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base">Navn</th>
+                  <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base hidden sm:table-cell">E-post</th>
+                  <th className="py-2 px-2 sm:py-3 sm:px-4 text-left text-sm sm:text-base hidden md:table-cell">Lagt til</th>
+                  <th className="py-2 px-2 sm:py-3 sm:px-4 text-center text-sm sm:text-base">Status</th>
+                  <th className="py-2 px-2 sm:py-3 sm:px-4 text-right text-sm sm:text-base">Handling</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {officers.map((officer) => (
+                  <tr key={officer.id} className="border-b border-gray-700">
+                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base">
+                      <div>
+                        <div className="font-medium">{officer.full_name}</div>
+                        <div className="text-xs text-gray-400 sm:hidden">{officer.email}</div>
+                        <div className="text-xs text-gray-400 md:hidden">
+                          {officer.created_at && new Date(officer.created_at).toLocaleDateString('nb-NO')}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden sm:table-cell">{officer.email}</td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4 text-sm sm:text-base hidden md:table-cell">
+                      {officer.created_at && new Date(officer.created_at).toLocaleDateString('nb-NO')}
+                    </td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4">
+                      <div className="flex justify-center">
+                        <button
+                          onClick={() => handleToggleActive(officer)}
+                          className={`flex items-center gap-1 px-1 py-1 rounded ${
+                            officer.active 
+                              ? 'text-green-400 hover:bg-green-400/10' 
+                              : 'text-red-400 hover:bg-red-400/10'
+                          }`}
+                          disabled={loading}
+                        >
+                          {officer.active ? (
+                            <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                          ) : (
+                            <XCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                    <td className="py-2 px-2 sm:py-3 sm:px-4">
+                      <div className="flex justify-end gap-1 sm:gap-2">
+                        <button
+                          onClick={() => setEditingOfficer(officer)}
+                          className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors"
+                          disabled={loading}
+                        >
+                          <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(officer)}
+                          className="p-1 sm:p-2 hover:bg-gray-700 rounded-full transition-colors text-red-400"
+                          disabled={loading}
+                        >
+                          <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -330,6 +406,7 @@ export function RangeOfficerManagement() {
           onClose={() => {
             setEditingOfficer(null);
             setShowAddModal(false);
+            setError(null);
           }}
           onSave={handleSave}
         />
