@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Download, Calendar, Target, CheckCircle, Plus, Edit2, X, Save, Upload, Trash2 } from 'lucide-react';
 import { format, subMonths, isAfter } from 'date-fns';
 import { jsPDF } from 'jspdf';
@@ -35,7 +35,6 @@ interface EditTrainingModalProps {
 
 function EditTrainingModal({ entry, onClose, onSave }: EditTrainingModalProps) {
   const { t } = useLanguage();
-  const [editedEntry, setEditedEntry] = useState(entry);
   const [details, setDetails] = useState<TrainingDetails>(entry.details || {});
   const [uploadingImages, setUploadingImages] = useState(false);
 
@@ -88,7 +87,7 @@ function EditTrainingModal({ entry, onClose, onSave }: EditTrainingModalProps) {
 
   const handleSave = () => {
     const updatedEntry = {
-      ...editedEntry,
+      ...entry,
       details
     };
     
@@ -245,7 +244,7 @@ export function TrainingLog() {
     dfs_enabled: true,
     dssn_enabled: true
   });
-  const [, setAvailableActivities] = useState(['Trening', 'Stevne', 'Dugnad']);
+  const [availableActivities] = useState(['Trening', 'Stevne', 'Dugnad']);
 
   useEffect(() => {
     const loadTrainingSessions = async () => {
@@ -703,7 +702,7 @@ export function TrainingLog() {
               className="w-full bg-gray-700 rounded-lg px-4 py-2"
             >
               <option value="all">{t('log.all_activities')}</option>
-              {availableActivities.map(activity => (
+              {availableActivities.map((activity: string) => (
                 <option key={activity} value={activity}>{activity}</option>
               ))}
             </select>
