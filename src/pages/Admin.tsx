@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Shield, Plus, Calendar, CheckCircle } from 'lucide-react';
+import { getOrganizationTrainingSessions, verifyTrainingSession } from '../lib/supabase';
 import { MemberManagement } from '../components/MemberManagement';
 import { TrainingApprovalQueue } from '../components/TrainingApprovalQueue';
 import { QRCodeManagement } from '../components/QRCodeManagement';
@@ -13,7 +14,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { SupabaseStatus } from '../components/SupabaseStatus';
 
 export function Admin() {
-  const { user, profile } = useAuth();
+  const { user, profile, organization } = useAuth();
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'approvals' | 'qr' | 'log' | 'officers' | 'settings' | 'email'>('overview');
   const [showManualModal, setShowManualModal] = useState(false);
@@ -23,52 +24,52 @@ export function Admin() {
   const [todaysUnapprovedCount, setTodaysUnapprovedCount] = useState(0);
   const [selectedDateUnapprovedCount, setSelectedDateUnapprovedCount] = useState(0);
 
-  // Calculate today's unapproved count from TrainingApprovalQueue
+  // Load training sessions from database
   useEffect(() => {
-    const calculateCounts = () => {
+    if (!organization?.id) return;
+    
+    const loadTrainingSessions = async () => {
       try {
-        const savedApprovals = localStorage.getItem('pendingTrainingApprovals');
-        if (savedApprovals) {
-          const approvals = JSON.parse(savedApprovals);
-          const pendingApprovals = approvals.filter((approval: any) => !approval.approved);
+        const result = await getOrganizationTrainingSessions(organization.id);
+        if (result.data) {
+          const unverifiedSessions = result.data.filter(session => !session.verified);
           
           // Today's count
           const today = new Date().toDateString();
-          const todayCount = pendingApprovals.filter((approval: any) => 
-            new Date(approval.date).toDateString() === today
+          const todayCount = unverifiedSessions.filter(session => 
+            session.start_time && new Date(session.start_time).toDateString() === today
           ).length;
           setTodaysUnapprovedCount(todayCount);
           
           // Selected date count
           const selected = new Date(selectedDate).toDateString();
-          const selectedCount = pendingApprovals.filter((approval: any) => 
-            new Date(approval.date).toDateString() === selected
+          const selectedCount = unverifiedSessions.filter(session => 
+            session.start_time && new Date(session.start_time).toDateString() === selected
           ).length;
           setSelectedDateUnapprovedCount(selectedCount);
           
           // Update total pending count
-          setPendingApprovalsCount(pendingApprovals.length);
-        } else {
-          setTodaysUnapprovedCount(0);
-          setSelectedDateUnapprovedCount(0);
-          setPendingApprovalsCount(0);
+          setPendingApprovalsCount(unverifiedSessions.length);
         }
       } catch (error) {
-        console.error('Error calculating approval counts:', error);
+        console.error('Error loading training sessions:', error);
+        setTodaysUnapprovedCount(0);
+        setSelectedDateUnapprovedCount(0);
+        setPendingApprovalsCount(0);
       }
     };
 
-    calculateCounts();
+    loadTrainingSessions();
     
-    // Listen for updates
-    const interval = setInterval(calculateCounts, 2000);
+    // Refresh every 30 seconds
+    const interval = setInterval(loadTrainingSessions, 30000);
     return () => clearInterval(interval);
-  }, [selectedDate]);
+  }, [organization?.id, selectedDate]);
 
   // Check if user has admin access
   const hasAdminAccess = user?.user_type === 'super_user' || 
-                        user?.member_profile?.role === 'admin' ||
-                        user?.member_profile?.role === 'range_officer';
+                        (user?.user_type === 'organization_member' && 
+                         (user?.member_profile?.role === 'admin' || user?.member_profile?.role === 'range_officer'));
 
   if (!hasAdminAccess) {
     return (
@@ -82,15 +83,17 @@ export function Admin() {
     );
   }
 
-  const handleBulkApproveToday = () => {
-    const today = new Date().toDateString();
+  const handleBulkApproveToday = async () => {
+    if (!organization?.id) return;
     
-    // Get today's pending approvals
-    const savedApprovals = localStorage.getItem('pendingTrainingApprovals');
-    if (savedApprovals) {
-      const approvals = JSON.parse(savedApprovals);
-      const todayPending = approvals.filter((approval: any) => 
-        new Date(approval.date).toDateString() === today && !approval.approved
+    try {
+      // Get today's pending sessions from database
+      const result = await getOrganizationTrainingSessions(organization.id);
+      if (!result.data) return;
+      
+      const today = new Date().toDateString();
+      const todayPending = result.data.filter(session => 
+        !session.verified && session.start_time && new Date(session.start_time).toDateString() === today
       );
       
       if (todayPending.length === 0) {
@@ -101,54 +104,32 @@ export function Admin() {
       if (window.confirm(`Godkjenn alle ${todayPending.length} treningsøkter for dagens dato?`)) {
         const adminName = profile?.full_name || 'Admin';
         
-        // Mark approvals as approved
-        const updatedApprovals = approvals.map((approval: any) =>
-          new Date(approval.date).toDateString() === today && !approval.approved
-            ? { ...approval, approved: true, approvedBy: adminName, approvedAt: new Date().toISOString() }
-            : approval
-        );
-        
-        localStorage.setItem('pendingTrainingApprovals', JSON.stringify(updatedApprovals));
-        
-        // Update training sessions
-        const savedSessions = localStorage.getItem('trainingSessions');
-        if (savedSessions) {
-          const sessions = JSON.parse(savedSessions);
-          const updatedSessions = sessions.map((session: any) => {
-            const matchingApproval = todayPending.find((approval: any) => approval.sessionId === session.id);
-            if (matchingApproval) {
-              return { 
-                ...session, 
-                verified: true, 
-                approved: true,
-                verifiedBy: adminName,
-                rangeOfficer: adminName,
-                verification_time: new Date().toISOString()
-              };
-            }
-            return session;
-          });
-          localStorage.setItem('trainingSessions', JSON.stringify(updatedSessions));
+        // Verify all today's sessions
+        for (const session of todayPending) {
+          await verifyTrainingSession(session.id, adminName);
         }
-        
-        localStorage.setItem('trainingLogLastUpdate', Date.now().toString());
         
         // Reset counts
         setTodaysUnapprovedCount(0);
         setPendingApprovalsCount(prev => Math.max(0, prev - todayPending.length));
       }
+    } catch (error) {
+      console.error('Error in bulk approve today:', error);
+      alert('Det oppstod en feil ved bulk-godkjenning.');
     }
   };
 
-  const handleBulkApproveSelectedDate = () => {
-    const selected = new Date(selectedDate).toDateString();
+  const handleBulkApproveSelectedDate = async () => {
+    if (!organization?.id) return;
     
-    // Get selected date's pending approvals
-    const savedApprovals = localStorage.getItem('pendingTrainingApprovals');
-    if (savedApprovals) {
-      const approvals = JSON.parse(savedApprovals);
-      const selectedPending = approvals.filter((approval: any) => 
-        new Date(approval.date).toDateString() === selected && !approval.approved
+    try {
+      // Get selected date's pending sessions from database
+      const result = await getOrganizationTrainingSessions(organization.id);
+      if (!result.data) return;
+      
+      const selected = new Date(selectedDate).toDateString();
+      const selectedPending = result.data.filter(session => 
+        !session.verified && session.start_time && new Date(session.start_time).toDateString() === selected
       );
       
       if (selectedPending.length === 0) {
@@ -159,42 +140,18 @@ export function Admin() {
       if (window.confirm(`Godkjenn alle ${selectedPending.length} treningsøkter for ${new Date(selectedDate).toLocaleDateString('nb-NO')}?`)) {
         const adminName = profile?.full_name || 'Admin';
         
-        // Mark approvals as approved
-        const updatedApprovals = approvals.map((approval: any) =>
-          new Date(approval.date).toDateString() === selected && !approval.approved
-            ? { ...approval, approved: true, approvedBy: adminName, approvedAt: new Date().toISOString() }
-            : approval
-        );
-        
-        localStorage.setItem('pendingTrainingApprovals', JSON.stringify(updatedApprovals));
-        
-        // Update training sessions
-        const savedSessions = localStorage.getItem('trainingSessions');
-        if (savedSessions) {
-          const sessions = JSON.parse(savedSessions);
-          const updatedSessions = sessions.map((session: any) => {
-            const matchingApproval = selectedPending.find((approval: any) => approval.sessionId === session.id);
-            if (matchingApproval) {
-              return { 
-                ...session, 
-                verified: true, 
-                approved: true,
-                verifiedBy: adminName,
-                rangeOfficer: adminName,
-                verification_time: new Date().toISOString()
-              };
-            }
-            return session;
-          });
-          localStorage.setItem('trainingSessions', JSON.stringify(updatedSessions));
+        // Verify all selected date's sessions
+        for (const session of selectedPending) {
+          await verifyTrainingSession(session.id, adminName);
         }
-        
-        localStorage.setItem('trainingLogLastUpdate', Date.now().toString());
         
         // Reset counts
         setSelectedDateUnapprovedCount(0);
         setPendingApprovalsCount(prev => Math.max(0, prev - selectedPending.length));
       }
+    } catch (error) {
+      console.error('Error in bulk approve selected date:', error);
+      alert('Det oppstod en feil ved bulk-godkjenning.');
     }
   };
 

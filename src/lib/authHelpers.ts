@@ -8,8 +8,8 @@ export function isAdmin(user: AuthUser | null): boolean {
   if (!user) return false;
   
   return user.user_type === 'super_user' || 
-         user.member_profile?.role === 'admin' ||
-         user.member_profile?.role === 'range_officer';
+         (user.user_type === 'organization_member' &&
+          (user.member_profile?.role === 'admin' || user.member_profile?.role === 'range_officer'));
 }
 
 /**
@@ -33,7 +33,7 @@ export function canManageMembers(user: AuthUser | null): boolean {
   if (!user) return false;
   
   return user.user_type === 'super_user' || 
-         user.member_profile?.role === 'admin';
+         (user.user_type === 'organization_member' && user.member_profile?.role === 'admin');
 }
 
 /**
@@ -43,8 +43,8 @@ export function canVerifyTraining(user: AuthUser | null): boolean {
   if (!user) return false;
   
   return user.user_type === 'super_user' || 
-         user.member_profile?.role === 'admin' ||
-         user.member_profile?.role === 'range_officer';
+         (user.user_type === 'organization_member' &&
+          (user.member_profile?.role === 'admin' || user.member_profile?.role === 'range_officer'));
 }
 
 /**
@@ -54,7 +54,7 @@ export function canManageOrganization(user: AuthUser | null): boolean {
   if (!user) return false;
   
   return user.user_type === 'super_user' || 
-         user.member_profile?.role === 'admin';
+         (user.user_type === 'organization_member' && user.member_profile?.role === 'admin');
 }
 
 /**

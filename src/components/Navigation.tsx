@@ -22,8 +22,8 @@ export function Navigation() {
 
   // Check if user is admin or super user
   const isAdminUser = user?.user_type === 'super_user' || 
-                     user?.member_profile?.role === 'admin' ||
-                     user?.member_profile?.role === 'range_officer';
+                     (user?.user_type === 'organization_member' &&
+                      (user?.member_profile?.role === 'admin' || user?.member_profile?.role === 'range_officer'));
   
   return (
     <nav 
