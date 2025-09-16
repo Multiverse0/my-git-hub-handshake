@@ -495,8 +495,11 @@ export type Database = {
           active: boolean | null
           created_at: string | null
           description: string | null
+          dfs_enabled: boolean | null
+          dssn_enabled: boolean | null
           id: string
           name: string
+          nsf_enabled: boolean | null
           organization_id: string
           qr_code_id: string
           updated_at: string | null
@@ -505,8 +508,11 @@ export type Database = {
           active?: boolean | null
           created_at?: string | null
           description?: string | null
+          dfs_enabled?: boolean | null
+          dssn_enabled?: boolean | null
           id?: string
           name: string
+          nsf_enabled?: boolean | null
           organization_id: string
           qr_code_id: string
           updated_at?: string | null
@@ -515,8 +521,11 @@ export type Database = {
           active?: boolean | null
           created_at?: string | null
           description?: string | null
+          dfs_enabled?: boolean | null
+          dssn_enabled?: boolean | null
           id?: string
           name?: string
+          nsf_enabled?: boolean | null
           organization_id?: string
           qr_code_id?: string
           updated_at?: string | null
