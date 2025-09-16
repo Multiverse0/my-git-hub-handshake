@@ -17,6 +17,7 @@ export type Database = {
       member_training_sessions: {
         Row: {
           created_at: string | null
+          discipline: string | null
           duration_minutes: number | null
           end_time: string | null
           id: string
@@ -33,6 +34,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          discipline?: string | null
           duration_minutes?: number | null
           end_time?: string | null
           id?: string
@@ -49,6 +51,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          discipline?: string | null
           duration_minutes?: number | null
           end_time?: string | null
           id?: string

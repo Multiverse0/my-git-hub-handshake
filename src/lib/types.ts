@@ -101,9 +101,10 @@ export interface MemberTrainingSession {
   verified_by?: string | null;
   verification_time?: string | null;
   manual_entry: boolean | null;
+  notes?: string | null;
+  discipline?: string | null;
   created_at: string | null;
   updated_at: string | null;
-  notes?: string | null;
   member?: OrganizationMember;
   location?: TrainingLocation;
   organization_members?: OrganizationMember;

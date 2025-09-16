@@ -28,11 +28,36 @@ function EditModal({ location, onClose, onSave }: EditModalProps) {
   );
   const [error, setError] = useState<string | null>(null);
 
-  const generateQRCode = () => {
-    const prefix = 'svpk-';
-    const randomSuffix = Math.random().toString(36).substring(2, 8);
-    const qrCode = prefix + formData.name.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + randomSuffix;
-    setFormData(prev => ({ ...prev, qr_code_id: qrCode }));
+  const generateQRCode = (name: string, disciplines: { nsf: boolean; dfs: boolean; dssn: boolean }): string => {
+    // Determine primary discipline (first enabled one)
+    let prefix = '';
+    if (disciplines.nsf) prefix = 'nsf';
+    else if (disciplines.dfs) prefix = 'dfs';
+    else if (disciplines.dssn) prefix = 'dssn';
+    
+    const cleanName = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
+    const randomSuffix = Math.random().toString(36).substring(2, 6);
+    
+    return `${prefix}-${cleanName}-${randomSuffix}`;
+  };
+
+  const handleDisciplineChange = (discipline: string, enabled: boolean) => {
+    const updatedData = {
+      ...formData,
+      [`${discipline}_enabled`]: enabled
+    };
+    
+    // Update QR code when disciplines change and name exists
+    if (updatedData.name) {
+      const disciplines = {
+        nsf: updatedData.nsf_enabled ?? false,
+        dfs: updatedData.dfs_enabled ?? false,
+        dssn: updatedData.dssn_enabled ?? false
+      };
+      updatedData.qr_code_id = generateQRCode(updatedData.name, disciplines);
+    }
+    
+    setFormData(updatedData);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -79,7 +104,19 @@ function EditModal({ location, onClose, onSave }: EditModalProps) {
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                onChange={(e) => {
+                  const newName = e.target.value;
+                  const disciplines = {
+                    nsf: formData.nsf_enabled ?? false,
+                    dfs: formData.dfs_enabled ?? false,
+                    dssn: formData.dssn_enabled ?? false
+                  };
+                  setFormData(prev => ({ 
+                    ...prev, 
+                    name: newName,
+                    qr_code_id: newName ? generateQRCode(newName, disciplines) : ''
+                  }));
+                }}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
                 placeholder="F.eks. Innendørs 25m"
                 required
@@ -93,7 +130,19 @@ function EditModal({ location, onClose, onSave }: EditModalProps) {
                 </label>
                 <button
                   type="button"
-                  onClick={generateQRCode}
+                  onClick={() => {
+                    if (formData.name) {
+                      const disciplines = {
+                        nsf: formData.nsf_enabled ?? false,
+                        dfs: formData.dfs_enabled ?? false,
+                        dssn: formData.dssn_enabled ?? false
+                      };
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        qr_code_id: generateQRCode(formData.name, disciplines)
+                      }));
+                    }
+                  }}
                   className="text-sm text-svpk-yellow hover:text-yellow-400"
                 >
                   Generer automatisk
@@ -105,7 +154,7 @@ function EditModal({ location, onClose, onSave }: EditModalProps) {
                   value={formData.qr_code_id}
                   onChange={(e) => setFormData(prev => ({ ...prev, qr_code_id: e.target.value }))}
                   className="w-full bg-gray-700 rounded-md px-3 py-2 pr-10"
-                  placeholder="svpk-innendors-25m"
+                  placeholder="nsf-innendors-25m-abc1"
                   required
                 />
                 <button
@@ -118,7 +167,7 @@ function EditModal({ location, onClose, onSave }: EditModalProps) {
                 </button>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                Denne koden brukes til å generere QR-koder som medlemmer skanner
+                Koden starter med disiplin (nsf-, dfs-, dssn-) og brukes til å generere QR-koder
               </p>
             </div>
 
@@ -160,7 +209,7 @@ function EditModal({ location, onClose, onSave }: EditModalProps) {
                   <input
                     type="checkbox"
                     checked={formData.nsf_enabled ?? true}
-                    onChange={(e) => setFormData(prev => ({ ...prev, nsf_enabled: e.target.checked }))}
+                    onChange={(e) => handleDisciplineChange('nsf', e.target.checked)}
                     className="rounded border-gray-600"
                   />
                   <span className="text-sm text-gray-300">NSF (Norges Skytterforbund)</span>
@@ -170,7 +219,7 @@ function EditModal({ location, onClose, onSave }: EditModalProps) {
                   <input
                     type="checkbox"
                     checked={formData.dfs_enabled ?? false}
-                    onChange={(e) => setFormData(prev => ({ ...prev, dfs_enabled: e.target.checked }))}
+                    onChange={(e) => handleDisciplineChange('dfs', e.target.checked)}
                     className="rounded border-gray-600"
                   />
                   <span className="text-sm text-gray-300">DFS (Dynamisk Feltskyting)</span>
@@ -180,7 +229,7 @@ function EditModal({ location, onClose, onSave }: EditModalProps) {
                   <input
                     type="checkbox"
                     checked={formData.dssn_enabled ?? false}
-                    onChange={(e) => setFormData(prev => ({ ...prev, dssn_enabled: e.target.checked }))}
+                    onChange={(e) => handleDisciplineChange('dssn', e.target.checked)}
                     className="rounded border-gray-600"
                   />
                   <span className="text-sm text-gray-300">DSSN (Dynamisk Sportskyting Norge)</span>
@@ -470,6 +519,30 @@ export function QRCodeManagement() {
         )}
       </div>
 
+      {/* Information section */}
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="card">
+          <h3 className="text-lg font-semibold text-svpk-yellow mb-4">Slik bruker medlemmer QR-kodene</h3>
+          <ol className="list-decimal list-inside space-y-2 text-sm text-gray-300">
+            <li>Medlemmet åpner QR-skanneren i appen</li>
+            <li>Skanner QR-koden på skytebanen</li>
+            <li>Treningsøkten registreres automatisk med riktig disiplin</li>
+            <li>Skyteleder godkjenner økten</li>
+          </ol>
+        </div>
+
+        <div className="card">
+          <h3 className="text-lg font-semibold text-svpk-yellow mb-4">Tips for QR-kode generering</h3>
+          <ul className="list-disc list-inside space-y-2 text-sm text-gray-300">
+            <li>QR-koder starter med disiplin (nsf-, dfs-, dssn-)</li>
+            <li>Bruk beskrivende navn som "innendors-25m" eller "feltbane-klasse2"</li>
+            <li>Aktiver kun de disiplinene som faktisk kan utføres på banen</li>
+            <li>Print ut QR-kodene og fest dem på skytebanen</li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Modals */}
       {(editingLocation || showAddModal) && (
         <EditModal
           location={editingLocation}
@@ -480,30 +553,6 @@ export function QRCodeManagement() {
           onSave={handleSave}
         />
       )}
-
-      <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-6">
-        <h3 className="font-semibold text-blue-400 mb-3">📱 Slik bruker medlemmene QR-kodene:</h3>
-        <div className="space-y-2 text-sm text-blue-200">
-          <p>1. Medlemmet går til skanner-siden på telefonen</p>
-          <p>2. Skanner QR-koden som er hengt opp på skytebanen</p>
-          <p>3. Systemet registrerer automatisk oppmøte med tidsstempel</p>
-          <p>4. Standplassleder godkjenner økten i admin-panelet</p>
-        </div>
-        
-        <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-700 rounded">
-          <p className="text-xs text-yellow-200">
-            💡 <strong>Tips:</strong> Disse kodene kan brukes til å generere QR-koder for hver bane. 
-            Bruk QR-kode teksten over i en QR-kodegenerator som f.eks. <a 
-              href="https://qrgenerator.org/#text" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-yellow-400 hover:text-yellow-300 underline"
-            >
-              QR Code Generator
-            </a>. Skriv inn QR-kode teksten (f.eks. "svpk-innendors-25m") i generatoren og skriv ut QR-koden.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }

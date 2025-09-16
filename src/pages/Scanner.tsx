@@ -205,12 +205,14 @@ export function Scanner() {
       }
       
       const location = locationResult.data;
-      
+      const scannedDiscipline = (location as any).scannedDiscipline;
+
       // Start training session in database
       const sessionResult = await startTrainingSession(
         user.organization_id!,
         user.id,
-        location.id
+        location.id,
+        scannedDiscipline
       );
       
       if (sessionResult.error) {
