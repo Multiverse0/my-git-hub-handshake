@@ -142,9 +142,9 @@ export function TrainingApprovalQueue({ onCountChange }: TrainingApprovalQueuePr
         <div className="text-center py-8">
           <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-400 mb-2">Ingen ventende treningsøkter</p>
-          <p className="text-sm text-gray-500">
-            Treningsøkter som registreres via QR-skanning vil vises her for godkjenning
-          </p>
+           <p className="text-sm text-gray-500">
+             Både QR-skannede og manuelt registrerte treningsøkter vil vises her for godkjenning
+           </p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -152,13 +152,20 @@ export function TrainingApprovalQueue({ onCountChange }: TrainingApprovalQueuePr
             <div key={training.id} className="bg-gray-700 rounded-lg p-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-3">
-                    <User className="w-5 h-5 text-svpk-yellow" />
-                    <div>
-                      <h4 className="font-medium">{training.member?.full_name}</h4>
-                      <p className="text-sm text-gray-400">Medlem #{training.member?.member_number}</p>
-                    </div>
-                  </div>
+                   <div className="flex items-center gap-3 mb-3">
+                     <User className="w-5 h-5 text-svpk-yellow" />
+                     <div>
+                       <h4 className="font-medium flex items-center gap-2">
+                         {training.member?.full_name}
+                         {training.manual_entry && (
+                           <span className="px-2 py-1 bg-blue-600 text-white text-xs rounded-full">
+                             Manuell
+                           </span>
+                         )}
+                       </h4>
+                       <p className="text-sm text-gray-400">Medlem #{training.member?.member_number}</p>
+                     </div>
+                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div className="flex items-center gap-2">

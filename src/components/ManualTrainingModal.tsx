@@ -10,7 +10,7 @@ interface Props {
 }
 
 export function ManualTrainingModal({ onClose, onSuccess }: Props) {
-  const { profile, organization } = useAuth();
+  const { organization } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [trainingLocations, setTrainingLocations] = useState<Array<{id: string, name: string}>>([]);
@@ -79,14 +79,15 @@ export function ManualTrainingModal({ onClose, onSuccess }: Props) {
           date: formData.date,
           activity: formData.activity,
           notes: formData.notes
-        },
-        profile?.full_name || 'Administrator'
+        }
       );
       
       if (result.error) {
         throw new Error(result.error);
       }
       
+      // Show success message indicating approval is needed
+      alert('Treningsøkt registrert! Den må godkjennes under "DAGENS" fanen før den teller i loggen.');
       onSuccess();
     } catch (error) {
       console.error('Error creating manual training session:', error);

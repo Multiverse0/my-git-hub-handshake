@@ -813,8 +813,7 @@ export async function addManualTrainingSession(
     date: string;
     activity: string;
     notes?: string;
-  },
-  verifiedBy: string
+  }
 ): Promise<ApiResponse<MemberTrainingSession>> {
   try {
     const { data, error } = await supabase
@@ -826,9 +825,7 @@ export async function addManualTrainingSession(
         start_time: sessionData.date,
         end_time: sessionData.date,
         notes: sessionData.notes,
-        verified: true,
-        verified_by: verifiedBy,
-        verification_time: new Date().toISOString(),
+        verified: false,
         manual_entry: true
       })
       .select()
