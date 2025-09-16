@@ -951,6 +951,9 @@ export async function createTrainingLocation(
     name: string;
     qr_code_id: string;
     description?: string;
+    nsf_enabled?: boolean;
+    dfs_enabled?: boolean;
+    dssn_enabled?: boolean;
   }
 ): Promise<ApiResponse<TrainingLocation>> {
   try {
@@ -960,7 +963,10 @@ export async function createTrainingLocation(
         organization_id: organizationId,
         name: locationData.name,
         qr_code_id: locationData.qr_code_id,
-        description: locationData.description
+        description: locationData.description,
+        nsf_enabled: locationData.nsf_enabled ?? true,
+        dfs_enabled: locationData.dfs_enabled ?? false,
+        dssn_enabled: locationData.dssn_enabled ?? false
       })
       .select()
       .single();

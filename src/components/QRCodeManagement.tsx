@@ -18,6 +18,9 @@ function EditModal({ location, onClose, onSave }: EditModalProps) {
       qr_code_id: '',
       description: '',
       active: true,
+      nsf_enabled: true,
+      dfs_enabled: false,
+      dssn_enabled: false,
       organization_id: '',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
@@ -37,6 +40,12 @@ function EditModal({ location, onClose, onSave }: EditModalProps) {
     
     if (!formData.name.trim() || !formData.qr_code_id.trim()) {
       setError('Navn og QR-kode må fylles ut');
+      return;
+    }
+
+    // Validate that at least one discipline is enabled
+    if (!formData.nsf_enabled && !formData.dfs_enabled && !formData.dssn_enabled) {
+      setError('Minst én skytedisiplin må være aktivert');
       return;
     }
 
@@ -140,6 +149,49 @@ function EditModal({ location, onClose, onSave }: EditModalProps) {
               </p>
             </div>
 
+            {/* Shooting Disciplines */}
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-300">
+                Støttede skytedisipliner
+              </label>
+              
+              <div className="space-y-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.nsf_enabled ?? true}
+                    onChange={(e) => setFormData(prev => ({ ...prev, nsf_enabled: e.target.checked }))}
+                    className="rounded border-gray-600"
+                  />
+                  <span className="text-sm text-gray-300">NSF (Norges Skytterforbund)</span>
+                </label>
+                
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.dfs_enabled ?? false}
+                    onChange={(e) => setFormData(prev => ({ ...prev, dfs_enabled: e.target.checked }))}
+                    className="rounded border-gray-600"
+                  />
+                  <span className="text-sm text-gray-300">DFS (Dynamisk Feltskyting)</span>
+                </label>
+                
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.dssn_enabled ?? false}
+                    onChange={(e) => setFormData(prev => ({ ...prev, dssn_enabled: e.target.checked }))}
+                    className="rounded border-gray-600"
+                  />
+                  <span className="text-sm text-gray-300">DSSN (Dynamisk Sportskyting Norge)</span>
+                </label>
+              </div>
+              
+              <p className="text-xs text-gray-400">
+                Velg hvilke skytedisipliner som kan utføres på denne skytebanen
+              </p>
+            </div>
+
             {error && (
               <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg flex items-center gap-2 text-red-200">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -203,7 +255,10 @@ export function QRCodeManagement() {
           name: locationData.name,
           qr_code_id: locationData.qr_code_id,
           description: locationData.description || undefined,
-          active: locationData.active
+          active: locationData.active,
+          nsf_enabled: locationData.nsf_enabled,
+          dfs_enabled: locationData.dfs_enabled,
+          dssn_enabled: locationData.dssn_enabled
         });
         
         if (result.error) {
@@ -218,7 +273,10 @@ export function QRCodeManagement() {
         const result = await createTrainingLocation(organization.id, {
           name: locationData.name,
           qr_code_id: locationData.qr_code_id,
-          description: locationData.description || undefined
+          description: locationData.description || undefined,
+          nsf_enabled: locationData.nsf_enabled ?? true,
+          dfs_enabled: locationData.dfs_enabled ?? false,
+          dssn_enabled: locationData.dssn_enabled ?? false
         });
         
         if (result.error) {
@@ -336,6 +394,30 @@ export function QRCodeManagement() {
                     {location.description && (
                       <p className="text-gray-300 mb-4">{location.description}</p>
                     )}
+                    
+                    {/* Shooting Disciplines */}
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {location.nsf_enabled && (
+                        <span className="px-2 py-1 bg-svpk-yellow/20 text-svpk-yellow text-xs rounded-full">
+                          NSF
+                        </span>
+                      )}
+                      {location.dfs_enabled && (
+                        <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">
+                          DFS
+                        </span>
+                      )}
+                      {location.dssn_enabled && (
+                        <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">
+                          DSSN
+                        </span>
+                      )}
+                      {!location.nsf_enabled && !location.dfs_enabled && !location.dssn_enabled && (
+                        <span className="px-2 py-1 bg-gray-500/20 text-gray-400 text-xs rounded-full">
+                          Ingen disipliner aktivert
+                        </span>
+                      )}
+                    </div>
                     
                     <div className="bg-gray-600 rounded-lg p-4">
                       <div className="flex items-center justify-between mb-2">

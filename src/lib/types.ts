@@ -82,6 +82,9 @@ export interface TrainingLocation {
   qr_code_id: string;
   description?: string | null;
   active: boolean | null;
+  nsf_enabled?: boolean | null;
+  dfs_enabled?: boolean | null;
+  dssn_enabled?: boolean | null;
   created_at: string | null;
   updated_at: string | null;
 }
