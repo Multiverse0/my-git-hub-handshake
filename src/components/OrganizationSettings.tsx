@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Palette, Building2, Mail, Globe, FileText, Upload, Loader2, AlertCircle, CheckCircle, X, Plus, Trash2 } from 'lucide-react';
+import { Save, Palette, Building2, Mail, Globe, FileText, Upload, Loader2, AlertCircle, CheckCircle, X, Plus, Trash2, Copy } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { languages } from '../lib/translations';
@@ -61,6 +61,7 @@ export function OrganizationSettings() {
   const [languageError, setLanguageError] = useState<string | null>(null);
   const [requestedLanguage, setRequestedLanguage] = useState('');
   const [languageRequestSent, setLanguageRequestSent] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -398,6 +399,18 @@ export function OrganizationSettings() {
     localStorage.setItem('salesBanners', JSON.stringify(updatedBanners));
   };
 
+  const handleCopyOrganizationId = async () => {
+    if (!user?.organization?.id) return;
+    
+    try {
+      await navigator.clipboard.writeText(user.organization.id);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy organization ID:', error);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -424,6 +437,38 @@ export function OrganizationSettings() {
               className="w-full bg-gray-700 rounded-md px-3 py-2"
               placeholder="Klubbnavn"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Organisasjons-ID
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={user?.organization?.id || ''}
+                readOnly
+                className="w-full bg-gray-700 rounded-md px-3 py-2 pr-12 text-gray-400 cursor-not-allowed"
+                placeholder="Ingen organisasjon valgt"
+              />
+              {user?.organization?.id && (
+                <button
+                  type="button"
+                  onClick={handleCopyOrganizationId}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-white transition-colors"
+                  title="Kopier organisasjons-ID"
+                >
+                  {copySuccess ? (
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Unik identifikator for denne organisasjonen
+            </p>
           </div>
 
           <div>

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Package, AlertTriangle, CheckCircle, Loader2, FileText, Database, Archive } from 'lucide-react';
 import { format } from 'date-fns';
 import JSZip from 'jszip';
+import { supabase, setUserContext } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 interface DataExportManagerProps {
   organizationId: string;
@@ -19,6 +21,7 @@ interface ExportData {
 }
 
 export function DataExportManager({ organizationId, organizationName, onClose }: DataExportManagerProps) {
+  const { user } = useAuth();
   const [isExporting, setIsExporting] = useState(false);
   const [exportComplete, setExportComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,48 +33,84 @@ export function DataExportManager({ organizationId, organizationName, onClose }:
     admins: number;
   } | null>(null);
 
-  const gatherOrganizationData = (): ExportData => {
+  const gatherOrganizationData = async (): Promise<ExportData> => {
     try {
-      // Get organization data
-      const savedOrgs = localStorage.getItem('organizations');
-      const organizations = savedOrgs ? JSON.parse(savedOrgs) : [];
-      const organization = organizations.find((org: any) => org.id === organizationId);
+      // Ensure user context is set for RLS policies
+      if (user?.email) {
+        await setUserContext(user.email);
+      }
+
+      // Get organization data from Supabase
+      const { data: organization, error: orgError } = await supabase
+        .from('organizations')
+        .select('*')
+        .eq('id', organizationId)
+        .single();
+
+      if (orgError) {
+        console.error('Error fetching organization:', orgError);
+      }
 
       // Get members for this organization
-      const savedMembers = localStorage.getItem('members');
-      const allMembers = savedMembers ? JSON.parse(savedMembers) : [];
-      const orgMembers = allMembers.filter((member: any) => member.organization_id === organizationId);
+      const { data: orgMembers, error: membersError } = await supabase
+        .from('organization_members')
+        .select('*')
+        .eq('organization_id', organizationId);
+
+      if (membersError) {
+        console.error('Error fetching members:', membersError);
+      }
 
       // Get training sessions for this organization
-      const savedSessions = localStorage.getItem('trainingSessions');
-      const allSessions = savedSessions ? JSON.parse(savedSessions) : [];
-      const orgSessions = allSessions.filter((session: any) => 
-        orgMembers.some((member: any) => member.id === session.user_id || member.full_name === session.memberName)
-      );
+      const { data: orgSessions, error: sessionsError } = await supabase
+        .from('member_training_sessions')
+        .select(`
+          *,
+          organization_members (*),
+          training_locations (*),
+          training_session_details (*),
+          session_target_images (*)
+        `)
+        .eq('organization_id', organizationId);
+
+      if (sessionsError) {
+        console.error('Error fetching training sessions:', sessionsError);
+      }
 
       // Get training locations for this organization
-      const savedLocations = localStorage.getItem('rangeLocations');
-      const trainingLocations = savedLocations ? JSON.parse(savedLocations) : [];
+      const { data: trainingLocations, error: locationsError } = await supabase
+        .from('training_locations')
+        .select('*')
+        .eq('organization_id', organizationId);
+
+      if (locationsError) {
+        console.error('Error fetching training locations:', locationsError);
+      }
 
       // Get organization settings
-      const savedSettings = localStorage.getItem('organizationSettings');
-      const allSettings = savedSettings ? JSON.parse(savedSettings) : [];
-      const orgSettings = allSettings.filter((setting: any) => setting.organization_id === organizationId);
+      const { data: orgSettings, error: settingsError } = await supabase
+        .from('organization_settings')
+        .select('*')
+        .eq('organization_id', organizationId);
+
+      if (settingsError) {
+        console.error('Error fetching organization settings:', settingsError);
+      }
 
       // Get organization admins
-      const orgAdmins = orgMembers.filter((member: any) => member.role === 'admin');
+      const orgAdmins = (orgMembers || []).filter((member: any) => member.role === 'admin');
 
       return {
         organization: organization || {},
-        members: orgMembers,
-        trainingSessions: orgSessions,
-        trainingLocations,
-        settings: orgSettings,
+        members: orgMembers || [],
+        trainingSessions: orgSessions || [],
+        trainingLocations: trainingLocations || [],
+        settings: orgSettings || [],
         admins: orgAdmins
       };
     } catch (error) {
       console.error('Error gathering organization data:', error);
-      throw new Error('Kunne ikke samle organisasjonsdata');
+      throw new Error('Kunne ikke samle organisasjonsdata fra database');
     }
   };
 
@@ -271,7 +310,7 @@ Kontakt: yngve@promonorge.no for gjenopprettingshjelp
       setError(null);
 
       // Gather all organization data
-      const data = gatherOrganizationData();
+      const data = await gatherOrganizationData();
       
       // Set export statistics
       setExportStats({
