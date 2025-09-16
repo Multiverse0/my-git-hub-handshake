@@ -653,6 +653,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_current_user_organization_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       get_organization_admins: {
         Args: { org_id: string }
         Returns: {
@@ -664,6 +668,14 @@ export type Database = {
           member_id: string
           permissions: Json
         }[]
+      }
+      get_user_member_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      is_user_organization_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
       }
       set_config: {
         Args: {
