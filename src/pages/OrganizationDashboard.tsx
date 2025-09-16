@@ -2,16 +2,10 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Building2, Users, Settings, UserPlus, Eye, EyeOff, Copy, CheckCircle, AlertCircle, Loader2, Shield, Edit2, Trash2, Save, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { addOrganizationMember, updateMemberRole, updateOrganizationMember, getOrganizationById, supabase } from '../lib/supabase';
+import { addOrganizationMember, updateMemberRole, updateOrganizationMember, getOrganizationById, getOrganizationAdmins, supabase } from '../lib/supabase';
+import { sendAdminWelcomeEmail } from '../lib/emailService';
+import { OrganizationAdmin } from '../lib/types';
 import { OrganizationSettings } from '../components/OrganizationSettings';
-
-interface OrganizationAdmin {
-  id: string;
-  email: string;
-  full_name: string;
-  created_at: string;
-  active: boolean;
-}
 
 interface CreateAdminModalProps {
   organizationId: string;
@@ -132,7 +126,7 @@ function EditAdminModal({ admin, organizationName, onClose, onSuccess }: EditAdm
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={formData.active}
+                  checked={formData.active || false}
                   onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))}
                   className="rounded border-gray-600"
                 />
@@ -274,21 +268,25 @@ function CreateAdminModal({ organizationId, organizationName, onClose, onSuccess
         throw new Error(result.error);
       }
 
-      // Send actual welcome email
-      // TODO: Re-enable email sending when Edge Function is configured
-      // const loginUrl = generateLoginUrl(organizationId);
-      // const emailResult = await sendAdminWelcomeEmail(
-      //   formData.email,
-      //   formData.full_name,
-      //   organizationName,
-      //   organizationId,
-      //   formData.password,
-      //   loginUrl
-      // );
-      //
-      // if (!emailResult.success) {
-      //   console.warn('Email sending failed:', emailResult.error);
-      // }
+      // Send welcome email
+      const loginUrl = `${window.location.origin}/login?org=${organizationId}`;
+      try {
+        const emailResult = await sendAdminWelcomeEmail(
+          formData.email,
+          formData.full_name,
+          organizationName,
+          organizationId,
+          formData.password,
+          loginUrl
+        );
+        
+        if (!emailResult.success) {
+          console.warn('Email sending failed:', emailResult.error);
+        }
+      } catch (emailError) {
+        console.warn('Email service error:', emailError);
+        // Don't fail the entire operation if email fails
+      }
 
       setEmailSent(true);
 
@@ -581,18 +579,14 @@ export function OrganizationDashboard() {
         totalAdmins: orgMembers.filter((m: any) => m.role === 'admin').length
       });
 
-      // Set admins from Supabase data
-      const adminUsers: OrganizationAdmin[] = orgMembers
-        .filter((m: any) => m.role === 'admin')
-        .map((m: any) => ({
-          id: m.id,
-          email: m.email,
-          full_name: m.full_name,
-          created_at: m.created_at || new Date().toISOString(),
-          active: m.active !== false
-        }));
-
-      setAdmins(adminUsers);
+      // Load admins using the new database function
+      const adminsResult = await getOrganizationAdmins(orgId || '');
+      if (adminsResult.error) {
+        console.error('Error loading admins:', adminsResult.error);
+        setAdmins([]);
+      } else {
+        setAdmins(adminsResult.data || []);
+      }
 
     } catch (error) {
       console.error('Error loading organization data:', error);
@@ -826,7 +820,7 @@ export function OrganizationDashboard() {
                           </td>
                           <td className="py-3 px-4">{admin.email}</td>
                           <td className="py-3 px-4">
-                            {new Date(admin.created_at).toLocaleDateString('nb-NO')}
+                            {admin.created_at ? new Date(admin.created_at).toLocaleDateString('nb-NO') : 'N/A'}
                           </td>
                           <td className="py-3 px-4">
                             <span className={`px-2 py-1 rounded text-xs ${
@@ -847,9 +841,10 @@ export function OrganizationDashboard() {
                                 <Edit2 className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => handleDeleteAdmin(admin.id, admin.full_name)}
+                                onClick={() => handleDeleteAdmin(admin.id || '', admin.full_name || '')}
                                 className="p-2 text-red-400 hover:text-red-300"
                                 title="Fjern admin-tilgang"
+                                disabled={!admin.id}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>

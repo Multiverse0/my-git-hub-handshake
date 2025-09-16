@@ -11,6 +11,7 @@ import type {
   AuthUser,
   SuperUser,
   Organization,
+  OrganizationAdmin,
   OrganizationBranding,
   OrganizationMember, 
   MemberTrainingSession,
@@ -511,10 +512,29 @@ export async function getOrganizationMembers(organizationId: string): Promise<Ap
       return { error: error.message };
     }
 
-    return { data: data as any[] };
+  return { data: data as any[] };
   } catch (error) {
     console.error('Error getting organization members:', error);
     return { error: 'Kunne ikke hente medlemmer' };
+  }
+}
+
+/**
+ * Get organization admins with proper relationship data
+ */
+export async function getOrganizationAdmins(organizationId: string): Promise<ApiResponse<OrganizationAdmin[]>> {
+  try {
+    const { data, error } = await supabase
+      .rpc('get_organization_admins', { org_id: organizationId });
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    return { data: data as any[] };
+  } catch (error) {
+    console.error('Error getting organization admins:', error);
+    return { error: 'Kunne ikke hente administratorer' };
   }
 }
 
@@ -599,7 +619,7 @@ export async function addOrganizationMember(
       }
     }
 
-    // Create organization member
+    // Create organization member (trigger will automatically create admin record if role is admin)
     const { data, error } = await supabase
       .from('organization_members')
       .insert({
