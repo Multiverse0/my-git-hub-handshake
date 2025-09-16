@@ -17,7 +17,11 @@ export interface Organization {
   active: boolean | null;
   subscription_plan?: 'starter' | 'professional';
   admin_notes?: string;
-  background_color?: string; // Legacy property
+  background_color?: string | null;
+  nsf_enabled?: boolean | null;
+  dfs_enabled?: boolean | null;
+  dssn_enabled?: boolean | null;
+  activity_types?: any;
 }
 
 export interface OrganizationSettings {
@@ -152,7 +156,11 @@ export interface OrganizationBranding {
   primary_color: string;
   secondary_color: string;
   logo_url?: string | null;
-  background_color?: string; // Legacy property
+  background_color?: string | null;
+  nsf_enabled?: boolean | null;
+  dfs_enabled?: boolean | null;
+  dssn_enabled?: boolean | null;
+  activity_types?: any;
 }
 
 // Authentication types

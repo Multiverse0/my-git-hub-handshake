@@ -1,7 +1,6 @@
 // This file provides a comprehensive interface for interacting with a Supabase backend, handling authentication, organization management, member management, training sessions, and file uploads.
 
 import { supabase } from '../integrations/supabase/client';
-import { safeDate } from './typeUtils';
 
 // Export supabase for other components
 export { supabase };
@@ -61,11 +60,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
         id: user.id,
         email: user.email!,
         user_type: 'super_user',
-        profile: {
-          id: user.id,
-          email: user.email!,
-          full_name: superUserData.full_name
-        }
+        super_user_profile: superUserData
       };
     }
 
@@ -82,21 +77,20 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       .maybeSingle();
 
     if (memberData) {
-      const isAdmin = !!memberData.organization_admins;
+      // Get organization data
+      const { data: orgData } = await supabase
+        .from('organizations')
+        .select('*')
+        .eq('id', memberData.organization_id)
+        .single();
       
       return {
         id: memberData.id,
         email: user.email!,
-        user_type: isAdmin ? 'admin' : 'member',
+        user_type: 'organization_member',
         organization_id: memberData.organization_id,
-        profile: {
-          id: memberData.id,
-          email: user.email!,
-          full_name: memberData.full_name,
-          member_number: memberData.member_number,
-          role: memberData.role,
-          avatar_url: memberData.avatar_url
-        }
+        organization: orgData || undefined,
+        member_profile: memberData
       };
     }
 
@@ -104,12 +98,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     return {
       id: user.id,
       email: user.email!,
-      user_type: 'user',
-      profile: {
-        id: user.id,
-        email: user.email!,
-        full_name: user.user_metadata?.full_name || user.email!
-      }
+      user_type: 'organization_member'
     };
 
   } catch (error) {
