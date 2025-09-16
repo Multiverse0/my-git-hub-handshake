@@ -712,7 +712,8 @@ export async function getTrainingLocationByQR(
 export async function startTrainingSession(
   organizationId: string,
   memberId: string,
-  locationId: string
+  locationId: string,
+  discipline?: string
 ): Promise<ApiResponse<MemberTrainingSession>> {
   try {
     const { data, error } = await supabase
@@ -721,6 +722,7 @@ export async function startTrainingSession(
         organization_id: organizationId,
         member_id: memberId,
         location_id: locationId,
+        discipline: discipline || null,
         start_time: new Date().toISOString(),
         verified: false
       })
