@@ -16,8 +16,7 @@ export function Register() {
     email: '',
     password: '',
     confirmPassword: '',
-    memberNumber: '',
-    role: 'member' as 'member' | 'admin' | 'range_officer' | 'super_user'
+    memberNumber: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -36,9 +35,7 @@ export function Register() {
         const superUsersExist = await checkSuperUsersExist();
         setNeedsSetup(!superUsersExist);
         
-        if (!superUsersExist) {
-          setFormData(prev => ({ ...prev, role: 'super_user' }));
-        }
+        // No need to set role for super user setup
       } catch (error) {
         console.error('Error checking setup status:', error);
         setNeedsSetup(true);
@@ -97,7 +94,7 @@ export function Register() {
       setError(null);
       setSuccess(null);
 
-      if (formData.role === 'super_user') {
+      if (needsSetup) {
         // Create first super user
         const result = await createFirstSuperUser(
           formData.email,
@@ -122,11 +119,10 @@ export function Register() {
           formData.email,
           formData.password,
           formData.fullName,
-          formData.memberNumber,
-          formData.role
+          formData.memberNumber
         );
 
-        setSuccess('Registrering vellykket! Du kan nå logge inn når en administrator har godkjent medlemskapet ditt.');
+        setSuccess('Registrering vellykket! Du vil motta en e-post når en administrator har godkjent medlemskapet ditt.');
         
         // Redirect to login after 3 seconds
         setTimeout(() => {
@@ -265,23 +261,6 @@ export function Register() {
             </div>
           )}
 
-          {!needsSetup && (
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Rolle
-              </label>
-              <select
-                value={formData.role}
-                onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value as any }))}
-                className="w-full bg-gray-700 rounded-lg px-4 py-2"
-                disabled={isLoading}
-              >
-                <option value="member">Medlem</option>
-                <option value="range_officer">Standplassleder</option>
-                <option value="admin">Administrator</option>
-              </select>
-            </div>
-          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">

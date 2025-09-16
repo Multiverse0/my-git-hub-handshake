@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Plus, Edit2, Trash2, Shield, AlertCircle, X, Loader2, Eye, EyeOff, Copy, Save, Package, Globe, Users, CheckCircle } from 'lucide-react';
+import { Building2, Plus, Edit2, Trash2, Shield, AlertCircle, X, Loader2, Eye, EyeOff, Copy, Save, Package, Globe, Users, CheckCircle, Mail } from 'lucide-react';
 import { supabase, createOrganization, setUserContext } from '../lib/supabase';
 import bcrypt from 'bcryptjs';
 import { useAuth } from '../contexts/AuthContext';
 import type { Organization } from '../lib/types';
 import { ThemeToggle } from '../components/ThemeToggle';
+import { EmailManagement } from '../components/EmailManagement';
 import { DataExportManager } from '../components/DataExportManager';
 import { LanguageFileManager } from '../components/LanguageFileManager';
 import { SupabaseStatus } from '../components/SupabaseStatus';
@@ -677,7 +678,7 @@ export function SuperAdmin() {
   const [superUsers, setSuperUsers] = useState<any[]>([]);
   const [, setSelectedOrg] = useState<string | null>(null);
   const [editingSuperUser, setEditingSuperUser] = useState<any | null>(null);
-  const [activeTab, setActiveTab] = useState<'organizations' | 'languages'>('organizations');
+  const [activeTab, setActiveTab] = useState<'organizations' | 'languages' | 'email'>('organizations');
   const [exportingOrg, setExportingOrg] = useState<{ id: string; name: string } | null>(null);
   
   // Statistics state
@@ -972,11 +973,26 @@ export function SuperAdmin() {
               <Globe className="w-4 h-4 inline mr-2" />
               Språkfiler
             </button>
+            <button
+              onClick={() => setActiveTab('email')}
+              className={`px-4 py-2 text-sm font-medium ${
+                activeTab === 'email'
+                  ? 'text-svpk-yellow border-b-2 border-svpk-yellow'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Mail className="w-4 h-4 inline mr-2" />
+              E-post
+            </button>
           </div>
         </header>
 
         {activeTab === 'languages' && (
           <LanguageFileManager />
+        )}
+
+        {activeTab === 'email' && (
+          <EmailManagement />
         )}
 
         {activeTab === 'organizations' && (

@@ -8,7 +8,6 @@ import { ManualTrainingModal } from '../components/ManualTrainingModal';
 import { AdminFullTrainingLog } from '../components/AdminFullTrainingLog';
 import { OrganizationSettings } from '../components/OrganizationSettings';
 import { RangeOfficerManagement } from '../components/RangeOfficerManagement';
-import { EmailManagement } from '../components/EmailManagement';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { SupabaseStatus } from '../components/SupabaseStatus';
@@ -372,9 +371,6 @@ export function Admin() {
         <QRCodeManagement />
       )}
 
-      {user?.user_type === 'super_user' && activeTab === 'email' && (
-        <EmailManagement />
-      )}
 
       {showManualModal && (
         <ManualTrainingModal

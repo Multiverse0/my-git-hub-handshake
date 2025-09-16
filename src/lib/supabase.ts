@@ -17,6 +17,7 @@ import type {
   MemberTrainingSession,
   TrainingLocation
 } from './types';
+import { sendMemberWelcomeEmail } from './emailService';
 
 // =============================================================================
 // USER CONTEXT AND AUTHENTICATION
@@ -488,6 +489,21 @@ export async function registerOrganizationMember(
 
     if (memberError) {
       return { error: memberError.message };
+    }
+
+    // Send welcome email to new member
+    try {
+      await sendMemberWelcomeEmail(
+        email,
+        fullName,
+        organization.name,
+        organization.id,
+        memberNumber
+      );
+      console.log('✅ Welcome email sent successfully');
+    } catch (emailError) {
+      console.warn('⚠️ Could not send welcome email:', emailError);
+      // Don't fail registration if email fails
     }
 
     return { data: memberData as any };
