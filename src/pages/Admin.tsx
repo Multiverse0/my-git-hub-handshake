@@ -388,7 +388,7 @@ export function Admin() {
 
       {/* Supabase Connection Status - Bottom of page */}
       <div className="mt-12 pt-6 border-t border-gray-700">
-        <SupabaseStatus showDetails={false} collapsible={true} />
+        <SupabaseStatus iconOnly={true} />
       </div>
     </div>
   );

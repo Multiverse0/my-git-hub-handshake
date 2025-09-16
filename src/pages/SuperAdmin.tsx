@@ -914,7 +914,7 @@ export function SuperAdmin() {
               <p className="text-gray-400">Administrer alle organisasjoner i systemet</p>
             </div>
             <div className="flex items-center gap-4">
-              <SupabaseStatus showDetails={false} />
+              <SupabaseStatus iconOnly={true} />
               <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
                 <ThemeToggle />
               </div>
