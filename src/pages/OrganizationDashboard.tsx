@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Building2, Users, Settings, UserPlus, Eye, EyeOff, Copy, CheckCircle, AlertCircle, Loader2, Shield, Edit2, Trash2, Save, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { addOrganizationMember, updateMemberRole, supabase } from '../lib/supabase';
+import { addOrganizationMember, updateMemberRole, updateOrganizationMember, getOrganizationById, supabase } from '../lib/supabase';
 import { OrganizationSettings } from '../components/OrganizationSettings';
 
 interface OrganizationAdmin {
@@ -60,25 +60,25 @@ function EditAdminModal({ admin, organizationName, onClose, onSuccess }: EditAdm
     setError(null);
 
     try {
-      // Update admin user
-      const savedMembers = localStorage.getItem('members');
-      if (savedMembers) {
-        const members = JSON.parse(savedMembers);
-        const updatedMembers = await Promise.all(members.map(async (member: any) => {
-          if (member.id === admin.id) {
-            const updatedMember = { ...member, ...formData, updated_at: new Date().toISOString() };
-            
-            // Hash new password if provided (simplified for browser)
-            if (formData.password && generateNewPassword) {
-              // In a real app, password hashing would be done server-side
-              updatedMember.password_hash = formData.password; // Simplified - don't do this in production
-            }
-            
-            return updatedMember;
-          }
-          return member;
-        }));
-        localStorage.setItem('members', JSON.stringify(updatedMembers));
+      // Prepare update data
+      const updateData: any = {
+        email: formData.email,
+        full_name: formData.full_name,
+        active: formData.active,
+        updated_at: new Date().toISOString()
+      };
+
+      // Only include password hash if new password was generated
+      if (formData.password && generateNewPassword) {
+        // Note: In production, password hashing should be done server-side
+        updateData.password_hash = formData.password;
+      }
+
+      // Update admin using Supabase
+      const result = await updateOrganizationMember(admin.id, updateData);
+      
+      if (result.error) {
+        throw new Error(result.error);
       }
 
       onSuccess();
@@ -532,79 +532,67 @@ export function OrganizationDashboard() {
     try {
       setLoading(true);
       
-      // Load organization from localStorage
-      const savedOrgs = localStorage.getItem('organizations');
-      let targetOrg = null;
+      // Load organization from Supabase
+      const orgResult = await getOrganizationById(orgId || '');
       
-      if (savedOrgs) {
-        const organizations = JSON.parse(savedOrgs);
-        targetOrg = organizations.find((org: any) => org.id === orgId);
-      }
-      
-      // Fallback to default SVPK if not found and orgId matches
-      if (!targetOrg && orgId === 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11') {
-        targetOrg = {
-          id: orgId,
-          name: 'Svolvær Pistolklubb',
-          slug: 'svpk',
-          description: 'Norges beste pistolklubb',
-          email: 'post@svpk.no',
-          phone: '+47 123 45 678',
-          website: 'https://svpk.no',
-          address: 'Svolværgata 1, 8300 Svolvær',
-          primary_color: '#FFD700',
-          secondary_color: '#1F2937',
-          logo_url: null,
-          active: true,
-          created_at: '2024-01-01T00:00:00Z'
-        };
-      }
-      
-      if (!targetOrg) {
-        throw new Error('Organisasjon ikke funnet');
-      }
-      
-      setOrganization(targetOrg);
-
-      // Load members and calculate stats
-      // Load members from Supabase
-      try {
-        const { data: members, error } = await supabase
-          .from('organization_members')
-          .select('*')
-          .eq('organization_id', orgId || '');
-
-        if (error) {
-          console.error('Error loading members:', error);
+      if (orgResult.error || !orgResult.data) {
+        // Fallback to default SVPK if not found and orgId matches
+        if (orgId === 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11') {
+          const fallbackOrg = {
+            id: orgId,
+            name: 'Svolvær Pistolklubb',
+            slug: 'svpk',
+            description: 'Norges beste pistolklubb',
+            email: 'post@svpk.no',
+            phone: '+47 123 45 678',
+            website: 'https://svpk.no',
+            address: 'Svolværgata 1, 8300 Svolvær',
+            primary_color: '#FFD700',
+            secondary_color: '#1F2937',
+            logo_url: null,
+            active: true,
+            created_at: '2024-01-01T00:00:00Z'
+          };
+          setOrganization(fallbackOrg);
         } else {
-          const orgMembers = members || [];
-          
-          setStats({
-            totalMembers: orgMembers.length,
-            activeMembers: orgMembers.filter((m: any) => m.approved && m.active).length,
-            pendingMembers: orgMembers.filter((m: any) => !m.approved).length,
-            totalAdmins: orgMembers.filter((m: any) => m.role === 'admin').length
-          });
-
-          // Set admins
-          const adminUsers: OrganizationAdmin[] = orgMembers
-            .filter((m: any) => m.role === 'admin')
-            .map((m: any) => ({
-              id: m.id,
-              organization_id: m.organization_id,
-              member_id: m.id,
-              permissions: { manage_members: true, manage_settings: false, manage_training: true },
-              created_at: m.created_at || new Date().toISOString(),
-              updated_at: m.updated_at || new Date().toISOString(),
-              email: m.email,
-              full_name: m.full_name,
-              active: m.active
-            }));
-          setAdmins(adminUsers);
+          throw new Error('Organisasjon ikke funnet');
         }
-      } catch (error) {
-        console.error('Error loading organization members:', error);
+      } else {
+        setOrganization(orgResult.data);
       }
+
+      // Load members and calculate stats from Supabase
+      const { data: members, error: membersError } = await supabase
+        .from('organization_members')
+        .select('*')
+        .eq('organization_id', orgId || '');
+
+      if (membersError) {
+        console.error('Error loading members:', membersError);
+        throw new Error('Kunne ikke laste medlemmer');
+      }
+
+      const orgMembers = members || [];
+      
+      setStats({
+        totalMembers: orgMembers.length,
+        activeMembers: orgMembers.filter((m: any) => m.approved && m.active).length,
+        pendingMembers: orgMembers.filter((m: any) => !m.approved).length,
+        totalAdmins: orgMembers.filter((m: any) => m.role === 'admin').length
+      });
+
+      // Set admins from Supabase data
+      const adminUsers: OrganizationAdmin[] = orgMembers
+        .filter((m: any) => m.role === 'admin')
+        .map((m: any) => ({
+          id: m.id,
+          email: m.email,
+          full_name: m.full_name,
+          created_at: m.created_at || new Date().toISOString(),
+          active: m.active !== false
+        }));
+
+      setAdmins(adminUsers);
 
     } catch (error) {
       console.error('Error loading organization data:', error);
@@ -624,7 +612,8 @@ export function OrganizationDashboard() {
         throw new Error(result.error);
       }
       
-      loadOrganizationData();
+      // Reload data to reflect changes
+      await loadOrganizationData();
     } catch (error) {
       console.error('Error removing admin:', error);
       alert('Kunne ikke fjerne admin-tilgang');
