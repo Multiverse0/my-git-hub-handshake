@@ -18,6 +18,7 @@ export function Scanner() {
   const [success, setSuccess] = useState(false);
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
   const [scanAttempts, setScanAttempts] = useState(0);
+  const [lastProcessTime, setLastProcessTime] = useState<number>(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const qrScannerRef = useRef<QrScanner | null>(null);
 
@@ -124,12 +125,16 @@ export function Scanner() {
   const handleScan = async (scannedText: string) => {
     if (!scannedText || isProcessing) return;
     
-    // Prevent duplicate scans within a short time window
-    if (lastScannedCode === scannedText) {
-      console.log('Duplicate scan prevented');
+    const now = Date.now();
+    
+    // Prevent duplicate scans within a short time window (3 seconds)
+    if (lastScannedCode === scannedText || (now - lastProcessTime < 3000)) {
+      console.log('Duplicate scan prevented - same code or too soon');
       return;
     }
 
+    setLastProcessTime(now);
+    
     // Increment scan attempts for debugging
     setScanAttempts(prev => prev + 1);
     console.log(`🔍 Scan attempt ${scanAttempts + 1}:`, scannedText);
@@ -205,18 +210,16 @@ export function Scanner() {
       }
       
       const location = locationResult.data;
-      const scannedDiscipline = (location as any).scannedDiscipline;
 
-      // Start training session in database
+      // Start training session in database (discipline will be determined automatically)
       const sessionResult = await startTrainingSession(
         user.organization_id!,
         user.id,
-        location.id,
-        scannedDiscipline
+        location.id
       );
       
       if (sessionResult.error) {
-        if (sessionResult.error.includes('allerede registrert')) {
+        if (sessionResult.error.includes('allerede registrert') || sessionResult.error.includes('Du har allerede registrert')) {
           // Show duplicate registration modal
           setError(null);
           setSuccess(false);

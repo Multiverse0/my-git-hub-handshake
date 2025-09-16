@@ -752,13 +752,59 @@ export async function startTrainingSession(
   discipline?: string
 ): Promise<ApiResponse<MemberTrainingSession>> {
   try {
+    // Check for existing training session today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const { data: existingSessions, error: checkError } = await supabase
+      .from('member_training_sessions')
+      .select('id, discipline')
+      .eq('organization_id', organizationId)
+      .eq('member_id', memberId)
+      .eq('location_id', locationId)
+      .gte('start_time', today.toISOString())
+      .lt('start_time', tomorrow.toISOString());
+
+    if (checkError) {
+      return { error: checkError.message };
+    }
+
+    if (existingSessions && existingSessions.length > 0) {
+      return { error: 'Du har allerede registrert trening på denne lokasjonen i dag' };
+    }
+
+    // Get location details to determine correct discipline
+    const { data: location, error: locationError } = await supabase
+      .from('training_locations')
+      .select('nsf_enabled, dfs_enabled, dssn_enabled')
+      .eq('id', locationId)
+      .single();
+
+    if (locationError) {
+      return { error: 'Kunne ikke hente treningssted informasjon' };
+    }
+
+    // Determine discipline if not provided
+    let finalDiscipline = discipline;
+    if (!finalDiscipline) {
+      const enabledDisciplines = [];
+      if (location.nsf_enabled) enabledDisciplines.push('NSF');
+      if (location.dfs_enabled) enabledDisciplines.push('DFS');
+      if (location.dssn_enabled) enabledDisciplines.push('DSSN');
+      
+      // Use the first enabled discipline, or NSF as default
+      finalDiscipline = enabledDisciplines[0] || 'NSF';
+    }
+
     const { data, error } = await supabase
       .from('member_training_sessions')
       .insert({
         organization_id: organizationId,
         member_id: memberId,
         location_id: locationId,
-        discipline: discipline || null,
+        discipline: finalDiscipline,
         start_time: new Date().toISOString(),
         verified: false
       })
