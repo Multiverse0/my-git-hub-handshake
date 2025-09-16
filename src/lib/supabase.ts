@@ -249,6 +249,33 @@ export async function getOrganizationBySlug(slug: string): Promise<ApiResponse<O
 }
 
 /**
+ * Get organization by ID
+ */
+export async function getOrganizationById(id: string): Promise<ApiResponse<Organization>> {
+  try {
+    const { data, error } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('id', id)
+      .eq('active', true)
+      .maybeSingle();
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    if (!data) {
+      return { error: 'Organisasjon ikke funnet' };
+    }
+
+    return { data: data as any } as ApiResponse<Organization>;
+  } catch (error) {
+    console.error('Error getting organization by ID:', error);
+    return { error: 'Kunne ikke hente organisasjon' };
+  }
+}
+
+/**
  * Get organization branding information
  */
 export async function getOrganizationBranding(organizationId: string): Promise<OrganizationBranding> {

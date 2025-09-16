@@ -64,7 +64,10 @@ export function OrganizationSettings() {
 
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !user?.organization_id) return;
+    if (!file || !user?.organization?.id) {
+      console.log('Missing file or organization ID:', { file: !!file, orgId: user?.organization?.id });
+      return;
+    }
 
     try {
       setSaving(true);
@@ -86,7 +89,7 @@ export function OrganizationSettings() {
 
       // Upload logo to Supabase
       const { updateOrganizationLogo } = await import('../lib/supabase');
-      const result = await updateOrganizationLogo(user.organization_id, file);
+      const result = await updateOrganizationLogo(user.organization.id, file);
       
       if (result.error) {
         setError(result.error);
@@ -116,14 +119,20 @@ export function OrganizationSettings() {
   // Load organization data on mount
   useEffect(() => {
     const loadOrganizationData = async () => {
-      if (!user?.organization_id) return;
+      if (!user?.organization?.id) {
+        console.log('No organization ID available:', user?.organization);
+        return;
+      }
+
+      console.log('Loading organization data for ID:', user.organization.id);
 
       try {
-        const { getOrganizationBySlug } = await import('../lib/supabase');
-        const result = await getOrganizationBySlug(user.organization_id);
+        const { getOrganizationById } = await import('../lib/supabase');
+        const result = await getOrganizationById(user.organization.id);
         
         if (result.data) {
           const org = result.data;
+          console.log('Loaded organization data:', org);
           setOrgData({
             name: org.name || '',
             description: org.description || '',
@@ -140,9 +149,13 @@ export function OrganizationSettings() {
             activity_types: org.activity_types || ['Trening', 'Stevne', 'Dugnad'],
             subscription_plan: 'professional' // This would come from subscription data
           });
+        } else if (result.error) {
+          console.error('Failed to load organization:', result.error);
+          setError(result.error);
         }
       } catch (error) {
         console.error('Error loading organization data:', error);
+        setError('Kunne ikke laste organisasjonsdata');
         // Fallback to localStorage if database fails
         const savedOrg = localStorage.getItem('currentOrganization');
         if (savedOrg) {
@@ -180,10 +193,16 @@ export function OrganizationSettings() {
 
     loadOrganizationData();
     loadSalesBanners();
-  }, [user?.organization_id]);
+  }, [user?.organization?.id]);
 
   const handleSave = async () => {
-    if (!user?.organization_id) return;
+    if (!user?.organization?.id) {
+      console.log('No organization ID available for save:', user?.organization);
+      setError('Organisasjons-ID mangler');
+      return;
+    }
+
+    console.log('Saving organization settings for ID:', user.organization.id, orgData);
 
     setSaving(true);
     setError(null);
@@ -192,7 +211,7 @@ export function OrganizationSettings() {
     try {
       // Save to Supabase database
       const { updateOrganizationSettings } = await import('../lib/supabase');
-      const result = await updateOrganizationSettings(user.organization_id, {
+      const result = await updateOrganizationSettings(user.organization.id, {
         name: orgData.name,
         description: orgData.description,
         email: orgData.email,
@@ -209,9 +228,12 @@ export function OrganizationSettings() {
       });
 
       if (result.error) {
+        console.error('Failed to save organization settings:', result.error);
         setError(result.error);
         return;
       }
+
+      console.log('Organization settings saved successfully');
 
       // Trigger branding update event
       const brandingUpdateEvent = new CustomEvent('brandingUpdated', {
