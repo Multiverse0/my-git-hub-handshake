@@ -1,13 +1,34 @@
 import { useState, useEffect } from 'react';
-import { Search, ChevronUp, ChevronDown, XCircle, CheckCircle, AlertCircle, Edit2, Shield, ShieldOff, Trash2 } from 'lucide-react';
+import { 
+  Search, 
+  ChevronUp, 
+  ChevronDown, 
+  XCircle, 
+  CheckCircle, 
+  AlertCircle, 
+  Edit2, 
+  Shield, 
+  ShieldOff, 
+  Trash2,
+  UserPlus
+} from 'lucide-react';
 import { format } from 'date-fns';
-import { getOrganizationMembers, approveMember, updateMemberRole, updateOrganizationMember, deleteOrganizationMember } from '../lib/supabase';
+import { 
+  getOrganizationMembers, 
+  approveMember, 
+  updateMemberRole, 
+  updateOrganizationMember, 
+  deleteOrganizationMember,
+  addOrganizationMember,
+  setUserContext
+} from '../lib/supabase';
 import { sendMemberApprovalEmail, generateLoginUrl } from '../lib/emailService';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { nullToEmptyString } from '../lib/typeUtils';
 import { canManageMembers } from '../lib/authHelpers';
 import type { OrganizationMember } from '../lib/types';
+import { AddMemberModal } from './AddMemberModal';
 
 interface MemberManagementProps {
   onMemberCountChange?: (count: number) => void;
@@ -124,6 +145,7 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [error, setError] = useState<string | null>(null);
   const [editingMember, setEditingMember] = useState<OrganizationMember | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;
 
@@ -221,6 +243,47 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
   };
 
   const pendingMembers = members.filter(member => !member.approved);
+
+  const handleAddMember = async (newMemberData: Partial<OrganizationMember>) => {
+    if (!organization?.id) return;
+    
+    try {
+      setError(null);
+      
+      // Ensure user is authenticated and has proper context
+      if (!user?.email) {
+        throw new Error('Du må være innlogget for å legge til medlemmer');
+      }
+
+      await setUserContext(user.email);
+
+      const result = await addOrganizationMember(
+        organization.id,
+        {
+          email: newMemberData.email!,
+          full_name: newMemberData.full_name!,
+          member_number: newMemberData.member_number || undefined,
+          role: (newMemberData.role || 'member') as 'member' | 'admin' | 'range_officer',
+          approved: true
+        }
+      );
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      // Refresh members list
+      const membersResult = await getOrganizationMembers(organization.id);
+      if (membersResult.data) {
+        setMembers(membersResult.data);
+      }
+      
+      setShowAddModal(false);
+    } catch (error) {
+      console.error('Error adding member:', error);
+      setError(error instanceof Error ? error.message : 'Kunne ikke legge til medlem');
+    }
+  };
 
   const handleApproveAll = async () => {
     if (pendingMembers.length === 0) return;
@@ -378,6 +441,13 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
             {t('admin.description')}
           </p>
         </div>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="btn-primary"
+        >
+          <UserPlus className="w-5 h-5" />
+          Legg til medlem
+        </button>
       </div>
 
       <div className="card space-y-6">
@@ -558,12 +628,19 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
         )}
       </div>
 
-      {editingMember && (
-        <EditModal
-          member={editingMember}
-          onClose={() => setEditingMember(null)}
-          onSave={handleSaveEdit}
-        />
+      {(editingMember || showAddModal) && (
+        editingMember ? (
+          <EditModal
+            member={editingMember}
+            onClose={() => setEditingMember(null)}
+            onSave={handleSaveEdit}
+          />
+        ) : (
+          <AddMemberModal
+            onClose={() => setShowAddModal(false)}
+            onSave={handleAddMember}
+          />
+        )
       )}
     </div>
   );

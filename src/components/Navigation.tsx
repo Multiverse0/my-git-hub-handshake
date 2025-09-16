@@ -43,10 +43,9 @@ export function Navigation() {
               />
             ) : (
               <div 
-                className="h-10 px-4 flex items-center rounded font-bold text-lg"
-                style={{ backgroundColor: branding.primary_color, color: branding.secondary_color }}
+                className="h-10 w-10 flex items-center justify-center rounded bg-gray-700"
               >
-                {branding.organization_name}
+                <Building2 className="w-6 h-6 text-gray-300" />
               </div>
             )}
             

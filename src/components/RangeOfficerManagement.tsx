@@ -199,6 +199,7 @@ export function RangeOfficerManagement() {
       await setUserContext(user.email);
 
       console.log('Saving range officer:', updatedOfficer);
+      console.log('Organization ID:', organization.id);
       
       if (editingOfficer) {
         // Update existing officer
@@ -212,7 +213,10 @@ export function RangeOfficerManagement() {
           })
           .eq('id', editingOfficer.id);
         
-        if (error) throw error;
+        if (error) {
+          console.error('Supabase error:', error);
+          throw error;
+        }
       } else {
         // Add new officer
         const { error } = await supabase
@@ -226,7 +230,10 @@ export function RangeOfficerManagement() {
             approved: true, // Auto-approve range officers added by admin
           }]);
         
-        if (error) throw error;
+        if (error) {
+          console.error('Supabase error creating officer:', error);
+          throw error;
+        }
       }
       
       console.log('Range officer saved successfully');

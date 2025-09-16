@@ -155,15 +155,15 @@ export function TrainingApprovalQueue({ onCountChange }: TrainingApprovalQueuePr
                    <div className="flex items-center gap-3 mb-3">
                      <User className="w-5 h-5 text-svpk-yellow" />
                      <div>
-                       <h4 className="font-medium flex items-center gap-2">
-                         {training.member?.full_name}
-                         {training.manual_entry && (
-                           <span className="px-2 py-1 bg-blue-600 text-white text-xs rounded-full">
-                             Manuell
-                           </span>
-                         )}
-                       </h4>
-                       <p className="text-sm text-gray-400">Medlem #{training.member?.member_number}</p>
+                        <h4 className="font-medium flex items-center gap-2">
+                          {training.organization_members?.full_name || 'Ukjent medlem'}
+                          {training.manual_entry && (
+                            <span className="px-2 py-1 bg-blue-600 text-white text-xs rounded-full">
+                              Manuell
+                            </span>
+                          )}
+                        </h4>
+                        <p className="text-sm text-gray-400">Medlem #{training.organization_members?.member_number || 'N/A'}</p>
                      </div>
                    </div>
                   
