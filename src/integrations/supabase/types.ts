@@ -653,6 +653,18 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_organization_admins: {
+        Args: { org_id: string }
+        Returns: {
+          active: boolean
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          member_id: string
+          permissions: Json
+        }[]
+      }
       set_config: {
         Args: {
           is_local?: boolean
