@@ -232,13 +232,18 @@ export type Database = {
       organizations: {
         Row: {
           active: boolean | null
+          activity_types: Json | null
           address: string | null
+          background_color: string | null
           created_at: string | null
           description: string | null
+          dfs_enabled: boolean | null
+          dssn_enabled: boolean | null
           email: string | null
           id: string
           logo_url: string | null
           name: string
+          nsf_enabled: boolean | null
           phone: string | null
           primary_color: string | null
           secondary_color: string | null
@@ -248,13 +253,18 @@ export type Database = {
         }
         Insert: {
           active?: boolean | null
+          activity_types?: Json | null
           address?: string | null
+          background_color?: string | null
           created_at?: string | null
           description?: string | null
+          dfs_enabled?: boolean | null
+          dssn_enabled?: boolean | null
           email?: string | null
           id?: string
           logo_url?: string | null
           name: string
+          nsf_enabled?: boolean | null
           phone?: string | null
           primary_color?: string | null
           secondary_color?: string | null
@@ -264,13 +274,18 @@ export type Database = {
         }
         Update: {
           active?: boolean | null
+          activity_types?: Json | null
           address?: string | null
+          background_color?: string | null
           created_at?: string | null
           description?: string | null
+          dfs_enabled?: boolean | null
+          dssn_enabled?: boolean | null
           email?: string | null
           id?: string
           logo_url?: string | null
           name?: string
+          nsf_enabled?: boolean | null
           phone?: string | null
           primary_color?: string | null
           secondary_color?: string | null

@@ -232,7 +232,7 @@ function EditTrainingModal({ entry, onClose, onSave }: EditTrainingModalProps) {
 }
 
 export function TrainingLog() {
-  const { user, profile } = useAuth();
+  const { user, profile, branding } = useAuth();
   const { t } = useLanguage();
   const [trainingSessions, setTrainingSessions] = useState<MemberTrainingSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -245,7 +245,7 @@ export function TrainingLog() {
     dfs_enabled: true,
     dssn_enabled: true
   });
-  const [availableActivities] = useState(['Trening', 'Stevne', 'Dugnad']);
+  const [availableActivities, setAvailableActivities] = useState(['Trening', 'Stevne', 'Dugnad']);
 
   useEffect(() => {
     const loadTrainingSessions = async () => {
@@ -275,6 +275,21 @@ export function TrainingLog() {
       clearInterval(interval);
     };
   }, [user?.id]);
+
+  // Load organization settings from branding context
+  useEffect(() => {
+    if (branding) {
+      setOrganizationSettings({
+        nsf_enabled: branding.nsf_enabled !== false,
+        dfs_enabled: branding.dfs_enabled !== false,
+        dssn_enabled: branding.dssn_enabled !== false
+      });
+      
+      if (branding.activity_types && Array.isArray(branding.activity_types)) {
+        setAvailableActivities(branding.activity_types);
+      }
+    }
+  }, [branding]);
 
   // Calculate requirements
   const calculateRequirements = () => {

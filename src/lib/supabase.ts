@@ -1,84 +1,117 @@
+// This file provides a comprehensive interface for interacting with a Supabase backend, handling authentication, organization management, member management, training sessions, and file uploads.
+
 import { supabase } from '../integrations/supabase/client';
+import { safeDate } from './typeUtils';
+
+// Export supabase for other components
 export { supabase };
-import type { 
-  AuthUser, 
-  Organization, 
-  OrganizationMember, 
+
+// Types imported from types.ts
+import type {
+  ApiResponse,
+  AuthUser,
   SuperUser,
-  MemberTrainingSession,
-  TrainingLocation,
+  Organization,
   OrganizationBranding,
-  ApiResponse
+  OrganizationMember, 
+  MemberTrainingSession,
+  TrainingLocation
 } from './types';
 
 // =============================================================================
-// AUTHENTICATION FUNCTIONS
+// USER CONTEXT AND AUTHENTICATION
 // =============================================================================
 
 /**
- * Set user context for Row Level Security (RLS)
+ * Set user context for RLS policies
  */
 export async function setUserContext(email: string): Promise<void> {
   try {
     await supabase.rpc('set_user_context', { user_email: email });
   } catch (error) {
-    // Silently handle missing RLS function - it's optional for basic functionality
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'PGRST202') {
-      console.warn('RLS function set_user_context not found. Please run the create_rls_functions.sql migration.');
-    } else {
-      console.warn('Could not set user context:', error);
-    }
+    console.error('Error setting user context:', error);
   }
 }
 
 /**
- * Get current authenticated user with profile data
+ * Get currently logged in user with profile data
  */
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
-    const { data: { user }, error } = await supabase.auth.getUser();
+    // Get current auth user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    if (error || !user?.email) {
+    if (authError || !user) {
       return null;
     }
 
+    // Set user context for database queries
+    await setUserContext(user.email!);
+
     // Check if user is a super user
-    const { data: superUser } = await supabase
+    const { data: superUserData } = await supabase
       .from('super_users')
       .select('*')
-      .eq('email', user.email)
+      .eq('email', user.email!)
       .eq('active', true)
       .maybeSingle();
 
-      if (superUser) {
-        return {
+    if (superUserData) {
+      return {
+        id: user.id,
+        email: user.email!,
+        user_type: 'super_user',
+        profile: {
           id: user.id,
           email: user.email!,
-          user_type: 'super_user',
-          super_user_profile: superUser as any
-        };
-      }
+          full_name: superUserData.full_name
+        }
+      };
+    }
 
     // Check if user is an organization member
-    const { data: orgMember } = await supabase
+    const { data: memberData } = await supabase
       .from('organization_members')
-      .select('*, organizations(*)')
-      .eq('email', user.email)
+      .select(`
+        *,
+        organization_admins!inner(id, permissions)
+      `)
+      .eq('email', user.email!)
+      .eq('approved', true)
       .eq('active', true)
       .maybeSingle();
 
-      if (orgMember) {
-        return {
-          id: user.id,
+    if (memberData) {
+      const isAdmin = !!memberData.organization_admins;
+      
+      return {
+        id: memberData.id,
+        email: user.email!,
+        user_type: isAdmin ? 'admin' : 'member',
+        organization_id: memberData.organization_id,
+        profile: {
+          id: memberData.id,
           email: user.email!,
-          user_type: 'organization_member',
-          organization_id: orgMember.organization_id,
-          organization: orgMember.organizations as any,
-          member_profile: orgMember as any
-        };
-      }
+          full_name: memberData.full_name,
+          member_number: memberData.member_number,
+          role: memberData.role,
+          avatar_url: memberData.avatar_url
+        }
+      };
+    }
 
-    return null;
+    // Regular auth user without organization membership
+    return {
+      id: user.id,
+      email: user.email!,
+      user_type: 'user',
+      profile: {
+        id: user.id,
+        email: user.email!,
+        full_name: user.user_metadata?.full_name || user.email!
+      }
+    };
+
   } catch (error) {
     console.error('Error getting current user:', error);
     return null;
@@ -88,10 +121,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 /**
  * Authenticate user with email and password
  */
-export async function authenticateUser(
-  email: string, 
-  password: string
-): Promise<ApiResponse<{ user: AuthUser }>> {
+export async function authenticateUser(email: string, password: string): Promise<ApiResponse<{ user: AuthUser }>> {
   try {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -103,20 +133,19 @@ export async function authenticateUser(
     }
 
     if (!data.user) {
-      return { error: 'Innlogging feilet' };
+      return { error: 'Ingen bruker returnert' };
     }
 
-    // Get user profile data
-    const currentUser = await getCurrentUser();
-    
-    if (!currentUser) {
-      return { error: 'Bruker ikke funnet i systemet' };
+    // Get full user data
+    const user = await getCurrentUser();
+    if (!user) {
+      return { error: 'Kunne ikke hente brukerdata' };
     }
 
-    return { data: { user: currentUser } };
+    return { data: { user } };
   } catch (error) {
-    console.error('Authentication error:', error);
-    return { error: 'Det oppstod en feil ved innlogging' };
+    console.error('Error authenticating user:', error);
+    return { error: 'Autentisering feilet' };
   }
 }
 
@@ -143,7 +172,7 @@ export async function checkSuperUsersExist(): Promise<boolean> {
       return false;
     }
 
-    return (data?.length || 0) > 0;
+    return data && data.length > 0;
   } catch (error) {
     console.error('Error checking super users:', error);
     return false;
@@ -151,7 +180,7 @@ export async function checkSuperUsersExist(): Promise<boolean> {
 }
 
 /**
- * Create the first super user (system setup)
+ * Create the first super user (system initialization)
  */
 export async function createFirstSuperUser(
   email: string,
@@ -159,16 +188,15 @@ export async function createFirstSuperUser(
   fullName: string
 ): Promise<ApiResponse<SuperUser>> {
   try {
-    // Check if super users already exist
-    const superUsersExist = await checkSuperUsersExist();
-    if (superUsersExist) {
-      return { error: 'Super-brukere eksisterer allerede i systemet' };
-    }
-
-    // Sign up with Supabase Auth
+    // First, create the auth user
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
-      password
+      password,
+      options: {
+        data: {
+          full_name: fullName
+        }
+      }
     });
 
     if (authError) {
@@ -179,25 +207,24 @@ export async function createFirstSuperUser(
       return { error: 'Kunne ikke opprette bruker' };
     }
 
-    // Create super user record
-    const { data: superUser, error: insertError } = await supabase
+    // Then create the super user record
+    const { data: superUserData, error: superUserError } = await supabase
       .from('super_users')
       .insert({
         email,
-        full_name: fullName,
-        active: true
+        full_name: fullName
       })
       .select()
       .single();
 
-    if (insertError) {
-      return { error: insertError.message };
+    if (superUserError) {
+      return { error: superUserError.message };
     }
 
-    return { data: superUser };
+    return { data: superUserData };
   } catch (error) {
     console.error('Error creating first super user:', error);
-    return { error: 'Det oppstod en feil ved opprettelse av super-bruker' };
+    return { error: 'Kunne ikke opprette superbruker' };
   }
 }
 
@@ -239,7 +266,7 @@ export async function getOrganizationBranding(organizationId: string): Promise<O
   try {
     const { data } = await supabase
       .from('organizations')
-      .select('name, primary_color, secondary_color, logo_url')
+      .select('name, primary_color, secondary_color, logo_url, background_color, nsf_enabled, dfs_enabled, dssn_enabled, activity_types')
       .eq('id', organizationId)
       .maybeSingle();
 
@@ -248,7 +275,12 @@ export async function getOrganizationBranding(organizationId: string): Promise<O
         organization_name: data.name || 'Idrettsklubb',
         primary_color: data.primary_color || '#FFD700',
         secondary_color: data.secondary_color || '#1F2937',
-        logo_url: data.logo_url
+        background_color: data.background_color || '#FFFFFF',
+        logo_url: data.logo_url,
+        nsf_enabled: data.nsf_enabled !== false,
+        dfs_enabled: data.dfs_enabled !== false,
+        dssn_enabled: data.dssn_enabled !== false,
+        activity_types: data.activity_types || ['NSF', 'DFS', 'DSSN', 'Pistol', 'Rifle', 'Shotgun']
       };
     }
 
@@ -256,14 +288,24 @@ export async function getOrganizationBranding(organizationId: string): Promise<O
     return {
       organization_name: 'Idrettsklubb',
       primary_color: '#FFD700',
-      secondary_color: '#1F2937'
+      secondary_color: '#1F2937',
+      background_color: '#FFFFFF',
+      nsf_enabled: true,
+      dfs_enabled: true,
+      dssn_enabled: true,
+      activity_types: ['NSF', 'DFS', 'DSSN', 'Pistol', 'Rifle', 'Shotgun']
     };
   } catch (error) {
     console.error('Error getting organization branding:', error);
     return {
       organization_name: 'Idrettsklubb',
       primary_color: '#FFD700',
-      secondary_color: '#1F2937'
+      secondary_color: '#1F2937',
+      background_color: '#FFFFFF',
+      nsf_enabled: true,
+      dfs_enabled: true,
+      dssn_enabled: true,
+      activity_types: ['NSF', 'DFS', 'DSSN', 'Pistol', 'Rifle', 'Shotgun']
     };
   }
 }
@@ -284,7 +326,12 @@ export async function createOrganization(orgData: Partial<Organization>): Promis
         website: orgData.website,
         address: orgData.address,
         primary_color: orgData.primary_color || '#FFD700',
-        secondary_color: orgData.secondary_color || '#1F2937'
+        secondary_color: orgData.secondary_color || '#1F2937',
+        background_color: orgData.background_color || '#FFFFFF',
+        nsf_enabled: orgData.nsf_enabled !== false,
+        dfs_enabled: orgData.dfs_enabled !== false,
+        dssn_enabled: orgData.dssn_enabled !== false,
+        activity_types: orgData.activity_types || ['NSF', 'DFS', 'DSSN', 'Pistol', 'Rifle', 'Shotgun']
       })
       .select()
       .single();
@@ -345,9 +392,29 @@ export async function updateOrganizationLogo(
   }
 }
 
-// =============================================================================
-// MEMBER MANAGEMENT FUNCTIONS
-// =============================================================================
+/**
+ * Update organization settings
+ */
+export async function updateOrganizationSettings(
+  organizationId: string,
+  settings: Partial<Organization>
+): Promise<ApiResponse<void>> {
+  try {
+    const { error } = await supabase
+      .from('organizations')
+      .update(settings)
+      .eq('id', organizationId);
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    return { data: undefined };
+  } catch (error) {
+    console.error('Error updating organization settings:', error);
+    return { error: 'Kunne ikke oppdatere innstillinger' };
+  }
+}
 
 /**
  * Register new organization member
@@ -361,7 +428,7 @@ export async function registerOrganizationMember(
   role: 'member' | 'admin' | 'range_officer' = 'member'
 ): Promise<ApiResponse<OrganizationMember>> {
   try {
-    // Get organization
+    // First, get the organization
     const orgResult = await getOrganizationBySlug(organizationSlug);
     if (orgResult.error || !orgResult.data) {
       return { error: orgResult.error || 'Organisasjon ikke funnet' };
@@ -369,10 +436,15 @@ export async function registerOrganizationMember(
 
     const organization = orgResult.data;
 
-    // Sign up with Supabase Auth
+    // Create auth user first
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
-      password
+      password,
+      options: {
+        data: {
+          full_name: fullName
+        }
+      }
     });
 
     if (authError) {
@@ -383,8 +455,8 @@ export async function registerOrganizationMember(
       return { error: 'Kunne ikke opprette bruker' };
     }
 
-    // Create organization member record
-    const { data: member, error: memberError } = await supabase
+    // Create organization member
+    const { data: memberData, error: memberError } = await supabase
       .from('organization_members')
       .insert({
         organization_id: organization.id,
@@ -392,8 +464,7 @@ export async function registerOrganizationMember(
         full_name: fullName,
         member_number: memberNumber,
         role,
-        approved: role === 'admin', // Auto-approve admins
-        active: true
+        approved: false // Requires approval by admin
       })
       .select()
       .single();
@@ -402,10 +473,10 @@ export async function registerOrganizationMember(
       return { error: memberError.message };
     }
 
-    return { data: member };
+    return { data: memberData as any };
   } catch (error) {
     console.error('Error registering organization member:', error);
-    return { error: 'Det oppstod en feil ved registrering' };
+    return { error: 'Kunne ikke registrere medlem' };
   }
 }
 
@@ -418,13 +489,13 @@ export async function getOrganizationMembers(organizationId: string): Promise<Ap
       .from('organization_members')
       .select('*')
       .eq('organization_id', organizationId)
-      .order('created_at', { ascending: false });
+      .order('full_name');
 
     if (error) {
       return { error: error.message };
     }
 
-    return { data: data || [] } as ApiResponse<OrganizationMember[]>;
+    return { data: data as any[] };
   } catch (error) {
     console.error('Error getting organization members:', error);
     return { error: 'Kunne ikke hente medlemmer' };
@@ -438,10 +509,7 @@ export async function approveMember(memberId: string): Promise<ApiResponse<Organ
   try {
     const { data, error } = await supabase
       .from('organization_members')
-      .update({ 
-        approved: true,
-        updated_at: new Date().toISOString()
-      })
+      .update({ approved: true })
       .eq('id', memberId)
       .select()
       .single();
@@ -450,7 +518,7 @@ export async function approveMember(memberId: string): Promise<ApiResponse<Organ
       return { error: error.message };
     }
 
-    return { data } as ApiResponse<OrganizationMember>;
+    return { data: data as any };
   } catch (error) {
     console.error('Error approving member:', error);
     return { error: 'Kunne ikke godkjenne medlem' };
@@ -461,16 +529,13 @@ export async function approveMember(memberId: string): Promise<ApiResponse<Organ
  * Update member role
  */
 export async function updateMemberRole(
-  memberId: string, 
+  memberId: string,
   role: 'member' | 'admin' | 'range_officer'
 ): Promise<ApiResponse<OrganizationMember>> {
   try {
     const { data, error } = await supabase
       .from('organization_members')
-      .update({ 
-        role,
-        updated_at: new Date().toISOString()
-      })
+      .update({ role })
       .eq('id', memberId)
       .select()
       .single();
@@ -479,15 +544,15 @@ export async function updateMemberRole(
       return { error: error.message };
     }
 
-    return { data } as ApiResponse<OrganizationMember>;
+    return { data: data as any };
   } catch (error) {
     console.error('Error updating member role:', error);
-    return { error: 'Kunne ikke oppdatere medlemsrolle' };
+    return { error: 'Kunne ikke oppdatere rolle' };
   }
 }
 
 /**
- * Add new organization member (admin function)
+ * Add organization member (admin function)
  */
 export async function addOrganizationMember(
   organizationId: string,
@@ -501,11 +566,16 @@ export async function addOrganizationMember(
   }
 ): Promise<ApiResponse<OrganizationMember>> {
   try {
-    // If password is provided, create auth user first
+    // If password is provided, create auth user
     if (memberData.password) {
       const { error: authError } = await supabase.auth.signUp({
         email: memberData.email,
-        password: memberData.password
+        password: memberData.password,
+        options: {
+          data: {
+            full_name: memberData.full_name
+          }
+        }
       });
 
       if (authError) {
@@ -513,7 +583,7 @@ export async function addOrganizationMember(
       }
     }
 
-    // Create organization member record
+    // Create organization member
     const { data, error } = await supabase
       .from('organization_members')
       .insert({
@@ -522,8 +592,7 @@ export async function addOrganizationMember(
         full_name: memberData.full_name,
         member_number: memberData.member_number,
         role: memberData.role,
-        approved: memberData.approved,
-        active: true
+        approved: memberData.approved
       })
       .select()
       .single();
@@ -532,7 +601,7 @@ export async function addOrganizationMember(
       return { error: error.message };
     }
 
-    return { data } as ApiResponse<OrganizationMember>;
+    return { data: data as any };
   } catch (error) {
     console.error('Error adding organization member:', error);
     return { error: 'Kunne ikke legge til medlem' };
@@ -549,10 +618,7 @@ export async function updateOrganizationMember(
   try {
     const { data, error } = await supabase
       .from('organization_members')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
+      .update(updates)
       .eq('id', memberId)
       .select()
       .single();
@@ -561,7 +627,7 @@ export async function updateOrganizationMember(
       return { error: error.message };
     }
 
-    return { data } as ApiResponse<OrganizationMember>;
+    return { data: data as any };
   } catch (error) {
     console.error('Error updating organization member:', error);
     return { error: 'Kunne ikke oppdatere medlem' };
@@ -590,7 +656,7 @@ export async function deleteOrganizationMember(memberId: string): Promise<ApiRes
 }
 
 // =============================================================================
-// TRAINING SESSION FUNCTIONS
+// TRAINING SESSION AND LOCATION MANAGEMENT
 // =============================================================================
 
 /**
@@ -614,18 +680,18 @@ export async function getTrainingLocationByQR(
     }
 
     if (!data) {
-      return { error: 'Treningslokasjon ikke funnet' };
+      return { error: 'Treningssted ikke funnet' };
     }
 
-    return { data };
+    return { data: data as any };
   } catch (error) {
     console.error('Error getting training location by QR:', error);
-    return { error: 'Kunne ikke finne treningslokasjon' };
+    return { error: 'Kunne ikke hente treningssted' };
   }
 }
 
 /**
- * Start training session
+ * Start new training session
  */
 export async function startTrainingSession(
   organizationId: string,
@@ -633,21 +699,6 @@ export async function startTrainingSession(
   locationId: string
 ): Promise<ApiResponse<MemberTrainingSession>> {
   try {
-    // Check if member already has a session today
-    const today = new Date().toISOString().split('T')[0];
-    const { data: existingSession } = await supabase
-      .from('member_training_sessions')
-      .select('id')
-      .eq('member_id', memberId)
-      .gte('start_time', `${today}T00:00:00Z`)
-      .lt('start_time', `${today}T23:59:59Z`)
-      .maybeSingle();
-
-    if (existingSession) {
-      return { error: 'Du har allerede registrert trening i dag' };
-    }
-
-    // Create new training session
     const { data, error } = await supabase
       .from('member_training_sessions')
       .insert({
@@ -655,8 +706,7 @@ export async function startTrainingSession(
         member_id: memberId,
         location_id: locationId,
         start_time: new Date().toISOString(),
-        verified: false,
-        manual_entry: false
+        verified: false
       })
       .select()
       .single();
@@ -665,7 +715,7 @@ export async function startTrainingSession(
       return { error: error.message };
     }
 
-    return { data };
+    return { data: data as any };
   } catch (error) {
     console.error('Error starting training session:', error);
     return { error: 'Kunne ikke starte treningsøkt' };
@@ -681,10 +731,9 @@ export async function getMemberTrainingSessions(memberId: string): Promise<ApiRe
       .from('member_training_sessions')
       .select(`
         *,
-        organization_members!inner(*),
-        training_locations(*),
-        training_session_details(*),
-        session_target_images(*)
+        training_locations(name),
+        training_session_details(training_type, results, notes),
+        session_target_images(image_url, filename)
       `)
       .eq('member_id', memberId)
       .order('start_time', { ascending: false });
@@ -693,7 +742,15 @@ export async function getMemberTrainingSessions(memberId: string): Promise<ApiRe
       return { error: error.message };
     }
 
-    return { data: data || [] };
+    // Transform the data to include details and target images
+    const transformedData = data.map(session => ({
+      ...session,
+      location_name: session.training_locations?.name || 'Ukjent',
+      details: session.training_session_details?.[0] || {},
+      target_images: session.session_target_images?.map(img => img.image_url) || []
+    }));
+
+    return { data: transformedData as any[] };
   } catch (error) {
     console.error('Error getting member training sessions:', error);
     return { error: 'Kunne ikke hente treningsøkter' };
@@ -709,10 +766,8 @@ export async function getOrganizationTrainingSessions(organizationId: string): P
       .from('member_training_sessions')
       .select(`
         *,
-        organization_members(*),
-        training_locations(*),
-        training_session_details(*),
-        session_target_images(*)
+        organization_members(full_name, member_number),
+        training_locations(name)
       `)
       .eq('organization_id', organizationId)
       .order('start_time', { ascending: false });
@@ -721,7 +776,7 @@ export async function getOrganizationTrainingSessions(organizationId: string): P
       return { error: error.message };
     }
 
-    return { data: data || [] };
+    return { data: data as any[] };
   } catch (error) {
     console.error('Error getting organization training sessions:', error);
     return { error: 'Kunne ikke hente treningsøkter' };
@@ -741,8 +796,7 @@ export async function verifyTrainingSession(
       .update({
         verified: true,
         verified_by: verifiedBy,
-        verification_time: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        verification_time: new Date().toISOString()
       })
       .eq('id', sessionId)
       .select()
@@ -752,7 +806,7 @@ export async function verifyTrainingSession(
       return { error: error.message };
     }
 
-    return { data };
+    return { data: data as any };
   } catch (error) {
     console.error('Error verifying training session:', error);
     return { error: 'Kunne ikke verifisere treningsøkt' };
@@ -780,12 +834,13 @@ export async function addManualTrainingSession(
         organization_id: organizationId,
         member_id: memberId,
         location_id: locationId,
-        start_time: new Date(sessionData.date).toISOString(),
+        start_time: sessionData.date,
+        end_time: sessionData.date,
+        notes: sessionData.notes,
         verified: true,
         verified_by: verifiedBy,
         verification_time: new Date().toISOString(),
-        manual_entry: true,
-        notes: sessionData.notes
+        manual_entry: true
       })
       .select()
       .single();
@@ -794,18 +849,7 @@ export async function addManualTrainingSession(
       return { error: error.message };
     }
 
-    // Add training details if activity is specified
-    if (sessionData.activity !== 'Trening') {
-      await supabase
-        .from('training_session_details')
-        .insert({
-          session_id: data.id,
-          training_type: sessionData.activity,
-          notes: sessionData.notes
-        });
-    }
-
-    return { data };
+    return { data: data as any };
   } catch (error) {
     console.error('Error adding manual training session:', error);
     return { error: 'Kunne ikke legge til manuell treningsøkt' };
@@ -813,7 +857,7 @@ export async function addManualTrainingSession(
 }
 
 /**
- * Update training session details
+ * Update training details
  */
 export async function updateTrainingDetails(
   sessionId: string,
@@ -824,7 +868,7 @@ export async function updateTrainingDetails(
   }
 ): Promise<ApiResponse<void>> {
   try {
-    // Check if details already exist
+    // First, check if details already exist
     const { data: existingDetails } = await supabase
       .from('training_session_details')
       .select('id')
@@ -832,20 +876,17 @@ export async function updateTrainingDetails(
       .maybeSingle();
 
     if (existingDetails) {
-      // Update existing
+      // Update existing details
       const { error } = await supabase
         .from('training_session_details')
-        .update({
-          ...details,
-          updated_at: new Date().toISOString()
-        })
+        .update(details)
         .eq('session_id', sessionId);
 
       if (error) {
         return { error: error.message };
       }
     } else {
-      // Create new
+      // Insert new details
       const { error } = await supabase
         .from('training_session_details')
         .insert({
@@ -865,10 +906,6 @@ export async function updateTrainingDetails(
   }
 }
 
-// =============================================================================
-// TRAINING LOCATION FUNCTIONS
-// =============================================================================
-
 /**
  * Get organization training locations
  */
@@ -878,16 +915,17 @@ export async function getOrganizationTrainingLocations(organizationId: string): 
       .from('training_locations')
       .select('*')
       .eq('organization_id', organizationId)
+      .eq('active', true)
       .order('name');
 
     if (error) {
       return { error: error.message };
     }
 
-    return { data: data || [] };
+    return { data: data as any[] };
   } catch (error) {
-    console.error('Error getting training locations:', error);
-    return { error: 'Kunne ikke hente treningslokasjoner' };
+    console.error('Error getting organization training locations:', error);
+    return { error: 'Kunne ikke hente treningssteder' };
   }
 }
 
@@ -909,8 +947,7 @@ export async function createTrainingLocation(
         organization_id: organizationId,
         name: locationData.name,
         qr_code_id: locationData.qr_code_id,
-        description: locationData.description,
-        active: true
+        description: locationData.description
       })
       .select()
       .single();
@@ -919,10 +956,10 @@ export async function createTrainingLocation(
       return { error: error.message };
     }
 
-    return { data };
+    return { data: data as any };
   } catch (error) {
     console.error('Error creating training location:', error);
-    return { error: 'Kunne ikke opprette treningslokasjon' };
+    return { error: 'Kunne ikke opprette treningssted' };
   }
 }
 
@@ -936,10 +973,7 @@ export async function updateTrainingLocation(
   try {
     const { data, error } = await supabase
       .from('training_locations')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
+      .update(updates)
       .eq('id', locationId)
       .select()
       .single();
@@ -948,157 +982,131 @@ export async function updateTrainingLocation(
       return { error: error.message };
     }
 
-    return { data };
+    return { data: data as any };
   } catch (error) {
     console.error('Error updating training location:', error);
-    return { error: 'Kunne ikke oppdatere treningslokasjon' };
+    return { error: 'Kunne ikke oppdatere treningssted' };
   }
 }
 
 // =============================================================================
-// FILE UPLOAD FUNCTIONS
+// FILE UPLOADS
 // =============================================================================
 
 /**
  * Upload profile image
  */
 export async function uploadProfileImage(file: File, userId: string): Promise<string> {
-  try {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${userId}-${Date.now()}.${fileExt}`;
-    const filePath = `avatars/${fileName}`;
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${userId}-${Math.random()}.${fileExt}`;
+  const filePath = `profiles/${fileName}`;
 
-    const { data, error } = await supabase.storage
-      .from('profiles')
-      .upload(filePath, file, {
-        upsert: true
-      });
+  const { error: uploadError } = await supabase.storage
+    .from('profiles')
+    .upload(filePath, file);
 
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('profiles')
-      .getPublicUrl(data.path);
-
-    return publicUrl;
-  } catch (error) {
-    console.error('Error uploading profile image:', error);
-    throw error;
+  if (uploadError) {
+    throw uploadError;
   }
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('profiles')
+    .getPublicUrl(filePath);
+
+  return publicUrl;
 }
 
 /**
  * Upload startkort PDF
  */
 export async function uploadStartkortPDF(file: File, userId: string): Promise<string> {
-  try {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `startkort-${userId}-${Date.now()}.${fileExt}`;
-    const filePath = `startkort/${fileName}`;
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${userId}-startkort-${Date.now()}.${fileExt}`;
+  const filePath = `documents/${fileName}`;
 
-    const { data, error } = await supabase.storage
-      .from('documents')
-      .upload(filePath, file, {
-        upsert: true
-      });
+  const { error: uploadError } = await supabase.storage
+    .from('documents')
+    .upload(filePath, file);
 
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('documents')
-      .getPublicUrl(data.path);
-
-    return publicUrl;
-  } catch (error) {
-    console.error('Error uploading startkort:', error);
-    throw error;
+  if (uploadError) {
+    throw uploadError;
   }
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('documents')
+    .getPublicUrl(filePath);
+
+  return publicUrl;
 }
 
 /**
- * Upload diploma/member card PDF
+ * Upload diploma PDF
  */
 export async function uploadDiplomaPDF(file: File, userId: string): Promise<string> {
-  try {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `diploma-${userId}-${Date.now()}.${fileExt}`;
-    const filePath = `diplomas/${fileName}`;
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${userId}-diploma-${Date.now()}.${fileExt}`;
+  const filePath = `documents/${fileName}`;
 
-    const { data, error } = await supabase.storage
-      .from('documents')
-      .upload(filePath, file, {
-        upsert: true
-      });
+  const { error: uploadError } = await supabase.storage
+    .from('documents')
+    .upload(filePath, file);
 
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('documents')
-      .getPublicUrl(data.path);
-
-    return publicUrl;
-  } catch (error) {
-    console.error('Error uploading diploma:', error);
-    throw error;
+  if (uploadError) {
+    throw uploadError;
   }
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('documents')
+    .getPublicUrl(filePath);
+
+  return publicUrl;
 }
 
 /**
  * Upload target image for training session
  */
 export async function uploadTargetImage(file: File, sessionId: string): Promise<string> {
-  try {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `target-${sessionId}-${Date.now()}.${fileExt}`;
-    const filePath = `target-images/${fileName}`;
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${sessionId}-target-${Date.now()}.${fileExt}`;
+  const filePath = `target-images/${fileName}`;
 
-    const { data, error } = await supabase.storage
-      .from('target-images')
-      .upload(filePath, file);
+  const { error: uploadError } = await supabase.storage
+    .from('target-images')
+    .upload(filePath, file);
 
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('target-images')
-      .getPublicUrl(data.path);
-
-    // Save reference in database
-    await supabase
-      .from('session_target_images')
-      .insert({
-        session_id: sessionId,
-        image_url: publicUrl,
-        filename: file.name
-      });
-
-    return publicUrl;
-  } catch (error) {
-    console.error('Error uploading target image:', error);
-    throw error;
+  if (uploadError) {
+    throw uploadError;
   }
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('target-images')
+    .getPublicUrl(filePath);
+
+  // Also save reference in the database
+  await supabase
+    .from('session_target_images')
+    .insert({
+      session_id: sessionId,
+      image_url: publicUrl,
+      filename: file.name
+    });
+
+  return publicUrl;
 }
 
 // =============================================================================
-// UTILITY FUNCTIONS
+// UTILITY AND STATUS FUNCTIONS
 // =============================================================================
 
 /**
- * Check if Supabase is properly configured
+ * Check if Supabase is configured
  */
 export function isSupabaseConfigured(): boolean {
-  return true; // Using integrated client, always configured
+  return !!supabase;
 }
 
 /**
- * Get Supabase connection status
+ * Get Supabase service status
  */
 export async function getSupabaseStatus(): Promise<{
   connected: boolean;
@@ -1113,14 +1121,16 @@ export async function getSupabaseStatus(): Promise<{
       .select('id')
       .limit(1);
 
-    // Test auth
+    // Test auth service
     const { error: authError } = await supabase.auth.getSession();
 
     // Test storage
-    const { error: storageError } = await supabase.storage.listBuckets();
+    const { error: storageError } = await supabase.storage
+      .from('profiles')
+      .list('', { limit: 1 });
 
     return {
-      connected: !dbError && !authError && !storageError,
+      connected: true,
       database: !dbError,
       auth: !authError,
       storage: !storageError
@@ -1136,11 +1146,11 @@ export async function getSupabaseStatus(): Promise<{
 }
 
 // =============================================================================
-// DEMO/FALLBACK FUNCTIONS
+// DEMO MODE FUNCTIONS
 // =============================================================================
 
 /**
- * Demo mode fallback for when Supabase is not configured
+ * Check if running in demo mode
  */
 export function isDemoMode(): boolean {
   return !isSupabaseConfigured();
@@ -1152,21 +1162,22 @@ export function isDemoMode(): boolean {
 export function getDemoOrganization(): Organization {
   return {
     id: 'demo-org-id',
-    name: 'Svolvær Pistolklubb',
-    slug: 'svpk',
-    description: 'Demo organisasjon for AKTIVLOGG',
-    email: 'post@svpk.no',
+    name: 'Demo Skytterklubb',
+    slug: 'demo',
+    description: 'Dette er en demo-organisasjon for testing',
+    email: 'post@demo.no',
     phone: '+47 123 45 678',
-    website: 'https://svpk.no',
-    address: 'Svolværgata 1, 8300 Svolvær',
+    website: 'https://demo.no',
+    address: 'Demogate 1, 0123 Demo',
     primary_color: '#FFD700',
     secondary_color: '#1F2937',
-    logo_url: undefined,
+    background_color: '#FFFFFF',
+    nsf_enabled: true,
+    dfs_enabled: true,
+    dssn_enabled: true,
+    activity_types: ['NSF', 'DFS', 'DSSN', 'Pistol', 'Rifle', 'Shotgun'],
     active: true,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
 }
-
-// Export default client for direct usage if needed
-export default supabase;

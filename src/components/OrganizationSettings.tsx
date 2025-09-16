@@ -64,9 +64,12 @@ export function OrganizationSettings() {
 
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file || !user?.organization_id) return;
 
     try {
+      setSaving(true);
+      setError(null);
+
       // Validate file type
       const fileExt = file.name.split('.').pop()?.toLowerCase();
       const allowedTypes = ['svg', 'png', 'jpg', 'jpeg'];
@@ -81,58 +84,66 @@ export function OrganizationSettings() {
         return;
       }
 
-      // Convert to base64 for localStorage
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const logoUrl = e.target?.result as string;
-        
-        // Update organization data
-        const savedOrg = localStorage.getItem('currentOrganization');
-        if (savedOrg) {
-          const orgInfo = JSON.parse(savedOrg);
-          const updatedOrg = { ...orgInfo, logo_url: logoUrl, updated_at: new Date().toISOString() };
-          localStorage.setItem('currentOrganization', JSON.stringify(updatedOrg));
-          
-          // Update organizations list
-          const savedOrgs = localStorage.getItem('organizations');
-          if (savedOrgs) {
-            const organizations = JSON.parse(savedOrgs);
-            const updatedOrganizations = organizations.map((org: any) => 
-              org.id === orgInfo.id ? updatedOrg : org
-            );
-            localStorage.setItem('organizations', JSON.stringify(updatedOrganizations));
-          }
+      // Upload logo to Supabase
+      const { updateOrganizationLogo } = await import('../lib/supabase');
+      const result = await updateOrganizationLogo(user.organization_id, file);
+      
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+
+      // Trigger branding update
+      const brandingUpdateEvent = new CustomEvent('brandingUpdated', {
+        detail: {
+          ...branding,
+          logo_url: result.data
         }
-        
-        // Trigger branding update
-        const brandingUpdateEvent = new CustomEvent('brandingUpdated', {
-          detail: {
-            ...branding,
-            logo_url: logoUrl
-          }
-        });
-        window.dispatchEvent(brandingUpdateEvent);
-        
-        setSuccess(true);
-        setTimeout(() => setSuccess(false), 3000);
-      };
+      });
+      window.dispatchEvent(brandingUpdateEvent);
       
-      reader.onerror = () => {
-        setError('Kunne ikke lese filen');
-      };
-      
-      reader.readAsDataURL(file);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
       
     } catch (error) {
       console.error('Error uploading logo:', error);
       setError('Kunne ikke laste opp logo');
+    } finally {
+      setSaving(false);
     }
   };
 
   // Load organization data on mount
   useEffect(() => {
-    const loadOrganizationData = () => {
+    const loadOrganizationData = async () => {
+      if (!user?.organization_id) return;
+
       try {
+        const { getOrganizationBySlug } = await import('../lib/supabase');
+        const result = await getOrganizationBySlug(user.organization_id);
+        
+        if (result.data) {
+          const org = result.data;
+          setOrgData({
+            name: org.name || '',
+            description: org.description || '',
+            email: org.email || '',
+            phone: org.phone || '',
+            website: org.website || '',
+            address: org.address || '',
+            primary_color: org.primary_color || '#FFD700',
+            secondary_color: org.secondary_color || '#1F2937',
+            background_color: org.background_color || '#FFFFFF',
+            nsf_enabled: org.nsf_enabled !== false,
+            dfs_enabled: org.dfs_enabled !== false,
+            dssn_enabled: org.dssn_enabled !== false,
+            activity_types: org.activity_types || ['Trening', 'Stevne', 'Dugnad'],
+            subscription_plan: 'professional' // This would come from subscription data
+          });
+        }
+      } catch (error) {
+        console.error('Error loading organization data:', error);
+        // Fallback to localStorage if database fails
         const savedOrg = localStorage.getItem('currentOrganization');
         if (savedOrg) {
           const orgInfo = JSON.parse(savedOrg);
@@ -145,16 +156,14 @@ export function OrganizationSettings() {
             address: orgInfo.address || '',
             primary_color: orgInfo.primary_color || '#FFD700',
             secondary_color: orgInfo.secondary_color || '#1F2937',
-            background_color: orgInfo.background_color || '#111827',
+            background_color: orgInfo.background_color || '#FFFFFF',
             nsf_enabled: orgInfo.nsf_enabled !== false,
-            dfs_enabled: orgInfo.dfs_enabled || false,
-            dssn_enabled: orgInfo.dssn_enabled || false,
+            dfs_enabled: orgInfo.dfs_enabled !== false,
+            dssn_enabled: orgInfo.dssn_enabled !== false,
             activity_types: orgInfo.activity_types || ['Trening', 'Stevne', 'Dugnad'],
             subscription_plan: orgInfo.subscription_plan || 'professional'
           });
         }
-      } catch (error) {
-        console.error('Error loading organization data:', error);
       }
     };
 
@@ -171,30 +180,37 @@ export function OrganizationSettings() {
 
     loadOrganizationData();
     loadSalesBanners();
-  }, []);
+  }, [user?.organization_id]);
 
   const handleSave = async () => {
+    if (!user?.organization_id) return;
+
     setSaving(true);
     setError(null);
     setSuccess(false);
 
     try {
-      // Update organization in localStorage
-      const savedOrg = localStorage.getItem('currentOrganization');
-      if (savedOrg) {
-        const orgInfo = JSON.parse(savedOrg);
-        const updatedOrg = { ...orgInfo, ...orgData, updated_at: new Date().toISOString() };
-        localStorage.setItem('currentOrganization', JSON.stringify(updatedOrg));
-        
-        // Also update in organizations list
-        const savedOrgs = localStorage.getItem('organizations');
-        if (savedOrgs) {
-          const organizations = JSON.parse(savedOrgs);
-          const updatedOrganizations = organizations.map((org: any) => 
-            org.id === orgInfo.id ? updatedOrg : org
-          );
-          localStorage.setItem('organizations', JSON.stringify(updatedOrganizations));
-        }
+      // Save to Supabase database
+      const { updateOrganizationSettings } = await import('../lib/supabase');
+      const result = await updateOrganizationSettings(user.organization_id, {
+        name: orgData.name,
+        description: orgData.description,
+        email: orgData.email,
+        phone: orgData.phone,
+        website: orgData.website,
+        address: orgData.address,
+        primary_color: orgData.primary_color,
+        secondary_color: orgData.secondary_color,
+        background_color: orgData.background_color,
+        nsf_enabled: orgData.nsf_enabled,
+        dfs_enabled: orgData.dfs_enabled,
+        dssn_enabled: orgData.dssn_enabled,
+        activity_types: orgData.activity_types
+      });
+
+      if (result.error) {
+        setError(result.error);
+        return;
       }
 
       // Trigger branding update event
@@ -204,7 +220,11 @@ export function OrganizationSettings() {
           primary_color: orgData.primary_color,
           secondary_color: orgData.secondary_color,
           background_color: orgData.background_color,
-          logo_url: branding.logo_url
+          logo_url: branding.logo_url,
+          nsf_enabled: orgData.nsf_enabled,
+          dfs_enabled: orgData.dfs_enabled,
+          dssn_enabled: orgData.dssn_enabled,
+          activity_types: orgData.activity_types
         }
       });
       window.dispatchEvent(brandingUpdateEvent);
