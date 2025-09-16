@@ -251,6 +251,9 @@ export type Database = {
           primary_color: string | null
           secondary_color: string | null
           slug: string
+          subscription_expires_at: string | null
+          subscription_status: string | null
+          subscription_type: string | null
           updated_at: string | null
           website: string | null
         }
@@ -272,6 +275,9 @@ export type Database = {
           primary_color?: string | null
           secondary_color?: string | null
           slug: string
+          subscription_expires_at?: string | null
+          subscription_status?: string | null
+          subscription_type?: string | null
           updated_at?: string | null
           website?: string | null
         }
@@ -293,6 +299,9 @@ export type Database = {
           primary_color?: string | null
           secondary_color?: string | null
           slug?: string
+          subscription_expires_at?: string | null
+          subscription_status?: string | null
+          subscription_type?: string | null
           updated_at?: string | null
           website?: string | null
         }

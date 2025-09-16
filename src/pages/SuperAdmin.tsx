@@ -13,6 +13,9 @@ import { SupabaseStatus } from '../components/SupabaseStatus';
 interface OrganizationWithStats extends Organization {
   member_count: number;
   admin_count: number;
+  subscription_type: string | null;
+  subscription_status: string | null;
+  subscription_expires_at?: string | null;
 }
 
 interface CreateSuperUserModalProps {
@@ -54,31 +57,24 @@ function CreateSuperUserModal({ onClose, onSuccess }: CreateSuperUserModalProps)
     setError(null);
 
     try {
-      // Hash password
-      const passwordHash = await bcrypt.hash(formData.password, 10);
+      // Hash password for future use if needed
+      await bcrypt.hash(formData.password, 10);
 
-      // Create new super user
-      const newSuperUser = {
-        id: crypto.randomUUID(),
-        email: formData.email,
-        full_name: formData.full_name,
-        password_hash: passwordHash,
-        active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      // Create new super user in Supabase
+      const { error: insertError } = await supabase
+        .from('super_users')
+        .insert({
+          email: formData.email,
+          full_name: formData.full_name,
+          active: true
+        });
 
-      // Save to localStorage
-      const existingSuperUsers = localStorage.getItem('superUsers');
-      const superUsers = existingSuperUsers ? JSON.parse(existingSuperUsers) : [];
-      
-      // Check for duplicate email
-      if (superUsers.some((user: any) => user.email === formData.email)) {
-        throw new Error('E-post er allerede registrert som super-bruker');
+      if (insertError) {
+        if (insertError.code === '23505') {
+          throw new Error('E-post er allerede registrert som super-bruker');
+        }
+        throw insertError;
       }
-      
-      superUsers.push(newSuperUser);
-      localStorage.setItem('superUsers', JSON.stringify(superUsers));
 
       onSuccess();
     } catch (error) {
@@ -246,26 +242,35 @@ function CreateOrgModal({ onClose, onSuccess }: CreateOrgModalProps) {
     setError(null);
 
     try {
-      // Create organization with unique ID
-      const newOrganization = {
-        id: crypto.randomUUID(),
-        ...formData,
-        active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      // Save to localStorage for demo (in production, this would use Supabase)
-      const savedOrgs = localStorage.getItem('organizations');
-      const organizations = savedOrgs ? JSON.parse(savedOrgs) : [];
-      
-      // Check for duplicate slug
-      if (organizations.some((org: any) => org.slug === formData.slug)) {
-        throw new Error('URL-slug er allerede i bruk. Velg en annen.');
+      // Validate form data
+      if (!formData.name || !formData.slug) {
+        throw new Error('Navn og slug er påkrevd');
       }
-      
-      organizations.push(newOrganization);
-      localStorage.setItem('organizations', JSON.stringify(organizations));
+
+      // Save to Supabase
+      const { error: insertError } = await supabase
+        .from('organizations')
+        .insert({
+          name: formData.name,
+          slug: formData.slug,
+          description: formData.description,
+          website: formData.website,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          primary_color: formData.primary_color,
+          secondary_color: formData.secondary_color,
+          subscription_type: 'starter',
+          subscription_status: 'active',
+          active: true
+        });
+
+      if (insertError) {
+        if (insertError.code === '23505') {
+          throw new Error('URL-slug er allerede i bruk. Velg en annen.');
+        }
+        throw insertError;
+      }
 
       onSuccess();
     } catch (error) {
@@ -471,7 +476,6 @@ function EditSuperUserModal({ superUser, onClose, onSuccess }: EditSuperUserModa
     password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
-  const [generateNewPassword, setGenerateNewPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -483,7 +487,6 @@ function EditSuperUserModal({ superUser, onClose, onSuccess }: EditSuperUserModa
       password += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     setFormData(prev => ({ ...prev, password }));
-    setGenerateNewPassword(true);
   };
 
   const copyPassword = () => {
@@ -498,29 +501,20 @@ function EditSuperUserModal({ superUser, onClose, onSuccess }: EditSuperUserModa
     setError(null);
 
     try {
-      const existingSuperUsers = localStorage.getItem('superUsers');
-      if (existingSuperUsers) {
-        const superUsers = JSON.parse(existingSuperUsers);
-        const updatedSuperUsers = superUsers.map((user: any) => {
-          if (user.id === superUser.id) {
-            const updatedUser = {
-              ...user,
-              email: formData.email,
-              full_name: formData.full_name,
-              active: formData.active,
-              updated_at: new Date().toISOString()
-            };
-            
-            // Only update password if new one is provided
-            if (formData.password && generateNewPassword) {
-              updatedUser.password_hash = bcrypt.hashSync(formData.password, 10);
-            }
-            
-            return updatedUser;
-          }
-          return user;
-        });
-        localStorage.setItem('superUsers', JSON.stringify(updatedSuperUsers));
+      const updateData: any = {
+        email: formData.email,
+        full_name: formData.full_name,
+        active: formData.active,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('super_users')
+        .update(updateData)
+        .eq('id', superUser.id);
+
+      if (error) {
+        throw error;
       }
 
       onSuccess();
@@ -601,7 +595,6 @@ function EditSuperUserModal({ superUser, onClose, onSuccess }: EditSuperUserModa
                   value={formData.password}
                   onChange={(e) => {
                     setFormData(prev => ({ ...prev, password: e.target.value }));
-                    setGenerateNewPassword(true);
                   }}
                   className="w-full bg-gray-700 rounded-md px-3 py-2 pr-20"
                   placeholder="La stå tom for å beholde eksisterende"
@@ -677,10 +670,10 @@ export function SuperAdmin() {
     try {
       setLoading(true);
       
-      // First try to load from Supabase
+      // Load from Supabase with subscription info
       const { data: orgsData, error: orgsError } = await supabase
         .from('organizations')
-        .select('*')
+        .select('*, subscription_type, subscription_status, subscription_expires_at')
         .order('created_at', { ascending: false });
 
       if (orgsError && orgsError.code !== 'PGRST116') {
@@ -729,14 +722,25 @@ export function SuperAdmin() {
     }
   };
 
-  const loadSuperUsers = () => {
+  const loadSuperUsers = async () => {
     try {
-      const savedSuperUsers = localStorage.getItem('superUsers');
-      if (savedSuperUsers) {
-        const users = JSON.parse(savedSuperUsers);
-        setSuperUsers(users || []);
+      const { data: superUsersData, error } = await supabase
+        .from('super_users')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading super users from database:', error);
+        // Fallback to localStorage if database fails
+        const savedSuperUsers = localStorage.getItem('superUsers');
+        if (savedSuperUsers) {
+          const users = JSON.parse(savedSuperUsers);
+          setSuperUsers(users || []);
+        } else {
+          setSuperUsers([]);
+        }
       } else {
-        setSuperUsers([]);
+        setSuperUsers(superUsersData || []);
       }
     } catch (error) {
       console.error('Error loading super users:', error);
@@ -746,13 +750,16 @@ export function SuperAdmin() {
 
 
   useEffect(() => {
-    loadOrganizations();
-    loadSuperUsers();
+    const loadData = async () => {
+      await loadOrganizations();
+      await loadSuperUsers();
+    };
+
+    loadData();
 
     // Listen for localStorage changes
     const handleStorageChange = () => {
-      loadOrganizations();
-      loadSuperUsers();
+      loadData();
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -829,22 +836,19 @@ export function SuperAdmin() {
 
   const handleToggleSuperUserStatus = async (userId: string, currentStatus: boolean) => {
     try {
-      const existingSuperUsers = localStorage.getItem('superUsers');
-      if (existingSuperUsers) {
-        const superUsers = JSON.parse(existingSuperUsers);
-        const updatedUsers = superUsers.map((user: any) => {
-          if (user.id === userId) {
-            return {
-              ...user,
-              active: !currentStatus,
-              updated_at: new Date().toISOString()
-            };
-          }
-          return user;
-        });
-        localStorage.setItem('superUsers', JSON.stringify(updatedUsers));
-        setSuperUsers(updatedUsers);
+      const { error } = await supabase
+        .from('super_users')
+        .update({ 
+          active: !currentStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) {
+        throw error;
       }
+
+      await loadSuperUsers();
     } catch (error) {
       console.error('Error toggling super user status:', error);
       alert('Kunne ikke endre status for super-bruker');
@@ -857,13 +861,16 @@ export function SuperAdmin() {
     }
 
     try {
-      const existingSuperUsers = localStorage.getItem('superUsers');
-      if (existingSuperUsers) {
-        const superUsers = JSON.parse(existingSuperUsers);
-        const updatedUsers = superUsers.filter((user: any) => user.id !== userId);
-        localStorage.setItem('superUsers', JSON.stringify(updatedUsers));
-        setSuperUsers(updatedUsers);
+      const { error } = await supabase
+        .from('super_users')
+        .delete()
+        .eq('id', userId);
+
+      if (error) {
+        throw error;
       }
+
+      await loadSuperUsers();
     } catch (error) {
       console.error('Error deleting super user:', error);
       alert('Kunne ikke slette super-bruker');
@@ -1084,6 +1091,29 @@ export function SuperAdmin() {
                             <div className="text-lg font-bold text-svpk-yellow">{org.admin_count}</div>
                             <div className="text-xs text-gray-400">Admins</div>
                           </div>
+                          <div className="text-center">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              org.active
+                                ? 'bg-green-900/50 text-green-300 border border-green-700'
+                                : 'bg-red-900/50 text-red-300 border border-red-700'
+                            }`}>
+                              {org.active ? 'Aktiv' : 'Inaktiv'}
+                            </span>
+                            <div className="text-xs text-gray-400 mt-1">Status</div>
+                          </div>
+                          <div className="text-center">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              (org.subscription_type || 'starter') === 'enterprise'
+                                ? 'bg-purple-900/50 text-purple-300 border border-purple-700'
+                                : (org.subscription_type || 'starter') === 'professional'
+                                ? 'bg-blue-900/50 text-blue-300 border border-blue-700'
+                                : 'bg-gray-900/50 text-gray-300 border border-gray-700'
+                            }`}>
+                              {(org.subscription_type || 'starter') === 'enterprise' ? 'Enterprise' : 
+                               (org.subscription_type || 'starter') === 'professional' ? 'Professional' : 'Starter'}
+                            </span>
+                            <div className="text-xs text-gray-400 mt-1">Abonnement</div>
+                          </div>
                           
                           <div className="flex gap-2">
                             <button
@@ -1091,7 +1121,7 @@ export function SuperAdmin() {
                               className="btn-secondary"
                             >
                               <Building2 className="w-4 h-4" />
-                              Åpne
+                              Administrer
                             </button>
                             <button
                               onClick={() => setExportingOrg({ id: org.id, name: org.name })}
