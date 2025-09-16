@@ -10,18 +10,21 @@ interface Props {
 }
 
 export function ManualTrainingModal({ onClose, onSuccess }: Props) {
-  const { organization } = useAuth();
+  const { organization, branding } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [trainingLocations, setTrainingLocations] = useState<Array<{id: string, name: string}>>([]);
   const [loadingRanges, setLoadingRanges] = useState(true);
   const [organizationMembers, setOrganizationMembers] = useState<Array<{id: string, full_name: string}>>([]);
-  const activityTypes = ['Trening', 'Stevne', 'Dugnad'];
+  
+  // Get activity types from organization branding with fallback
+  const activityTypes = branding?.activity_types || ['NSF', 'DFS', 'DSSN'];
+  
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     locationId: '',
     memberId: '',
-    activity: 'Trening',
+    activity: activityTypes[0] || 'NSF',
     notes: '',
   });
 
@@ -57,6 +60,13 @@ export function ManualTrainingModal({ onClose, onSuccess }: Props) {
 
     loadData();
   }, [organization?.id]);
+
+  // Update default activity when branding changes
+  useEffect(() => {
+    if (activityTypes.length > 0 && formData.activity && !activityTypes.includes(formData.activity)) {
+      setFormData(prev => ({ ...prev, activity: activityTypes[0] }));
+    }
+  }, [activityTypes, formData.activity]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,7 +191,7 @@ export function ManualTrainingModal({ onClose, onSuccess }: Props) {
                 required
                 disabled={isSubmitting}
               >
-                {activityTypes.map(activity => (
+                {activityTypes.map((activity: string) => (
                   <option key={activity} value={activity}>{activity}</option>
                 ))}
               </select>
