@@ -26,6 +26,7 @@ interface AuthContextType {
   switchOrganization: (organizationSlug: string) => Promise<void>;
   setOrganizationContext: (organizationSlug: string) => Promise<void>;
   checkSetupStatus: () => Promise<void>;
+  refreshUserData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -407,6 +408,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshUserData = async () => {
+    try {
+      if (!user?.id) return;
+      
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        setUser(currentUser);
+        
+        // Update organization data if needed
+        if (currentUser.user_type === 'organization_member' && currentUser.organization) {
+          setOrganization(currentUser.organization);
+          
+          try {
+            const brandingData = await getOrganizationBranding(currentUser.organization.id);
+            setBranding(brandingData);
+          } catch (brandingError) {
+            console.warn('Could not refresh branding:', brandingError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+    }
+  };
+
   const logout = async () => {
     await signOut();
     setUser(null);
@@ -433,7 +459,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       switchOrganization,
       setOrganizationContext,
-      checkSetupStatus
+      checkSetupStatus,
+      refreshUserData
     }}>
       {children}
     </AuthContext.Provider>

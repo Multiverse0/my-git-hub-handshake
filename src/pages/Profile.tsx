@@ -21,7 +21,7 @@ interface ProfileData {
 }
 
 export function Profile() {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshUserData } = useAuth();
   const { t } = useLanguage();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -171,8 +171,6 @@ export function Profile() {
           full_name: editData.name,
           email: editData.email,
           member_number: editData.memberNumber,
-          // join_date is created_at, not directly editable
-          // role is not directly editable by user
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
@@ -190,10 +188,9 @@ export function Profile() {
       setProfileData(editData);
       setIsEditing(false);
       
-      // Update auth context without full page refresh
-      setTimeout(() => {
-        window.location.reload();
-      }, 100);
+      // Refresh auth context to reflect updated user data
+      await refreshUserData();
+      
     } catch (error) {
       console.error('Error updating profile:', error);
     } finally {
