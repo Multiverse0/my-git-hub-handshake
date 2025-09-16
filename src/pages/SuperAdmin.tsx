@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Plus, Edit2, Trash2, Shield, AlertCircle, X, Loader2, Eye, EyeOff, Copy, Save, Package, Globe, Users, CheckCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase, createOrganization, setUserContext } from '../lib/supabase';
 import bcrypt from 'bcryptjs';
 import { useAuth } from '../contexts/AuthContext';
 import type { Organization } from '../lib/types';
@@ -222,6 +222,7 @@ interface CreateOrgModalProps {
 }
 
 function CreateOrgModal({ onClose, onSuccess }: CreateOrgModalProps) {
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -248,31 +249,43 @@ function CreateOrgModal({ onClose, onSuccess }: CreateOrgModalProps) {
         throw new Error('Navn og slug er påkrevd');
       }
 
-      // Save to Supabase
-      const { error: insertError } = await supabase
-        .from('organizations')
-        .insert({
-          name: formData.name,
-          slug: formData.slug,
-          description: formData.description,
-          website: formData.website,
-          email: formData.email,
-          phone: formData.phone,
-          address: formData.address,
-          primary_color: formData.primary_color,
-          secondary_color: formData.secondary_color,
-          subscription_type: 'starter',
-          subscription_status: 'active',
-          active: true
-        });
-
-      if (insertError) {
-        if (insertError.code === '23505') {
-          throw new Error('URL-slug er allerede i bruk. Velg en annen.');
-        }
-        throw insertError;
+      // Ensure user is authenticated
+      if (!user?.email) {
+        throw new Error('Du må være innlogget for å opprette organisasjoner');
       }
 
+      console.log('Setting user context for:', user.email);
+      
+      // Set user context for RLS policies
+      await setUserContext(user.email);
+
+      console.log('Creating organization with data:', formData);
+
+      // Use the centralized createOrganization function
+      const result = await createOrganization({
+        name: formData.name,
+        slug: formData.slug,
+        description: formData.description,
+        website: formData.website,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+        primary_color: formData.primary_color,
+        secondary_color: formData.secondary_color,
+        nsf_enabled: true,
+        dfs_enabled: true,
+        dssn_enabled: true,
+        activity_types: ['NSF', 'DFS', 'DSSN', 'Pistol', 'Rifle', 'Shotgun']
+      });
+
+      if (result.error) {
+        if (result.error.includes('duplicate key') || result.error.includes('23505')) {
+          throw new Error('URL-slug er allerede i bruk. Velg en annen.');
+        }
+        throw new Error(result.error);
+      }
+
+      console.log('Organization created successfully:', result.data);
       onSuccess();
     } catch (error) {
       console.error('Error creating organization:', error);
