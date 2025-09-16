@@ -61,7 +61,7 @@ export function Navigation() {
             
             {/* Supabase Status Indicator */}
             <div className="ml-4">
-              <SupabaseStatus />
+              <SupabaseStatus iconOnly={true} />
             </div>
           </div>
           

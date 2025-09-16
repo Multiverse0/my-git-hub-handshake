@@ -6,9 +6,10 @@ import { DatabaseService } from '../lib/database';
 interface SupabaseStatusProps {
   showDetails?: boolean;
   collapsible?: boolean;
+  iconOnly?: boolean;
 }
 
-export function SupabaseStatus({ showDetails = false, collapsible = false }: SupabaseStatusProps) {
+export function SupabaseStatus({ showDetails = false, collapsible = false, iconOnly = false }: SupabaseStatusProps) {
   const [status, setStatus] = useState<'checking' | 'connected' | 'disconnected' | 'error'>('checking');
   const [isExpanded, setIsExpanded] = useState(false);
   const [details, setDetails] = useState<{
@@ -206,6 +207,19 @@ export function SupabaseStatus({ showDetails = false, collapsible = false }: Sup
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  if (iconOnly) {
+    return (
+      <div className="relative group">
+        <div className="cursor-help">
+          {getStatusIcon()}
+        </div>
+        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+          {getStatusText()}
+        </div>
       </div>
     );
   }
