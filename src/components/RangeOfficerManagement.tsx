@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Edit2, Trash2, X, CheckCircle, XCircle, PlusCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
+import { setUserContext } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { DatabaseService } from '../lib/database';
 import type { OrganizationMember } from '../lib/types';
@@ -119,7 +120,7 @@ function EditModal({ officer, onClose, onSave }: EditModalProps) {
 }
 
 export function RangeOfficerManagement() {
-  const { organization } = useAuth();
+  const { organization, user } = useAuth();
   const [officers, setOfficers] = useState<OrganizationMember[]>([]);
   const [editingOfficer, setEditingOfficer] = useState<OrganizationMember | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -185,6 +186,19 @@ export function RangeOfficerManagement() {
     
     try {
       setLoading(true);
+      setError(null);
+
+      // Ensure user is authenticated
+      if (!user?.email) {
+        throw new Error('Du må være innlogget for å administrere standplassledere');
+      }
+
+      console.log('Setting user context for:', user.email);
+      
+      // Set user context for RLS policies
+      await setUserContext(user.email);
+
+      console.log('Saving range officer:', updatedOfficer);
       
       if (editingOfficer) {
         // Update existing officer
@@ -215,6 +229,8 @@ export function RangeOfficerManagement() {
         if (error) throw error;
       }
       
+      console.log('Range officer saved successfully');
+      
       // Refresh the list
       await fetchRangeOfficers();
       
@@ -222,7 +238,8 @@ export function RangeOfficerManagement() {
       setShowAddModal(false);
     } catch (error) {
       console.error('Error saving officer:', error);
-      setError('Kunne ikke lagre standplassleder');
+      const errorMessage = error instanceof Error ? error.message : 'Kunne ikke lagre standplassleder';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
