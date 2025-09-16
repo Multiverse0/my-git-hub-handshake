@@ -157,11 +157,6 @@ export function Admin() {
 
   return (
     <div className="space-y-8">
-      {/* Supabase Connection Status */}
-      <div className="mb-6">
-        <SupabaseStatus showDetails={true} />
-      </div>
-      
       <header className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-svpk-yellow mb-2">
@@ -338,6 +333,11 @@ export function Admin() {
           }}
         />
       )}
+
+      {/* Supabase Connection Status - Bottom of page */}
+      <div className="mt-12 pt-6 border-t border-gray-700">
+        <SupabaseStatus showDetails={false} collapsible={true} />
+      </div>
     </div>
   );
 }

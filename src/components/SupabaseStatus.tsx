@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Database, CheckCircle, XCircle, AlertTriangle, Loader2, Wifi, WifiOff } from 'lucide-react';
+import { Database, CheckCircle, XCircle, AlertTriangle, Loader2, Wifi, WifiOff, ChevronUp, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { DatabaseService } from '../lib/database';
 
 interface SupabaseStatusProps {
   showDetails?: boolean;
+  collapsible?: boolean;
 }
 
-export function SupabaseStatus({ showDetails = false }: SupabaseStatusProps) {
+export function SupabaseStatus({ showDetails = false, collapsible = false }: SupabaseStatusProps) {
   const [status, setStatus] = useState<'checking' | 'connected' | 'disconnected' | 'error'>('checking');
+  const [isExpanded, setIsExpanded] = useState(false);
   const [details, setDetails] = useState<{
     database: boolean;
     auth: boolean;
@@ -113,6 +115,100 @@ export function SupabaseStatus({ showDetails = false }: SupabaseStatusProps) {
         return 'text-red-400';
     }
   };
+
+  if (collapsible) {
+    return (
+      <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-700/30 transition-colors"
+        >
+          <div className="flex items-center gap-2 text-sm">
+            <Database className="w-4 h-4 text-gray-400" />
+            <span className="text-gray-400">System Status:</span>
+            {getStatusIcon()}
+            <span className={`${getStatusColor()} font-medium`}>{getStatusText()}</span>
+          </div>
+          {isExpanded ? (
+            <ChevronUp className="w-4 h-4 text-gray-400" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-gray-400" />
+          )}
+        </button>
+        
+        {isExpanded && (
+          <div className="px-3 pb-3 border-t border-gray-700/50">
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Database</span>
+                <div className="flex items-center gap-1">
+                  {details.database ? (
+                    <CheckCircle className="w-3 h-3 text-green-400" />
+                  ) : (
+                    <XCircle className="w-3 h-3 text-red-400" />
+                  )}
+                  <span className={`text-xs ${details.database ? 'text-green-400' : 'text-red-400'}`}>
+                    {details.database ? 'OK' : 'Error'}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Auth</span>
+                <div className="flex items-center gap-1">
+                  {details.auth ? (
+                    <CheckCircle className="w-3 h-3 text-green-400" />
+                  ) : (
+                    <XCircle className="w-3 h-3 text-red-400" />
+                  )}
+                  <span className={`text-xs ${details.auth ? 'text-green-400' : 'text-red-400'}`}>
+                    {details.auth ? 'OK' : 'Error'}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Storage</span>
+                <div className="flex items-center gap-1">
+                  {details.storage ? (
+                    <CheckCircle className="w-3 h-3 text-green-400" />
+                  ) : (
+                    <XCircle className="w-3 h-3 text-red-400" />
+                  )}
+                  <span className={`text-xs ${details.storage ? 'text-green-400' : 'text-red-400'}`}>
+                    {details.storage ? 'OK' : 'Error'}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Realtime</span>
+                <div className="flex items-center gap-1">
+                  {details.realtime ? (
+                    <Wifi className="w-3 h-3 text-green-400" />
+                  ) : (
+                    <WifiOff className="w-3 h-3 text-red-400" />
+                  )}
+                  <span className={`text-xs ${details.realtime ? 'text-green-400' : 'text-red-400'}`}>
+                    {details.realtime ? 'OK' : 'Error'}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="pt-2 border-t border-gray-700/50">
+                <button
+                  onClick={checkSupabaseConnection}
+                  className="text-xs text-gray-400 hover:text-white transition-colors"
+                >
+                  Refresh Status
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (!showDetails) {
     return (
