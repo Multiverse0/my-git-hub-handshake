@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Shield, Plus, Calendar, CheckCircle } from 'lucide-react';
-import { getOrganizationTrainingSessions, verifyTrainingSession } from '../lib/supabase';
+import { Shield, Plus, Calendar, CheckCircle, Users, AlertCircle, TrendingUp } from 'lucide-react';
+import { getOrganizationTrainingSessions, verifyTrainingSession, getOrganizationMembers } from '../lib/supabase';
 import { MemberManagement } from '../components/MemberManagement';
 import { TrainingApprovalQueue } from '../components/TrainingApprovalQueue';
 import { QRCodeManagement } from '../components/QRCodeManagement';
@@ -12,6 +12,7 @@ import { EmailManagement } from '../components/EmailManagement';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { SupabaseStatus } from '../components/SupabaseStatus';
+import { StatisticsCard } from '../components/StatisticsCard';
 
 export function Admin() {
   const { user, profile, organization } = useAuth();
@@ -23,16 +24,19 @@ export function Admin() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [todaysUnapprovedCount, setTodaysUnapprovedCount] = useState(0);
   const [selectedDateUnapprovedCount, setSelectedDateUnapprovedCount] = useState(0);
+  const [totalMembers, setTotalMembers] = useState(0);
+  const [totalTrainingSessions, setTotalTrainingSessions] = useState(0);
 
-  // Load training sessions from database
+  // Load training sessions and member data from database
   useEffect(() => {
     if (!organization?.id) return;
     
-    const loadTrainingSessions = async () => {
+    const loadData = async () => {
       try {
-        const result = await getOrganizationTrainingSessions(organization.id);
-        if (result.data) {
-          const unverifiedSessions = result.data.filter(session => !session.verified);
+        // Load training sessions
+        const sessionsResult = await getOrganizationTrainingSessions(organization.id);
+        if (sessionsResult.data) {
+          const unverifiedSessions = sessionsResult.data.filter(session => !session.verified);
           
           // Today's count
           const today = new Date().toDateString();
@@ -50,19 +54,37 @@ export function Admin() {
           
           // Update total pending count
           setPendingApprovalsCount(unverifiedSessions.length);
+          
+          // Total training sessions this month
+          const currentMonth = new Date();
+          const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+          const thisMonthSessions = sessionsResult.data.filter(session => 
+            session.verified && session.start_time && new Date(session.start_time) >= firstDayOfMonth
+          ).length;
+          setTotalTrainingSessions(thisMonthSessions);
+        }
+
+        // Load members
+        const membersResult = await getOrganizationMembers(organization.id);
+        if (membersResult.data) {
+          setTotalMembers(membersResult.data.length);
+          const pendingCount = membersResult.data.filter(member => !member.approved).length;
+          setPendingMembersCount(pendingCount);
         }
       } catch (error) {
-        console.error('Error loading training sessions:', error);
+        console.error('Error loading data:', error);
         setTodaysUnapprovedCount(0);
         setSelectedDateUnapprovedCount(0);
         setPendingApprovalsCount(0);
+        setTotalMembers(0);
+        setTotalTrainingSessions(0);
       }
     };
 
-    loadTrainingSessions();
+    loadData();
     
     // Refresh every 30 seconds
-    const interval = setInterval(loadTrainingSessions, 30000);
+    const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
   }, [organization?.id, selectedDate]);
 
@@ -250,6 +272,36 @@ export function Admin() {
       {/* Tab Content */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          {/* Statistics Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatisticsCard
+              title="Totale medlemmer"
+              value={totalMembers}
+              icon={Users}
+              color="yellow"
+              onClick={() => setActiveTab('members')}
+            />
+            <StatisticsCard
+              title="Ventende godkjenning"
+              value={pendingMembersCount}
+              icon={AlertCircle}
+              color="orange"
+              onClick={() => setActiveTab('members')}
+            />
+            <StatisticsCard
+              title="Ikke-godkjente treninger"
+              value={todaysUnapprovedCount}
+              icon={Shield}
+              color="red"
+            />
+            <StatisticsCard
+              title="Denne måneds treninger"
+              value={totalTrainingSessions}
+              icon={TrendingUp}
+              color="green"
+            />
+          </div>
+
           <div className="card">
             <h2 className="text-xl font-bold text-svpk-yellow mb-4">Alle treningsregistreringer</h2>
             <p className="text-gray-400 mb-6">Oversikt over alle treningsregistreringer med klikkbare status-ikoner</p>

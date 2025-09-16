@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Plus, Edit2, Trash2, Shield, AlertCircle, X, Loader2, Eye, EyeOff, Copy, Save, Package, Globe } from 'lucide-react';
+import { Building2, Plus, Edit2, Trash2, Shield, AlertCircle, X, Loader2, Eye, EyeOff, Copy, Save, Package, Globe, Users, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import bcrypt from 'bcryptjs';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,6 +9,7 @@ import { ThemeToggle } from '../components/ThemeToggle';
 import { DataExportManager } from '../components/DataExportManager';
 import { LanguageFileManager } from '../components/LanguageFileManager';
 import { SupabaseStatus } from '../components/SupabaseStatus';
+import { StatisticsCard } from '../components/StatisticsCard';
 
 interface OrganizationWithStats extends Organization {
   member_count: number;
@@ -665,6 +666,14 @@ export function SuperAdmin() {
   const [editingSuperUser, setEditingSuperUser] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<'organizations' | 'languages'>('organizations');
   const [exportingOrg, setExportingOrg] = useState<{ id: string; name: string } | null>(null);
+  
+  // Statistics state
+  const [stats, setStats] = useState({
+    totalOrganizations: 0,
+    activeOrganizations: 0,
+    totalUsers: 0,
+    totalSuperAdmins: 0
+  });
 
   const loadOrganizations = async () => {
     try {
@@ -714,6 +723,18 @@ export function SuperAdmin() {
       }
       
       setOrganizations(orgsWithStats);
+      
+      // Calculate statistics
+      const totalOrgs = orgsWithStats.length;
+      const activeOrgs = orgsWithStats.filter(org => org.active).length;
+      const totalUsers = orgsWithStats.reduce((sum, org) => sum + org.member_count, 0);
+      
+      setStats({
+        totalOrganizations: totalOrgs,
+        activeOrganizations: activeOrgs,
+        totalUsers,
+        totalSuperAdmins: 0 // Will be updated when super users are loaded
+      });
     } catch (error) {
       console.error('Error loading organizations:', error);
       throw error;
@@ -741,6 +762,12 @@ export function SuperAdmin() {
         }
       } else {
         setSuperUsers(superUsersData || []);
+        
+        // Update super admin count in stats
+        setStats((prev: typeof stats) => ({
+          ...prev,
+          totalSuperAdmins: (superUsersData || []).filter(su => su.active).length
+        }));
       }
     } catch (error) {
       console.error('Error loading super users:', error);
@@ -941,6 +968,34 @@ export function SuperAdmin() {
 
         {activeTab === 'organizations' && (
           <>
+            {/* Statistics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <StatisticsCard
+                title="Totale organisasjoner"
+                value={stats.totalOrganizations}
+                icon={Building2}
+                color="yellow"
+              />
+              <StatisticsCard
+                title="Aktive organisasjoner"
+                value={stats.activeOrganizations}
+                icon={CheckCircle}
+                color="green"
+              />
+              <StatisticsCard
+                title="Totale brukere"
+                value={stats.totalUsers}
+                icon={Users}
+                color="blue"
+              />
+              <StatisticsCard
+                title="Super-administratorer"
+                value={stats.totalSuperAdmins}
+                icon={Shield}
+                color="purple"
+              />
+            </div>
+
             {/* Super Users Section */}
             <div className="mb-8">
               <div className="flex justify-between items-center mb-4">
