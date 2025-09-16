@@ -233,7 +233,7 @@ export function EmailManagement() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-svpk-yellow mb-2">E-post Administrasjon</h2>
+        <h2 className="text-2xl font-bold theme-primary-text mb-2">E-post Administrasjon</h2>
         <p className="text-gray-400">Konfigurer e-post-tjeneste og rediger meldingsmaler</p>
       </div>
 
@@ -243,7 +243,7 @@ export function EmailManagement() {
           onClick={() => setActiveTab('config')}
           className={`px-4 py-2 text-sm font-medium ${
             activeTab === 'config'
-              ? 'text-svpk-yellow border-b-2 border-svpk-yellow'
+              ? 'theme-primary-text border-b-2 theme-primary-border'
               : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -254,7 +254,7 @@ export function EmailManagement() {
           onClick={() => setActiveTab('templates')}
           className={`px-4 py-2 text-sm font-medium ${
             activeTab === 'templates'
-              ? 'text-svpk-yellow border-b-2 border-svpk-yellow'
+              ? 'theme-primary-text border-b-2 theme-primary-border'
               : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -265,7 +265,7 @@ export function EmailManagement() {
           onClick={() => setActiveTab('test')}
           className={`px-4 py-2 text-sm font-medium ${
             activeTab === 'test'
-              ? 'text-svpk-yellow border-b-2 border-svpk-yellow'
+              ? 'theme-primary-text border-b-2 theme-primary-border'
               : 'text-gray-400 hover:text-white'
           }`}
         >

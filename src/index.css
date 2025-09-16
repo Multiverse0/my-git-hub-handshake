@@ -4,6 +4,7 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Organization theme CSS custom properties and utility classes */
 :root {
   --bg-primary: #111827;
   --bg-secondary: #1f2937;
@@ -15,6 +16,11 @@
   --primary-color: #FFD700;
   --secondary-color: #1F2937;
   --background-color: #111827;
+  
+  /* Organization theme colors (HSL format for CSS custom properties) */
+  --org-primary: 51 100% 50%; /* Default: #FFD700 */
+  --org-secondary: 217 11% 25%; /* Default: #1F2937 */
+  --org-background: 217 19% 10%; /* Default: #111827 */
 }
 
 .light {
@@ -103,14 +109,38 @@ nav {
   @apply bg-gray-800 rounded-lg p-6 border border-gray-700;
 }
 
-/* Dynamic theming support */
+/* Theme utility classes for organization branding */
 .theme-bg {
   background-color: var(--background-color);
   color: var(--text-primary);
 }
 
 .theme-primary {
-  color: var(--primary-color, #FFD700);
+  color: hsl(var(--org-primary));
+}
+
+.theme-secondary {
+  color: hsl(var(--org-secondary));
+}
+
+.theme-primary-bg {
+  background-color: hsl(var(--org-primary));
+}
+
+.theme-primary-border {
+  border-color: hsl(var(--org-primary));
+}
+
+.theme-primary-text {
+  color: hsl(var(--org-primary));
+}
+
+.theme-secondary-text {
+  color: hsl(var(--org-secondary));
+}
+
+.theme-background {
+  background-color: hsl(var(--org-background));
 }
 
 .theme-bg-primary {

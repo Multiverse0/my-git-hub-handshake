@@ -13,7 +13,7 @@ export function EmergencyFallback() {
           <h3 className="font-semibold text-yellow-400 mb-2">Quick Actions:</h3>
           <div className="space-y-2">
             <button 
-              className="w-full bg-yellow-500 text-black px-4 py-2 rounded hover:bg-yellow-400 transition-colors"
+              className="w-full bg-org-primary text-gray-900 px-4 py-2 rounded hover:brightness-110 transition-all"
               onClick={() => window.location.reload()}
             >
               Reload Page

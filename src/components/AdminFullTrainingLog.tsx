@@ -157,7 +157,7 @@ function EditModal({ entry, onClose, onSave, approvedMembers, locations }: EditM
                     type="radio"
                     checked={editedEntry.approved}
                     onChange={() => setEditedEntry((prev: TrainingEntry) => ({ ...prev, approved: true }))}
-                    className="text-svpk-yellow"
+                    className="theme-primary-text"
                   />
                   <span>Verifisert</span>
                 </label>
@@ -166,7 +166,7 @@ function EditModal({ entry, onClose, onSave, approvedMembers, locations }: EditM
                     type="radio"
                     checked={!editedEntry.approved}
                     onChange={() => setEditedEntry((prev: TrainingEntry) => ({ ...prev, approved: false }))}
-                    className="text-svpk-yellow"
+                    className="theme-primary-text"
                   />
                   <span>Ikke verifisert</span>
                 </label>

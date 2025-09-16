@@ -5,7 +5,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        'svpk-yellow': '#FFD700',
+        'svpk-yellow': 'hsl(var(--org-primary))',
+        'org-primary': 'hsl(var(--org-primary))',
+        'org-secondary': 'hsl(var(--org-secondary))',
+        'org-background': 'hsl(var(--org-background))',
       },
       fontFamily: {
         'inter': ['Inter', 'sans-serif'],

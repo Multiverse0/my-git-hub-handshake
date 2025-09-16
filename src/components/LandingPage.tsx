@@ -4,18 +4,18 @@ export function LandingPage() {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       {/* Navigation */}
-      <nav className="bg-gray-800/95 backdrop-blur-sm border-b border-yellow-500/20 sticky top-0 z-50">
+      <nav className="bg-gray-800/95 backdrop-blur-sm border-b border-org-primary/20 sticky top-0 z-50">
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
-              <div className="text-yellow-500 font-bold text-xl">AKTIVITETSLOGG.no</div>
+              <div className="text-org-primary font-bold text-xl">AKTIVITETSLOGG.no</div>
             </div>
             <div className="hidden md:flex items-center space-x-6">
-              <a href="#features" className="text-gray-300 hover:text-yellow-500 transition-colors">Funksjoner</a>
-              <a href="#benefits" className="text-gray-300 hover:text-yellow-500 transition-colors">Fordeler</a>
-              <a href="#pricing" className="text-gray-300 hover:text-yellow-500 transition-colors">Priser</a>
-              <a href="#contact" className="text-gray-300 hover:text-yellow-500 transition-colors">Kontakt</a>
-              <a href="mailto:yngve@promonorge.no" className="bg-yellow-500 text-gray-900 px-6 py-2 rounded-lg font-semibold hover:bg-yellow-400 transition-colors">
+              <a href="#features" className="text-gray-300 hover:text-org-primary transition-colors">Funksjoner</a>
+              <a href="#benefits" className="text-gray-300 hover:text-org-primary transition-colors">Fordeler</a>
+              <a href="#pricing" className="text-gray-300 hover:text-org-primary transition-colors">Priser</a>
+              <a href="#contact" className="text-gray-300 hover:text-org-primary transition-colors">Kontakt</a>
+              <a href="mailto:yngve@promonorge.no" className="bg-org-primary text-gray-900 px-6 py-2 rounded-lg font-semibold hover:brightness-110 transition-all">
                 Få demo
               </a>
             </div>
@@ -29,10 +29,10 @@ export function LandingPage() {
           <div className="max-w-4xl mx-auto text-center">
             <div className="mb-8">
               <h1 className="text-5xl lg:text-7xl font-bold mb-6">
-                <span className="text-yellow-500">AKTIVITETSLOGG</span><span className="text-white">.no</span>
+                <span className="text-org-primary">AKTIVITETSLOGG</span><span className="text-white">.no</span>
               </h1>
               <p className="text-xl lg:text-2xl text-gray-300 mb-8 leading-relaxed">
-                Digital treningsregistrering for <span className="text-yellow-500 font-semibold">skytterlag</span> og <span className="text-yellow-500 font-semibold">idrettslag</span>
+                Digital treningsregistrering for <span className="text-org-primary font-semibold">skytterlag</span> og <span className="text-org-primary font-semibold">idrettslag</span>
               </p>
               <p className="text-lg text-gray-400 mb-12 max-w-3xl mx-auto">
                 Slutt med papirbaserte lister og manuelle systemer. AKTIVITETSLOGG gir deg en komplett digital løsning 

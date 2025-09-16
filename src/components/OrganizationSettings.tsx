@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Palette, Building2, Mail, Globe, FileText, Upload, Loader2, AlertCircle, CheckCircle, X, Plus, Trash2, Copy } from 'lucide-react';
+import { Save, Palette, Building2, Mail, Globe, FileText, Upload, Loader2, AlertCircle, CheckCircle, X, Plus, Trash2, Copy, RotateCcw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { languages } from '../lib/translations';
 import { EmailTestPanel } from './EmailTestPanel';
+import { DEFAULT_ORGANIZATION_COLORS } from '../lib/constants';
 
 interface OrganizationData {
   name: string;
@@ -411,10 +412,22 @@ export function OrganizationSettings() {
     }
   };
 
+  const resetPrimaryColor = () => {
+    setOrgData(prev => ({ ...prev, primary_color: DEFAULT_ORGANIZATION_COLORS.primary_color }));
+  };
+
+  const resetSecondaryColor = () => {
+    setOrgData(prev => ({ ...prev, secondary_color: DEFAULT_ORGANIZATION_COLORS.secondary_color }));
+  };
+
+  const resetBackgroundColor = () => {
+    setOrgData(prev => ({ ...prev, background_color: DEFAULT_ORGANIZATION_COLORS.background_color }));
+  };
+
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-bold text-svpk-yellow mb-2">Organisasjonsinnstillinger</h2>
+        <h2 className="text-2xl font-bold theme-primary-text mb-2">Organisasjonsinnstillinger</h2>
         <p className="text-gray-400">Konfigurer organisasjonsinformasjon og innstillinger</p>
       </div>
 
@@ -628,6 +641,14 @@ export function OrganizationSettings() {
                   className="flex-1 bg-gray-700 rounded-md px-3 py-2 font-mono text-sm"
                   placeholder="#FFD700"
                 />
+                <button
+                  type="button"
+                  onClick={resetPrimaryColor}
+                  className="p-2 text-gray-400 hover:text-white transition-colors"
+                  title="Tilbakestill til Svolvær Pistolklubb standard"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
               </div>
             </div>
 
@@ -649,6 +670,14 @@ export function OrganizationSettings() {
                   className="flex-1 bg-gray-700 rounded-md px-3 py-2 font-mono text-sm"
                   placeholder="#1F2937"
                 />
+                <button
+                  type="button"
+                  onClick={resetSecondaryColor}
+                  className="p-2 text-gray-400 hover:text-white transition-colors"
+                  title="Tilbakestill til Svolvær Pistolklubb standard"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
               </div>
             </div>
 
@@ -670,6 +699,14 @@ export function OrganizationSettings() {
                   className="flex-1 bg-gray-700 rounded-md px-3 py-2 font-mono text-sm"
                   placeholder="#111827"
                 />
+                <button
+                  type="button"
+                  onClick={resetBackgroundColor}
+                  className="p-2 text-gray-400 hover:text-white transition-colors"
+                  title="Tilbakestill til Svolvær Pistolklubb standard"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </div>
