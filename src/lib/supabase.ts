@@ -1102,7 +1102,7 @@ export async function updateTrainingLocation(
 export async function uploadProfileImage(file: File, userId: string): Promise<string> {
   const fileExt = file.name.split('.').pop();
   const fileName = `${userId}-${Math.random()}.${fileExt}`;
-  const filePath = `profiles/${fileName}`;
+  const filePath = `profiles/${userId}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('profiles')
@@ -1125,7 +1125,7 @@ export async function uploadProfileImage(file: File, userId: string): Promise<st
 export async function uploadStartkortPDF(file: File, userId: string): Promise<string> {
   const fileExt = file.name.split('.').pop();
   const fileName = `${userId}-startkort-${Date.now()}.${fileExt}`;
-  const filePath = `documents/${fileName}`;
+  const filePath = `documents/${userId}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('documents')
@@ -1148,7 +1148,7 @@ export async function uploadStartkortPDF(file: File, userId: string): Promise<st
 export async function uploadDiplomaPDF(file: File, userId: string): Promise<string> {
   const fileExt = file.name.split('.').pop();
   const fileName = `${userId}-diploma-${Date.now()}.${fileExt}`;
-  const filePath = `documents/${fileName}`;
+  const filePath = `documents/${userId}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('documents')
@@ -1171,7 +1171,7 @@ export async function uploadDiplomaPDF(file: File, userId: string): Promise<stri
 export async function uploadTargetImage(file: File, sessionId: string): Promise<string> {
   const fileExt = file.name.split('.').pop();
   const fileName = `${sessionId}-target-${Date.now()}.${fileExt}`;
-  const filePath = `target-images/${fileName}`;
+  const filePath = `target-images/${sessionId}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('target-images')
