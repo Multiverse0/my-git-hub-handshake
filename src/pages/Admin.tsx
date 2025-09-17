@@ -18,7 +18,7 @@ export function Admin() {
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'approvals' | 'qr' | 'log' | 'officers' | 'settings' | 'email'>('overview');
   const [showManualModal, setShowManualModal] = useState(false);
-  const [, setPendingApprovalsCount] = useState(0);
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
   const [pendingMembersCount, setPendingMembersCount] = useState(0);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [todaysUnapprovedCount, setTodaysUnapprovedCount] = useState(0);
@@ -232,9 +232,11 @@ export function Admin() {
           }`}
         >
           Logg
-          <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center ml-1 inline-flex">
-            12
-          </span>
+          {pendingApprovalsCount > 0 && (
+            <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center ml-1 inline-flex">
+              {pendingApprovalsCount}
+            </span>
+          )}
         </button>
         <button
           onClick={() => setActiveTab('officers')}

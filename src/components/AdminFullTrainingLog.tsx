@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Search, ChevronDown, ChevronUp, CheckCircle, XCircle, Edit2, X, Loader2 } from 'lucide-react';
+import { Download, Search, ChevronDown, ChevronUp, CheckCircle, XCircle, Edit2, X, Loader2, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { jsPDF } from 'jspdf';
 import { useAuth } from '../contexts/AuthContext';
@@ -345,6 +345,42 @@ export function AdminFullTrainingLog() {
       console.error('Error toggling training session status:', error);
       // Revert local changes on error
       loadTrainingSessions();
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleDeleteEntry = async (entryId: string) => {
+    try {
+      const entry = logEntries.find(e => e.id === entryId);
+      if (!entry) return;
+
+      const confirmMessage = `Er du sikker på at du vil slette denne treningsøkten?\n\nMedlem: ${entry.memberName}\nDato: ${format(entry.date, 'dd.MM.yyyy')}\nBane: ${entry.range}`;
+      
+      if (!window.confirm(confirmMessage)) return;
+
+      setProcessingId(entryId);
+
+      // Update locally for immediate feedback
+      setLogEntries(prev => prev.filter(e => e.id !== entryId));
+
+      // Delete from database using supabase client directly
+      const { supabase } = await import('../integrations/supabase/client');
+      const { error } = await supabase
+        .from('member_training_sessions')
+        .delete()
+        .eq('id', entryId);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      console.log('Training session deleted successfully:', entryId);
+    } catch (error) {
+      console.error('Error deleting training session:', error);
+      // Revert local changes on error
+      loadTrainingSessions();
+      alert('Kunne ikke slette treningsøkten. Prøv igjen.');
     } finally {
       setProcessingId(null);
     }
@@ -751,6 +787,14 @@ export function AdminFullTrainingLog() {
                           ) : (
                             <XCircle className="w-5 h-5" />
                           )}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteEntry(entry.id)}
+                          disabled={processingId === entry.id}
+                          className="p-1 rounded text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                          title="Slett"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>

@@ -1,4 +1,5 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { Resend } from "npm:resend@2.0.0";
 
 interface EmailRequest {
   to: string
@@ -15,12 +16,6 @@ interface EmailRequest {
     [key: string]: any
   }
   organizationId: string
-}
-
-interface EmailProvider {
-  apiKey: string
-  fromEmail: string
-  fromName: string
 }
 
 const corsHeaders = {
@@ -328,296 +323,209 @@ ${data.organizationName}
     `
   },
 
-  subscription_change: {
-    subject: (data: any) => `Abonnementsendring for ${data.organizationName}`,
+  password_reset: {
+    subject: (data: any) => `Tilbakestill passord for ${data.organizationName}`,
     html: (data: any) => `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Abonnementsendring</title>
+        <title>Tilbakestill passord</title>
         <style>
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #FFD700, #FFA500); padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .header h1 { color: #1F2937; margin: 0; font-size: 28px; }
+          .header { background: linear-gradient(135deg, #3B82F6, #1D4ED8); padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .header h1 { color: white; margin: 0; font-size: 28px; }
           .content { background: #ffffff; padding: 30px; border: 1px solid #e0e0e0; }
-          .change-box { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #FFD700; }
+          .info-box { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3B82F6; }
+          .button { display: inline-block; background: #3B82F6; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
           .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 10px 10px; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <h1>💳 Abonnementsendring</h1>
+            <h1>🔐 Tilbakestill Passord</h1>
           </div>
           
           <div class="content">
-            <h2>Hei Yngve!</h2>
+            <h2>Hei ${data.recipientName}!</h2>
             
-            <p>En kunde har endret sitt abonnement i AKTIVLOGG-systemet:</p>
+            <p>Du har bedt om å tilbakestille passordet ditt for <strong>${data.organizationName}</strong>.</p>
             
-            <div class="change-box">
-              <h3>📋 Endringsinformasjon:</h3>
-              <p><strong>Organisasjon:</strong> ${data.organizationName}</p>
-              <p><strong>Endring:</strong> ${data.changeType}</p>
-              <p><strong>Fra:</strong> ${data.oldPlan} (Kr ${data.oldPrice}/mnd)</p>
-              <p><strong>Til:</strong> ${data.newPlan} (Kr ${data.newPrice}/mnd)</p>
-              <p><strong>Prisendring:</strong> ${data.newPrice > data.oldPrice ? '+' : ''}${data.newPrice - data.oldPrice} Kr/mnd</p>
+            <div class="info-box">
+              <h3>🔑 Ditt nye passord:</h3>
+              <p><strong>E-post:</strong> ${data.email}</p>
+              <p><strong>Nytt passord:</strong> <code style="background: #e9ecef; padding: 4px 8px; border-radius: 4px; font-family: monospace;">${data.password}</code></p>
             </div>
             
-            <div class="change-box">
-              <h3>📞 Kontaktinformasjon:</h3>
-              <p><strong>Organisasjons-epost:</strong> ${data.organizationEmail}</p>
-              <p><strong>Telefon:</strong> ${data.organizationPhone}</p>
-              <p><strong>Faktura-epost:</strong> ${data.billingEmail}</p>
+            <p><strong>⚠️ Viktig:</strong> Endre dette passordet så snart du logger inn av sikkerhetsmessige årsaker.</p>
+            
+            <div style="text-align: center;">
+              <a href="${data.loginUrl}" class="button">🚀 Logg inn nå</a>
             </div>
             
-            <p><strong>Neste steg:</strong></p>
-            <ul>
-              <li>Kontakt kunden for å bekrefte endringen</li>
-              <li>Oppdater faktureringssystemet</li>
-              <li>Send bekreftelse til kunden</li>
-            </ul>
-            
-            <p>Endringen er registrert i systemet: ${new Date().toLocaleString('nb-NO')}</p>
+            <p>Hvis du ikke ba om denne passordtilbakestillingen, kan du trygt ignorere denne e-posten.</p>
             
             <p>Med vennlig hilsen,<br>
-            <strong>AKTIVLOGG Automatisk System</strong></p>
+            <strong>${data.organizationName}</strong></p>
           </div>
           
           <div class="footer">
-            <p>Dette er en automatisk generert e-post fra AKTIVLOGG-systemet.</p>
-            <p>© ${new Date().getFullYear()} AKTIVLOGG. Alle rettigheter reservert.</p>
+            <p>Dette er en automatisk generert e-post fra Aktivlogg-systemet.</p>
+            <p>© ${new Date().getFullYear()} Aktivlogg. Alle rettigheter reservert.</p>
           </div>
         </div>
       </body>
       </html>
     `,
     text: (data: any) => `
-Abonnementsendring for ${data.organizationName}
+Tilbakestill passord for ${data.organizationName}
 
-Hei Yngve!
+Hei ${data.recipientName}!
 
-En kunde har endret sitt abonnement i AKTIVLOGG-systemet:
+Du har bedt om å tilbakestille passordet ditt for ${data.organizationName}.
 
-ENDRINGSINFORMASJON:
-Organisasjon: ${data.organizationName}
-Endring: ${data.changeType}
-Fra: ${data.oldPlan} (Kr ${data.oldPrice}/mnd)
-Til: ${data.newPlan} (Kr ${data.newPrice}/mnd)
-Prisendring: ${data.newPrice > data.oldPrice ? '+' : ''}${data.newPrice - data.oldPrice} Kr/mnd
+Dine nye innloggingsopplysninger:
+E-post: ${data.email}
+Nytt passord: ${data.password}
 
-KONTAKTINFORMASJON:
-Organisasjons-epost: ${data.organizationEmail}
-Telefon: ${data.organizationPhone}
-Faktura-epost: ${data.billingEmail}
+VIKTIG: Endre dette passordet så snart du logger inn av sikkerhetsmessige årsaker.
 
-NESTE STEG:
-- Kontakt kunden for å bekrefte endringen
-- Oppdater faktureringssystemet
-- Send bekreftelse til kunden
+Logg inn her: ${data.loginUrl}
 
-Endringen er registrert: ${new Date().toLocaleString('nb-NO')}
+Hvis du ikke ba om denne passordtilbakestillingen, kan du trygt ignorere denne e-posten.
 
 Med vennlig hilsen,
-AKTIVLOGG Automatisk System
+${data.organizationName}
     `
   }
 }
 
-async function sendWithSendGrid(emailData: EmailRequest, provider: EmailProvider) {
-  const template = templates[emailData.template]
-  if (!template) {
-    throw new Error(`Unknown email template: ${emailData.template}`)
-  }
-
-  const subject = template.subject(emailData.data)
-  const htmlContent = template.html(emailData.data)
-  const textContent = template.text(emailData.data)
-
-  const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${provider.apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      personalizations: [{
-        to: [{ email: emailData.to }],
-        subject: subject
-      }],
-      from: {
-        email: provider.fromEmail,
-        name: provider.fromName
-      },
-      content: [
-        {
-          type: 'text/plain',
-          value: textContent
-        },
-        {
-          type: 'text/html',
-          value: htmlContent
-        }
-      ]
-    })
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`SendGrid API error: ${response.status} - ${error}`)
-  }
-
-  return { success: true, provider: 'sendgrid' }
-}
-
-async function sendWithMailgun(emailData: EmailRequest, provider: EmailProvider) {
-  const template = templates[emailData.template]
-  if (!template) {
-    throw new Error(`Unknown email template: ${emailData.template}`)
-  }
-
-  const subject = template.subject(emailData.data)
-  const htmlContent = template.html(emailData.data)
-  const textContent = template.text(emailData.data)
-
-  // Extract domain from fromEmail
-  const domain = provider.fromEmail.split('@')[1]
+const handler = async (req: Request): Promise<Response> => {
+  console.log('Send email function called with method:', req.method);
   
-  const formData = new FormData()
-  formData.append('from', `${provider.fromName} <${provider.fromEmail}>`)
-  formData.append('to', emailData.to)
-  formData.append('subject', subject)
-  formData.append('text', textContent)
-  formData.append('html', htmlContent)
-
-  const response = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${btoa(`api:${provider.apiKey}`)}`
-    },
-    body: formData
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Mailgun API error: ${response.status} - ${error}`)
-  }
-
-  return { success: true, provider: 'mailgun' }
-}
-
-serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const emailData: EmailRequest = await req.json()
-    
-    // Handle test requests
-    if (emailData.test) {
-      // Get email provider configuration from environment
-      const emailProvider: EmailProvider = {
-        apiKey: Deno.env.get('EMAIL_API_KEY') || '',
-        fromEmail: Deno.env.get('EMAIL_FROM_ADDRESS') || 'noreply@aktivlogg.no',
-        fromName: Deno.env.get('EMAIL_FROM_NAME') || 'Aktivlogg'
-      }
-
-      if (!emailProvider.apiKey) {
-        return new Response(
-          JSON.stringify({ 
-            success: false,
-            error: 'Email service not configured. Missing EMAIL_API_KEY environment variable.' 
-          }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-
-      const emailService = Deno.env.get('EMAIL_SERVICE') || 'sendgrid'
-      
+    // Check if RESEND_API_KEY is configured
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+    if (!resendApiKey) {
+      console.error('RESEND_API_KEY environment variable is not configured');
       return new Response(
         JSON.stringify({ 
-          success: true,
-          message: 'Email configuration is valid',
-          provider: emailService
+          error: 'Email service not configured. RESEND_API_KEY is missing.' 
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        }
+      );
     }
+
+    console.log('RESEND_API_KEY found, initializing Resend client');
+    const resend = new Resend(resendApiKey);
+
+    const emailData: EmailRequest = await req.json();
+    console.log('Email request received:', {
+      to: emailData.to,
+      template: emailData.template,
+      organizationId: emailData.organizationId
+    });
 
     // Validate required fields
-    if (!emailData.to || !emailData.template || !emailData.data || !emailData.organizationId) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields: to, template, data, organizationId' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Get email provider configuration from environment or database
-    // For now, we'll use environment variables
-    const emailProvider: EmailProvider = {
-      apiKey: Deno.env.get('EMAIL_API_KEY') || '',
-      fromEmail: Deno.env.get('EMAIL_FROM_ADDRESS') || 'noreply@aktivlogg.no',
-      fromName: Deno.env.get('EMAIL_FROM_NAME') || 'Aktivlogg'
-    }
-
-    if (!emailProvider.apiKey) {
+    if (!emailData.to || !emailData.template || !emailData.data) {
+      console.error('Missing required fields in email request');
       return new Response(
         JSON.stringify({ 
-          success: false,
-          error: 'Email service not configured. Please set EMAIL_API_KEY environment variable.' 
+          error: 'Missing required fields: to, template, and data are required' 
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        }
+      );
     }
 
-    // Determine which email service to use based on API key format or environment
-    const emailService = Deno.env.get('EMAIL_SERVICE') || 'sendgrid'
-    
-    let result
-    try {
-      if (emailService === 'mailgun') {
-        result = await sendWithMailgun(emailData, emailProvider)
-      } else {
-        result = await sendWithSendGrid(emailData, emailProvider)
-      }
-    } catch (error) {
-      console.error('Email sending failed:', error)
+    // Get the template
+    const template = templates[emailData.template];
+    if (!template) {
+      console.error('Unknown email template:', emailData.template);
       return new Response(
         JSON.stringify({ 
-          success: false,
-          error: 'Failed to send email', 
-          details: error.message 
+          error: `Unknown email template: ${emailData.template}` 
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        }
+      );
     }
 
-    // Log successful email send (you might want to store this in database)
-    console.log(`Email sent successfully to ${emailData.to} using ${result.provider}`)
+    // Generate email content
+    const subject = template.subject(emailData.data);
+    const htmlContent = template.html(emailData.data);
+    const textContent = template.text(emailData.data);
+
+    console.log('Sending email with Resend:', {
+      to: emailData.to,
+      subject: subject,
+      from: 'Aktivlogg <noreply@aktivlogg.no>'
+    });
+
+    // Send email using Resend
+    const emailResponse = await resend.emails.send({
+      from: 'Aktivlogg <noreply@aktivlogg.no>',
+      to: [emailData.to],
+      subject: subject,
+      html: htmlContent,
+      text: textContent
+    });
+
+    console.log('Email sent successfully:', emailResponse);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Email sent successfully',
-        provider: result.provider
+        messageId: emailResponse.data?.id,
+        message: 'Email sent successfully' 
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      }
+    );
 
-  } catch (error) {
-    console.error('Error in send-email function:', error)
+  } catch (error: any) {
+    console.error('Error in send-email function:', error);
+    
+    // Handle specific Resend errors
+    if (error.message?.includes('API key')) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid RESEND API key. Please check your configuration.' 
+        }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        }
+      );
+    }
+
     return new Response(
       JSON.stringify({ 
-        success: false,
-        error: 'Internal server error',
-        details: error.message 
+        error: 'Failed to send email: ' + error.message 
       }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      }
+    );
   }
-})
+};
+
+serve(handler);
