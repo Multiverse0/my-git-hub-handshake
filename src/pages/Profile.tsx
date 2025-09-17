@@ -5,6 +5,8 @@ import { supabase, uploadProfileImage, uploadStartkortPDF, uploadDiplomaPDF } fr
 import { useAuth } from '../contexts/AuthContext';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { useLanguage } from '../contexts/LanguageContext';
+import { DatePicker } from '../components/ui/date-picker';
+import { useToast } from '../hooks/use-toast';
 
 interface ProfileData {
   name: string;
@@ -21,8 +23,9 @@ interface ProfileData {
 }
 
 export function Profile() {
-  const { user, profile, refreshUserData } = useAuth();
+  const { user, profile } = useAuth();
   const { t } = useLanguage();
+  const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -164,7 +167,7 @@ export function Profile() {
     try {
       setIsLoading(true);
       
-      // Update profile in Supabase
+      // Update profile in Supabase (DO NOT update auth.users)
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -179,20 +182,23 @@ export function Profile() {
         throw error;
       }
 
-      // If email changed, update auth email as well
-      if (user.email !== editData.email) {
-        await supabase.auth.updateUser({ email: editData.email });
-      }
-
       // Update local state
       setProfileData(editData);
       setIsEditing(false);
       
-      // Refresh auth context to reflect updated user data
-      await refreshUserData();
+      // Show success message
+      toast({
+        title: "Profil oppdatert",
+        description: "Profilendringene dine har blitt lagret.",
+      });
       
     } catch (error) {
       console.error('Error updating profile:', error);
+      toast({
+        title: "Feil",
+        description: "Kunne ikke lagre profilendringene. Prøv igjen.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -522,22 +528,14 @@ export function Profile() {
 
           <div className="flex items-center gap-4 p-4 bg-gray-700 rounded-lg">
             <Calendar className="w-6 h-6 text-svpk-yellow" />
-            <div>
+            <div className="flex-grow">
               <p className="text-sm text-gray-400">{t('profile.member_since')}</p>
               {isEditing ? (
-                <input
-                  type="date"
-                  value={editData.joinDate ? (
-                    editData.joinDate.includes('-') 
-                      ? editData.joinDate 
-                      : editData.joinDate.split('.').reverse().join('-')
-                  ) : ''}
-                  onChange={e => {
-                    const date = new Date(e.target.value);
-                    const formattedDate = date.toLocaleDateString('nb-NO');
-                    setEditData(prev => ({ ...prev, joinDate: formattedDate }));
-                  }}
-                  className="bg-gray-600 text-white px-2 py-1 rounded w-full"
+                <DatePicker
+                  value={editData.joinDate}
+                  onChange={(date) => setEditData(prev => ({ ...prev, joinDate: date }))}
+                  placeholder="Velg medlemsdato"
+                  className="w-full"
                 />
               ) : (
                 <p className="font-medium">{profileData.joinDate || t('profile.not_specified')}</p>

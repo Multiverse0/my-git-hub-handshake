@@ -7,6 +7,7 @@ import { ResetPassword } from './pages/ResetPassword';
 import { LandingPage } from './components/LandingPage';
 import { useAuth } from './contexts/AuthContext';
 import { ForgotPassword } from './pages/ForgotPassword';
+import { Toaster } from './components/ui/toaster';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading, initError } = useAuth();
@@ -162,6 +163,7 @@ function App() {
             }
           />
         </Routes>
+        <Toaster />
       </BrowserRouter>
     </ThemeProvider>
   );
