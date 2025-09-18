@@ -216,6 +216,61 @@ export async function createFirstSuperUser(
   }
 }
 
+/**
+ * Create admin user directly (bypasses approval process)
+ */
+export async function createAdminUser(
+  organizationId: string,
+  email: string,
+  password: string,
+  fullName: string
+): Promise<ApiResponse<OrganizationMember>> {
+  try {
+    // First, create the auth user
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/`,
+        data: {
+          full_name: fullName
+        }
+      }
+    });
+
+    if (authError) {
+      return { error: authError.message };
+    }
+
+    if (!authData.user) {
+      return { error: 'Could not create user' };
+    }
+
+    // Then create the organization member record with admin role
+    const { data: memberData, error: memberError } = await supabase
+      .from('organization_members')
+      .insert({
+        organization_id: organizationId,
+        email,
+        full_name: fullName,
+        role: 'admin',
+        approved: true, // Auto-approve admin users
+        active: true
+      })
+      .select()
+      .single();
+
+    if (memberError) {
+      return { error: memberError.message };
+    }
+
+    return { data: memberData };
+  } catch (error) {
+    console.error('Error creating admin user:', error);
+    return { error: 'Could not create admin user' };
+  }
+}
+
 // =============================================================================
 // ORGANIZATION FUNCTIONS
 // =============================================================================

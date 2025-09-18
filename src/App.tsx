@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { DashboardRouter } from './components/DashboardRouter';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+import { AdminRegister } from './pages/AdminRegister';
 import { ResetPassword } from './pages/ResetPassword';
 import { LandingPage } from './components/LandingPage';
 import { useAuth } from './contexts/AuthContext';
@@ -149,6 +150,7 @@ function App() {
           {/* Public routes - accessible without authentication */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/admin-register" element={<AdminRegister />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/landing" element={<LandingPage />} />
