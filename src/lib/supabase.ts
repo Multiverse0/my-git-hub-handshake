@@ -432,7 +432,84 @@ export async function updateOrganizationSettings(
 }
 
 /**
- * Register new organization member
+ * Search for existing users by email across all organizations
+ */
+export async function searchExistingUsers(
+  searchTerm: string,
+  excludeOrganizationId: string
+): Promise<ApiResponse<OrganizationMember[]>> {
+  try {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select('id, email, full_name, member_number, organization_id, organizations(name)')
+      .ilike('email', `%${searchTerm}%`)
+      .neq('organization_id', excludeOrganizationId)
+      .eq('approved', true)
+      .eq('active', true)
+      .limit(10);
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    return { data: data as any };
+  } catch (error) {
+    console.error('Error searching existing users:', error);
+    return { error: 'Kunne ikke søke etter brukere' };
+  }
+}
+
+/**
+ * Add existing user to organization
+ */
+export async function addExistingUserToOrganization(
+  email: string,
+  organizationId: string,
+  fullName: string,
+  memberNumber: string,
+  role: 'member' | 'admin' | 'range_officer' = 'member'
+): Promise<ApiResponse<OrganizationMember>> {
+  try {
+    // Check if user already exists in this organization
+    const { data: existingMember } = await supabase
+      .from('organization_members')
+      .select('id')
+      .eq('email', email)
+      .eq('organization_id', organizationId)
+      .maybeSingle();
+
+    if (existingMember) {
+      return { error: 'Brukeren er allerede medlem av denne organisasjonen' };
+    }
+
+    // Create organization member
+    const { data: memberData, error: memberError } = await supabase
+      .from('organization_members')
+      .insert({
+        organization_id: organizationId,
+        email,
+        full_name: fullName,
+        member_number: memberNumber || undefined,
+        role,
+        approved: true, // Auto-approve when added by admin
+        active: true
+      })
+      .select()
+      .single();
+
+    if (memberError) {
+      return { error: memberError.message };
+    }
+
+    return { data: memberData as any };
+  } catch (error) {
+    console.error('Error adding existing user to organization:', error);
+    return { error: 'Kunne ikke legge til bruker i organisasjonen' };
+  }
+}
+
+/**
+ * Register new organization member with optional organization code
  */
 export async function registerOrganizationMember(
   organizationSlug: string,
@@ -440,6 +517,7 @@ export async function registerOrganizationMember(
   password: string,
   fullName: string,
   memberNumber?: string,
+  organizationCode?: string,
   role: 'member' | 'admin' | 'range_officer' = 'member'
 ): Promise<ApiResponse<OrganizationMember>> {
   try {
@@ -451,11 +529,21 @@ export async function registerOrganizationMember(
 
     const organization = orgResult.data;
 
+    // Verify organization code if provided
+    let autoApprove = false;
+    if (organizationCode) {
+      if (!organization.registration_code || organization.registration_code !== organizationCode) {
+        return { error: 'Ugyldig organisasjonskode' };
+      }
+      autoApprove = true;
+    }
+
     // Create auth user first
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
+        emailRedirectTo: `${window.location.origin}/`,
         data: {
           full_name: fullName
         }
@@ -479,7 +567,7 @@ export async function registerOrganizationMember(
         full_name: fullName,
         member_number: memberNumber,
         role,
-        approved: false // Requires approval by admin
+        approved: autoApprove // Auto-approve if valid organization code provided
       })
       .select()
       .single();

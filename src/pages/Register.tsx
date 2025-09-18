@@ -16,7 +16,8 @@ export function Register() {
     email: '',
     password: '',
     confirmPassword: '',
-    memberNumber: ''
+    memberNumber: '',
+    organizationCode: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -119,7 +120,8 @@ export function Register() {
           formData.email,
           formData.password,
           formData.fullName,
-          formData.memberNumber
+          formData.memberNumber,
+          formData.organizationCode || undefined
         );
 
         setSuccess('Registrering vellykket! Du vil motta en e-post når en administrator har godkjent medlemskapet ditt.');
@@ -230,35 +232,57 @@ export function Register() {
           </div>
 
           {!needsSetup && (
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                SkytterID
-              </label>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm text-gray-400">
-                  <a
-                    href="https://app.skyting.no/user"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:opacity-80"
-                    style={{ color: organization?.primary_color || branding.primary_color }}
-                  >
-                    (Finn din SkytterID her)
-                  </a>
-                </span>
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  SkytterID
+                </label>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm text-gray-400">
+                    <a
+                      href="https://app.skyting.no/user"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:opacity-80"
+                      style={{ color: organization?.primary_color || branding.primary_color }}
+                    >
+                      (Finn din SkytterID her)
+                    </a>
+                  </span>
+                </div>
+                <div className="relative">
+                  <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    value={formData.memberNumber}
+                    onChange={(e) => setFormData(prev => ({ ...prev, memberNumber: e.target.value }))}
+                    className="w-full bg-gray-700 rounded-lg pl-10 pr-4 py-2"
+                    placeholder="12345"
+                    disabled={isLoading}
+                  />
+                </div>
               </div>
-              <div className="relative">
-                <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  value={formData.memberNumber}
-                  onChange={(e) => setFormData(prev => ({ ...prev, memberNumber: e.target.value }))}
-                  className="w-full bg-gray-700 rounded-lg pl-10 pr-4 py-2"
-                  placeholder="12345"
-                  disabled={isLoading}
-                />
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Organisasjonskode (valgfritt)
+                </label>
+                <div className="text-xs text-gray-400 mb-1">
+                  Bruk organisasjonskode for øyeblikkelig godkjenning
+                </div>
+                <div className="relative">
+                  <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    value={formData.organizationCode}
+                    onChange={(e) => setFormData(prev => ({ ...prev, organizationCode: e.target.value }))}
+                    className="w-full bg-gray-700 rounded-lg pl-10 pr-4 py-2"
+                    placeholder="Skriv inn organisasjonskode"
+                    disabled={isLoading}
+                  />
+                </div>
               </div>
-            </div>
+            </>
           )}
 
 

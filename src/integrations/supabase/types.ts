@@ -249,6 +249,7 @@ export type Database = {
           nsf_enabled: boolean | null
           phone: string | null
           primary_color: string | null
+          registration_code: string | null
           secondary_color: string | null
           slug: string
           subscription_expires_at: string | null
@@ -273,6 +274,7 @@ export type Database = {
           nsf_enabled?: boolean | null
           phone?: string | null
           primary_color?: string | null
+          registration_code?: string | null
           secondary_color?: string | null
           slug: string
           subscription_expires_at?: string | null
@@ -297,6 +299,7 @@ export type Database = {
           nsf_enabled?: boolean | null
           phone?: string | null
           primary_color?: string | null
+          registration_code?: string | null
           secondary_color?: string | null
           slug?: string
           subscription_expires_at?: string | null

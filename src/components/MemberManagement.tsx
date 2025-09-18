@@ -639,6 +639,7 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
           <AddMemberModal
             onClose={() => setShowAddModal(false)}
             onSave={handleAddMember}
+            organizationId={user?.organization_id || ''}
           />
         )
       )}

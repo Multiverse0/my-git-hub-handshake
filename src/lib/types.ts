@@ -12,6 +12,7 @@ export interface Organization {
   logo_url?: string | null;
   primary_color: string | null;
   secondary_color: string | null;
+  registration_code?: string | null;
   created_at: string | null;
   updated_at: string | null;
   active: boolean | null;
