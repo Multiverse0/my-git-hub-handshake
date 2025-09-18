@@ -33,7 +33,7 @@ interface SalesBanner {
 }
 
 export function OrganizationSettings() {
-  const { user, branding } = useAuth();
+  const { user, organization, branding } = useAuth();
   const { currentLanguage, setLanguage, isTranslating, t } = useLanguage();
   const [orgData, setOrgData] = useState<OrganizationData>({
     name: '',
@@ -66,8 +66,10 @@ export function OrganizationSettings() {
 
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !user?.organization?.id) {
-      console.log('Missing file or organization ID:', { file: !!file, orgId: user?.organization?.id });
+    const orgId = user?.organization?.id || organization?.id || user?.organization_id;
+    
+    if (!file || !orgId) {
+      console.log('Missing file or organization ID:', { file: !!file, orgId });
       return;
     }
 
@@ -91,7 +93,7 @@ export function OrganizationSettings() {
 
       // Upload logo to Supabase
       const { updateOrganizationLogo } = await import('../lib/supabase');
-      const result = await updateOrganizationLogo(user.organization.id, file);
+      const result = await updateOrganizationLogo(orgId, file);
       
       if (result.error) {
         setError(result.error);
@@ -121,16 +123,46 @@ export function OrganizationSettings() {
   // Load organization data on mount
   useEffect(() => {
     const loadOrganizationData = async () => {
-      if (!user?.organization?.id) {
-        console.log('No organization ID available:', user?.organization);
+      console.log('Auth context data:', { user, organization });
+      
+      // Try to get organization ID from different sources
+      const orgId = user?.organization?.id || organization?.id || user?.organization_id;
+      
+      if (!orgId) {
+        console.log('No organization ID available from any source:', { 
+          userOrg: user?.organization, 
+          contextOrg: organization,
+          userOrgId: user?.organization_id 
+        });
+        
+        // If user has organization data in context, use it to populate the form
+        if (organization) {
+          console.log('Using organization data from context:', organization);
+          setOrgData({
+            name: organization.name || '',
+            description: organization.description || '',
+            email: organization.email || '',
+            phone: organization.phone || '',
+            website: organization.website || '',
+            address: organization.address || '',
+            primary_color: organization.primary_color || '#FFD700',
+            secondary_color: organization.secondary_color || '#1F2937',
+            background_color: organization.background_color || '#FFFFFF',
+            nsf_enabled: organization.nsf_enabled !== false,
+            dfs_enabled: organization.dfs_enabled !== false,
+            dssn_enabled: organization.dssn_enabled !== false,
+            activity_types: organization.activity_types || ['Trening', 'Stevne', 'Dugnad'],
+            subscription_plan: 'professional'
+          });
+        }
         return;
       }
 
-      console.log('Loading organization data for ID:', user.organization.id);
+      console.log('Loading organization data for ID:', orgId);
 
       try {
         const { getOrganizationById } = await import('../lib/supabase');
-        const result = await getOrganizationById(user.organization.id);
+        const result = await getOrganizationById(orgId);
         
         if (result.data) {
           const org = result.data;
@@ -195,16 +227,22 @@ export function OrganizationSettings() {
 
     loadOrganizationData();
     loadSalesBanners();
-  }, [user?.organization?.id]);
+  }, [user?.organization?.id, organization?.id, user?.organization_id]);
 
   const handleSave = async () => {
-    if (!user?.organization?.id) {
-      console.log('No organization ID available for save:', user?.organization);
+    const orgId = user?.organization?.id || organization?.id || user?.organization_id;
+    
+    if (!orgId) {
+      console.log('No organization ID available for save:', { 
+        userOrg: user?.organization, 
+        contextOrg: organization,
+        userOrgId: user?.organization_id 
+      });
       setError('Organisasjons-ID mangler');
       return;
     }
 
-    console.log('Saving organization settings for ID:', user.organization.id, orgData);
+    console.log('Saving organization settings for ID:', orgId, orgData);
 
     setSaving(true);
     setError(null);
@@ -213,7 +251,7 @@ export function OrganizationSettings() {
     try {
       // Save to Supabase database
       const { updateOrganizationSettings } = await import('../lib/supabase');
-      const result = await updateOrganizationSettings(user.organization.id, {
+      const result = await updateOrganizationSettings(orgId, {
         name: orgData.name,
         description: orgData.description,
         email: orgData.email,
@@ -401,10 +439,11 @@ export function OrganizationSettings() {
   };
 
   const handleCopyOrganizationId = async () => {
-    if (!user?.organization?.id) return;
+    const orgId = user?.organization?.id || organization?.id || user?.organization_id;
+    if (!orgId) return;
     
     try {
-      await navigator.clipboard.writeText(user.organization.id);
+      await navigator.clipboard.writeText(orgId);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (error) {
@@ -452,32 +491,40 @@ export function OrganizationSettings() {
             />
           </div>
 
-          <div>
+            <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Organisasjons-ID
             </label>
             <div className="relative">
-              <input
-                type="text"
-                value={user?.organization?.id || ''}
-                readOnly
-                className="w-full bg-gray-700 rounded-md px-3 py-2 pr-12 text-gray-400 cursor-not-allowed"
-                placeholder="Ingen organisasjon valgt"
-              />
-              {user?.organization?.id && (
-                <button
-                  type="button"
-                  onClick={handleCopyOrganizationId}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-white transition-colors"
-                  title="Kopier organisasjons-ID"
-                >
-                  {copySuccess ? (
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
-                </button>
-              )}
+              {(() => {
+                const orgId = user?.organization?.id || organization?.id || user?.organization_id;
+                return (
+                  <input
+                    type="text"
+                    value={orgId || ''}
+                    readOnly
+                    className="w-full bg-gray-700 rounded-md px-3 py-2 pr-12 text-gray-400 cursor-not-allowed"
+                    placeholder={orgId ? orgId : "Ingen organisasjon valgt"}
+                  />
+                );
+              })()}
+              {(() => {
+                const orgId = user?.organization?.id || organization?.id || user?.organization_id;
+                return orgId && (
+                  <button
+                    type="button"
+                    onClick={handleCopyOrganizationId}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-white transition-colors"
+                    title="Kopier organisasjons-ID"
+                  >
+                    {copySuccess ? (
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                  </button>
+                );
+              })()}
             </div>
             <p className="text-xs text-gray-400 mt-1">
               Unik identifikator for denne organisasjonen
