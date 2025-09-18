@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Edit2, Trash2, X, CheckCircle, XCircle, PlusCircle, AlertCircle } from 'lucide-react';
+import { Edit2, Trash2, X, CheckCircle, XCircle, PlusCircle, AlertCircle, Search, User } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
-import { setUserContext } from '../lib/supabase';
+import { setUserContext, searchExistingUsers, addExistingUserToOrganization } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { DatabaseService } from '../lib/database';
 import type { OrganizationMember } from '../lib/types';
@@ -13,26 +13,103 @@ interface EditModalProps {
 }
 
 function EditModal({ officer, onClose, onSave }: EditModalProps) {
+  const { organization } = useAuth();
+  const [mode, setMode] = useState<'new' | 'existing'>('new');
   const [formData, setFormData] = useState({
     full_name: officer?.full_name || '',
     email: officer?.email || '',
     active: officer?.active ?? true,
   });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState<OrganizationMember[]>([]);
+  const [selectedUser, setSelectedUser] = useState<OrganizationMember | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.full_name.trim() || !formData.email.trim()) {
-      setError('Alle felt må fylles ut');
-      return;
-    }
-    onSave({
-      ...(officer || {}),
-      full_name: formData.full_name,
-      email: formData.email,
-      active: formData.active,
-      role: 'range_officer'  // Ensure role is set to range_officer
+  // Search for existing users
+  useEffect(() => {
+    const searchUsers = async () => {
+      if (mode === 'existing' && searchTerm.length >= 3 && organization?.id) {
+        setSearchLoading(true);
+        setError(null);
+        
+        try {
+          const result = await searchExistingUsers(searchTerm, organization.id);
+          if (result.error) {
+            setError(result.error);
+            setSearchResults([]);
+          } else {
+            setSearchResults(result.data || []);
+          }
+        } catch (error) {
+          setError('Feil ved søking etter brukere');
+          setSearchResults([]);
+        } finally {
+          setSearchLoading(false);
+        }
+      } else {
+        setSearchResults([]);
+      }
+    };
+
+    const timeoutId = setTimeout(searchUsers, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, mode, organization?.id]);
+
+  const handleSelectUser = (user: OrganizationMember) => {
+    setSelectedUser(user);
+    setFormData({
+      full_name: user.full_name,
+      email: user.email,
+      active: true,
     });
+    setSearchResults([]);
+    setSearchTerm('');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    
+    if (mode === 'new') {
+      // Handle new user creation
+      if (!formData.full_name.trim() || !formData.email.trim()) {
+        setError('Alle felt må fylles ut');
+        return;
+      }
+      onSave({
+        ...(officer || {}),
+        full_name: formData.full_name,
+        email: formData.email,
+        active: formData.active,
+        role: 'range_officer'
+      });
+    } else {
+      // Handle existing user addition
+      if (!selectedUser || !organization?.id) {
+        setError('Velg en bruker fra søkeresultatene');
+        return;
+      }
+      
+      try {
+        const result = await addExistingUserToOrganization(
+          selectedUser.email,
+          organization.id,
+          selectedUser.full_name,
+          selectedUser.member_number || '',
+          'range_officer'
+        );
+        
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        
+        onSave(result.data!);
+      } catch (error) {
+        setError('Kunne ikke legge til brukeren');
+      }
+    }
   };
 
   return (
@@ -51,44 +128,152 @@ function EditModal({ officer, onClose, onSave }: EditModalProps) {
             </button>
           </div>
 
+          {!officer && (
+            <div className="flex bg-gray-700 rounded-lg p-1 mb-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('new');
+                  setFormData({ full_name: '', email: '', active: true });
+                  setSelectedUser(null);
+                  setSearchTerm('');
+                  setSearchResults([]);
+                  setError(null);
+                }}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  mode === 'new'
+                    ? 'bg-svpk-yellow text-gray-900'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Ny bruker
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('existing');
+                  setFormData({ full_name: '', email: '', active: true });
+                  setSelectedUser(null);
+                  setSearchTerm('');
+                  setSearchResults([]);
+                  setError(null);
+                }}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                  mode === 'existing'
+                    ? 'bg-svpk-yellow text-gray-900'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Eksisterende bruker
+              </button>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Navn
-              </label>
-              <input
-                type="text"
-                value={formData.full_name}
-                onChange={(e) => setFormData(prev => ({ ...prev, full_name: e.target.value }))}
-                className="w-full bg-gray-700 rounded-md px-3 py-2"
-                placeholder="Fullt navn"
-              />
-            </div>
+            {mode === 'existing' && !officer ? (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Søk etter bruker
+                  </label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="email"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full bg-gray-700 rounded-md pl-10 pr-3 py-2"
+                      placeholder="Skriv inn e-postadresse..."
+                    />
+                  </div>
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                E-post
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                className="w-full bg-gray-700 rounded-md px-3 py-2"
-                placeholder="navn@example.com"
-              />
-            </div>
+                {searchLoading && (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-svpk-yellow"></div>
+                  </div>
+                )}
 
-            <div>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={formData.active}
-                  onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))}
-                  className="rounded border-gray-600"
-                />
-                <span className="text-sm font-medium text-gray-300">Aktiv</span>
-              </label>
-            </div>
+                {searchResults.length > 0 && (
+                  <div className="border border-gray-600 rounded-lg max-h-48 overflow-y-auto">
+                    {searchResults.map((user) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onClick={() => handleSelectUser(user)}
+                        className="w-full p-3 text-left hover:bg-gray-700 flex items-center gap-3 border-b border-gray-700 last:border-b-0"
+                      >
+                        <User className="w-4 h-4 text-gray-400" />
+                        <div>
+                          <div className="font-medium">{user.full_name}</div>
+                          <div className="text-sm text-gray-400">{user.email}</div>
+                          {(user as any).organizations?.name && (
+                            <div className="text-xs text-gray-500">
+                              Fra: {(user as any).organizations.name}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {selectedUser && (
+                  <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg">
+                    <div className="flex items-center gap-2 text-green-400 mb-2">
+                      <CheckCircle className="w-4 h-4" />
+                      <span className="text-sm font-medium">Bruker valgt</span>
+                    </div>
+                    <div className="text-sm">
+                      <div className="font-medium">{selectedUser.full_name}</div>
+                      <div className="text-gray-400">{selectedUser.email}</div>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Navn
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.full_name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, full_name: e.target.value }))}
+                    className="w-full bg-gray-700 rounded-md px-3 py-2"
+                    placeholder="Fullt navn"
+                    readOnly={mode === 'existing' && !!selectedUser}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    E-post
+                  </label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full bg-gray-700 rounded-md px-3 py-2"
+                    placeholder="navn@example.com"
+                    readOnly={mode === 'existing' && !!selectedUser}
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.active}
+                      onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))}
+                      className="rounded border-gray-600"
+                    />
+                    <span className="text-sm font-medium text-gray-300">Aktiv</span>
+                  </label>
+                </div>
+              </>
+            )}
 
             {error && (
               <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg flex items-center gap-2 text-red-200">
@@ -108,8 +293,9 @@ function EditModal({ officer, onClose, onSave }: EditModalProps) {
               <button
                 type="submit"
                 className="btn-primary"
+                disabled={mode === 'existing' && !selectedUser && !officer}
               >
-                {officer ? 'Lagre endringer' : 'Legg til'}
+                {officer ? 'Lagre endringer' : (mode === 'existing' ? 'Legg til bruker' : 'Legg til')}
               </button>
             </div>
           </form>
