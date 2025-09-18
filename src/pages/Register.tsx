@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { UserPlus, Mail, Lock, User, Hash, Loader2, AlertCircle, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { UserPlus, Mail, Lock, User, Hash, Loader2, AlertCircle, Eye, EyeOff, CheckCircle, Building2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getOrganizationBySlug, checkSuperUsersExist, createFirstSuperUser } from '../lib/supabase';
+import { DatabaseService } from '../lib/database';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import type { Organization } from '../lib/types';
 
 export function Register() {
   const navigate = useNavigate();
   const { register, branding } = useAuth();
-  const [searchParams] = useSearchParams();
-  const orgSlug = searchParams.get('org') || 'svpk';
+  const [searchParams, setSearchParams] = useSearchParams();
+  const orgSlug = searchParams.get('org');
   
   const [formData, setFormData] = useState({
     fullName: '',
@@ -28,6 +30,11 @@ export function Register() {
   const [loadingOrg, setLoadingOrg] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
+  
+  // Organization selector states
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [selectedOrgSlug, setSelectedOrgSlug] = useState<string>(orgSlug || '');
+  const [loadingOrganizations, setLoadingOrganizations] = useState(true);
 
   // Check if system needs setup (no super users exist)
   useEffect(() => {
@@ -49,28 +56,55 @@ export function Register() {
     checkSetup();
   }, []);
 
-  // Load organization info
+  // Load organizations on component mount
   useEffect(() => {
-    if (needsSetup) {
+    const loadOrganizations = async () => {
+      try {
+        const orgs = await DatabaseService.getOrganizations();
+        setOrganizations(orgs);
+        
+        // If there's an org in URL, set it as selected
+        if (orgSlug && orgs.find(org => org.slug === orgSlug)) {
+          setSelectedOrgSlug(orgSlug);
+        }
+      } catch (error) {
+        console.error('Error loading organizations:', error);
+      } finally {
+        setLoadingOrganizations(false);
+      }
+    };
+
+    loadOrganizations();
+  }, [orgSlug]);
+
+  // Load organization info when selected org changes
+  useEffect(() => {
+    if (needsSetup || !selectedOrgSlug) {
       setLoadingOrg(false);
       return;
     }
 
     const loadOrganization = async () => {
+      setLoadingOrg(true);
       try {
-        const result = await getOrganizationBySlug(orgSlug);
+        const result = await getOrganizationBySlug(selectedOrgSlug);
         if (result.data) {
           setOrganization(result.data);
+          // Update URL parameter
+          setSearchParams({ org: selectedOrgSlug });
+        } else {
+          setOrganization(null);
         }
       } catch (error) {
         console.error('Error loading organization:', error);
+        setOrganization(null);
       } finally {
         setLoadingOrg(false);
       }
     };
 
     loadOrganization();
-  }, [orgSlug, needsSetup]);
+  }, [selectedOrgSlug, needsSetup, setSearchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,8 +149,13 @@ export function Register() {
         }, 2000);
       } else {
         // Register organization member
+        if (!selectedOrgSlug) {
+          setError('Vennligst velg en organisasjon');
+          return;
+        }
+        
         await register(
-          orgSlug,
+          selectedOrgSlug,
           formData.email,
           formData.password,
           formData.fullName,
@@ -128,7 +167,7 @@ export function Register() {
         
         // Redirect to login after 3 seconds
         setTimeout(() => {
-          navigate(`/login?org=${orgSlug}`);
+          navigate(`/login?org=${selectedOrgSlug}`);
         }, 3000);
       }
     } catch (error) {
@@ -197,6 +236,45 @@ export function Register() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {!needsSetup && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Velg organisasjon
+              </label>
+              {loadingOrganizations ? (
+                <div className="w-full bg-gray-700 rounded-lg px-3 py-2 flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-gray-400">Laster organisasjoner...</span>
+                </div>
+              ) : organizations.length === 0 ? (
+                <div className="w-full bg-gray-700 rounded-lg px-3 py-2 text-gray-400">
+                  Ingen organisasjoner tilgjengelig
+                </div>
+              ) : (
+                <Select value={selectedOrgSlug} onValueChange={setSelectedOrgSlug}>
+                  <SelectTrigger className="w-full">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-gray-400" />
+                      <SelectValue placeholder="Velg din organisasjon" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {organizations.map((org) => (
+                      <SelectItem key={org.id} value={org.slug}>
+                        {org.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {!selectedOrgSlug && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Du må velge en organisasjon for å registrere deg
+                </p>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
               Fullt navn
@@ -231,7 +309,7 @@ export function Register() {
             </div>
           </div>
 
-          {!needsSetup && (
+          {!needsSetup && selectedOrgSlug && (
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
@@ -353,7 +431,7 @@ export function Register() {
           <button
             type="submit"
             className="btn-primary w-full"
-            disabled={isLoading}
+            disabled={isLoading || (!needsSetup && !selectedOrgSlug)}
           >
             {isLoading ? (
               <>
@@ -368,12 +446,12 @@ export function Register() {
             )}
           </button>
 
-          {!needsSetup && (
+          {!needsSetup && selectedOrgSlug && (
             <div className="text-center">
               <div className="text-sm text-gray-400">
                 Har du allerede konto?{' '}
                 <Link
-                  to={`/login?org=${orgSlug}`}
+                  to={`/login?org=${selectedOrgSlug}`}
                   className="hover:opacity-80"
                   style={{ color: organization?.primary_color || branding.primary_color }}
                 >
