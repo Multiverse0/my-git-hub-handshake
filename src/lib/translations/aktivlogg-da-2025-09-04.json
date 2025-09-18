@@ -93,7 +93,6 @@
     "log.scan_first": "Scan QR-koden på skydebanen for at registrere din første session",
     "log.change_filters": "Prøv at ændre filtrene for at se flere træningssessioner",
     "log.range": "Bane:",
-    "log.duration": "Varighed:",
     "log.verified_by": "Verificeret af:",
     "log.type": "Type:",
     "log.results": "Resultater:",

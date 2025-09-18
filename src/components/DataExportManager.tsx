@@ -191,7 +191,7 @@ For spørsmål om dataene, kontakt: yngve@promonorge.no
         'Medlemsnummer': session.memberNumber || session.member?.member_number,
         'Skytebane': session.location || session.rangeName,
         'Aktivitet': session.activity || 'Trening',
-        'Varighet': session.duration || '2 timer',
+        'Varighet': '2 timer',
         'Godkjent': session.approved || session.verified ? 'Ja' : 'Nei',
         'Godkjent_av': session.verifiedBy || session.rangeOfficer || '',
         'Notater': session.notes || ''

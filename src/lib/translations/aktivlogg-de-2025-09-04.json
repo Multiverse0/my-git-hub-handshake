@@ -93,7 +93,6 @@
     "log.scan_first": "Scannen Sie den QR-Code auf dem Schießstand, um Ihre erste Session zu registrieren",
     "log.change_filters": "Versuchen Sie, die Filter zu ändern, um mehr Trainingssessions zu sehen",
     "log.range": "Schießstand:",
-    "log.duration": "Dauer:",
     "log.verified_by": "Verifiziert von:",
     "log.type": "Typ:",
     "log.results": "Ergebnisse:",

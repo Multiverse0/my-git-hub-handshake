@@ -24,7 +24,6 @@ interface TrainingEntry {
   date: Date;
   approved: boolean;
   rangeOfficer: string;
-  duration?: number;
   notes?: string;
 }
 
@@ -280,7 +279,6 @@ export function AdminFullTrainingLog() {
       date: new Date(session.start_time || new Date()),
       approved: session.verified || false,
       rangeOfficer: session.verified_by || 'Ikke godkjent',
-      duration: session.duration_minutes || undefined,
       notes: session.notes || undefined
     }));
   };
@@ -712,7 +710,6 @@ export function AdminFullTrainingLog() {
                   </div>
                 </th>
                 <th className="px-4 py-3 text-left">Standplassleder</th>
-                <th className="px-4 py-3 text-left">Varighet</th>
                 <th className="px-4 py-3 text-center">Status</th>
                 <th className="px-4 py-3 text-center">Handlinger</th>
               </tr>
@@ -720,7 +717,7 @@ export function AdminFullTrainingLog() {
             <tbody>
               {currentData.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
                     {searchTerm || filterRange || filterRangeOfficer || filterApproved 
                       ? 'Ingen treningsøkter matcher søkekriteriene' 
                       : 'Ingen treningsøkter funnet'
@@ -749,9 +746,6 @@ export function AdminFullTrainingLog() {
                     <td className="px-4 py-3">{entry.activity}</td>
                     <td className="px-4 py-3">{entry.range}</td>
                     <td className="px-4 py-3">{entry.rangeOfficer}</td>
-                    <td className="px-4 py-3">
-                      {entry.duration ? `${entry.duration} min` : '-'}
-                    </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                         entry.approved 

@@ -93,7 +93,6 @@
     "log.scan_first": "Scan the QR code at the shooting range to register your first session",
     "log.change_filters": "Try changing the filters to see more training sessions",
     "log.range": "Range:",
-    "log.duration": "Duration:",
     "log.verified_by": "Verified by:",
     "log.type": "Type:",
     "log.results": "Results:",

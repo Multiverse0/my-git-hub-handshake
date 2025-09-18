@@ -93,7 +93,6 @@
     "log.scan_first": "Scansiona il codice QR al poligono di tiro per registrare la tua prima sessione",
     "log.change_filters": "Prova a modificare i filtri per vedere più sessioni di allenamento",
     "log.range": "Poligono:",
-    "log.duration": "Durata:",
     "log.verified_by": "Verificato da:",
     "log.type": "Tipo:",
     "log.results": "Risultati:",

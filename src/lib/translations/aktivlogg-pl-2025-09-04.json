@@ -93,7 +93,6 @@
     "log.scan_first": "Zeskanuj kod QR na strzelnicy, aby zarejestrować swoją pierwszą sesję",
     "log.change_filters": "Spróbuj zmienić filtry, aby zobaczyć więcej sesji treningowych",
     "log.range": "Strzelnica:",
-    "log.duration": "Czas trwania:",
     "log.verified_by": "Zweryfikowane przez:",
     "log.type": "Typ:",
     "log.results": "Wyniki:",

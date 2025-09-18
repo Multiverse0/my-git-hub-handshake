@@ -93,7 +93,6 @@
     "log.scan_first": "Skanna QR-koden på skjutbanan för att registrera ditt första pass",
     "log.change_filters": "Prova att ändra filtren för att se fler träningspass",
     "log.range": "Bana:",
-    "log.duration": "Varaktighet:",
     "log.verified_by": "Verifierad av:",
     "log.type": "Typ:",
     "log.results": "Resultat:",

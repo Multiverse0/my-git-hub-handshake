@@ -93,7 +93,6 @@
     "log.scan_first": "Escanea el código QR en el campo de tiro para registrar tu primera sesión",
     "log.change_filters": "Intenta cambiar los filtros para ver más sesiones de entrenamiento",
     "log.range": "Campo:",
-    "log.duration": "Duración:",
     "log.verified_by": "Verificado por:",
     "log.type": "Tipo:",
     "log.results": "Resultados:",

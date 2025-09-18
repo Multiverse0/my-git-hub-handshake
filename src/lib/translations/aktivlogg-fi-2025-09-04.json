@@ -93,7 +93,6 @@
     "log.scan_first": "Skannaa ampumaradan QR-koodi rekisteröidäksesi ensimmäisen harjoituksesi",
     "log.change_filters": "Kokeile muuttaa suodattimia nähdäksesi lisää harjoituksia",
     "log.range": "Rata:",
-    "log.duration": "Kesto:",
     "log.verified_by": "Vahvistanut:",
     "log.type": "Tyyppi:",
     "log.results": "Tulokset:",

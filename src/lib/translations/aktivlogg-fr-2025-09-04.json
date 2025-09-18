@@ -93,7 +93,6 @@
     "log.scan_first": "Scannez le QR code au stand de tir pour enregistrer votre première session",
     "log.change_filters": "Essayez de modifier les filtres pour voir plus de sessions d'entraînement",
     "log.range": "Stand :",
-    "log.duration": "Durée :",
     "log.verified_by": "Vérifié par :",
     "log.type": "Type :",
     "log.results": "Résultats :",
