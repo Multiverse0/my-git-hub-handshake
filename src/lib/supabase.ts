@@ -69,10 +69,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     // Check if user is an organization member
     const { data: memberData } = await supabase
       .from('organization_members')
-      .select(`
-        *,
-        organization_admins!inner(id, permissions)
-      `)
+      .select('*')
       .eq('email', user.email!)
       .eq('approved', true)
       .eq('active', true)
