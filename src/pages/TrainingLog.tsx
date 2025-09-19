@@ -293,15 +293,27 @@ export function TrainingLog() {
 
   // Calculate requirements
   const calculateRequirements = () => {
+    const sixMonthsAgo = subMonths(new Date(), 6);
     const twoYearsAgo = subMonths(new Date(), 24);
+    
+    // NSF requirements: 6 months
+    const nsfSessions = trainingSessions.filter(session => {
+      const sessionDate = safeDate(session.start_time);
+      return sessionDate && isAfter(sessionDate, sixMonthsAgo) && session.verified && 
+        !session.details?.training_type?.includes('Dynamisk');
+    });
+    
+    // DFS/DSSN requirements: 24 months
     const recentSessions = trainingSessions.filter(session => {
       const sessionDate = safeDate(session.start_time);
       return sessionDate && isAfter(sessionDate, twoYearsAgo) && session.verified;
     });
 
-    // Standard requirements (NSF/DFS)
-    const standardSessions = recentSessions.filter(session =>
-      !session.details?.training_type?.includes('Dynamisk')
+    // Standard requirements (now separated)
+    const dfsSessionsOnly = recentSessions.filter(session =>
+      session.details?.training_type?.includes('Felt') || 
+      (!session.details?.training_type?.includes('Dynamisk') && 
+       !session.details?.training_type?.includes('Felt'))
     );
 
     // Dynamic requirements (DSSN)
@@ -316,10 +328,20 @@ export function TrainingLog() {
     );
 
     return {
-      standard: {
-        count: standardSessions.length,
+      nsf: {
+        count: nsfSessions.length,
         required: 10,
-        met: standardSessions.length >= 10
+        met: nsfSessions.length >= 10
+      },
+      dfs: {
+        count: dfsSessionsOnly.length,
+        required: 10,
+        met: dfsSessionsOnly.length >= 10
+      },
+      standard: {
+        count: nsfSessions.length, // Keep for backward compatibility
+        required: 10,
+        met: nsfSessions.length >= 10
       },
       dynamic: {
         trainings: {
@@ -402,13 +424,17 @@ export function TrainingLog() {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       
-      // Standard requirements
-      doc.setTextColor(requirements.standard.met ? 0 : 255, requirements.standard.met ? 128 : 0, 0);
-      doc.text(`Standard våpensøknad: ${requirements.standard.count}/10 treninger (${requirements.standard.met ? 'OPPFYLT' : 'IKKE OPPFYLT'})`, 15, 67);
+      // NSF requirements (6 months)
+      doc.setTextColor(requirements.nsf.met ? 0 : 255, requirements.nsf.met ? 128 : 0, 0);
+      doc.text(`NSF (6 måneder): ${requirements.nsf.count}/10 treninger (${requirements.nsf.met ? 'OPPFYLT' : 'IKKE OPPFYLT'})`, 15, 67);
+      
+      // DFS requirements (24 months)
+      doc.setTextColor(requirements.dfs.met ? 0 : 255, requirements.dfs.met ? 128 : 0, 0);
+      doc.text(`DFS (24 måneder): ${requirements.dfs.count}/10 treninger (${requirements.dfs.met ? 'OPPFYLT' : 'IKKE OPPFYLT'})`, 15, 74);
       
       // Dynamic requirements
       doc.setTextColor(requirements.dynamic.overallMet ? 0 : 255, requirements.dynamic.overallMet ? 128 : 0, 0);
-      doc.text(`Dynamisk våpensøknad: ${requirements.dynamic.trainings.count}/10 treninger, ${requirements.dynamic.competitions.count}/10 stevner (${requirements.dynamic.overallMet ? 'OPPFYLT' : 'IKKE OPPFYLT'})`, 15, 74);
+      doc.text(`Dynamisk våpensøknad: ${requirements.dynamic.trainings.count}/10 treninger, ${requirements.dynamic.competitions.count}/10 stevner (${requirements.dynamic.overallMet ? 'OPPFYLT' : 'IKKE OPPFYLT'})`, 15, 81);
       
       doc.setTextColor(0, 0, 0); // Reset to black
 
@@ -835,13 +861,13 @@ export function TrainingLog() {
                   stroke="#a855f7"
                   strokeWidth="8"
                   fill="none"
-                  strokeDasharray={`${(requirements.standard.count / requirements.standard.required) * 314} 314`}
+                  strokeDasharray={`${(requirements.dfs.count / requirements.dfs.required) * 314} 314`}
                   strokeLinecap="round"
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-2xl font-bold text-purple-400">
-                  {requirements.standard.count}
+                  {requirements.dfs.count}
                 </span>
                 <span className="text-sm text-gray-400">av 10</span>
               </div>
@@ -852,14 +878,14 @@ export function TrainingLog() {
               {t('log.dfs_requirement_text')}
             </p>
             
-            {requirements.standard.met ? (
+            {requirements.dfs.met ? (
               <div className="bg-green-900/30 border border-green-700 rounded-lg px-4 py-2">
                 <span className="text-green-400 font-semibold">✅ {t('log.fulfilled')}</span>
               </div>
             ) : (
               <div className="bg-red-900/30 border border-red-700 rounded-lg px-4 py-2">
                 <span className="text-red-400 font-semibold">
-                  {t('log.trainings_remaining', { count: requirements.standard.required - requirements.standard.count })}
+                  {t('log.trainings_remaining', { count: requirements.dfs.required - requirements.dfs.count })}
                 </span>
               </div>
             )}
