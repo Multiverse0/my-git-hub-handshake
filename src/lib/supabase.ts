@@ -972,30 +972,7 @@ export async function startTrainingSession(
   discipline?: string
 ): Promise<ApiResponse<MemberTrainingSession>> {
   try {
-    // Check for existing training session today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const { data: existingSessions, error: checkError } = await supabase
-      .from('member_training_sessions')
-      .select('id, discipline')
-      .eq('organization_id', organizationId)
-      .eq('member_id', memberId)
-      .eq('location_id', locationId)
-      .gte('start_time', today.toISOString())
-      .lt('start_time', tomorrow.toISOString());
-
-    if (checkError) {
-      return { error: checkError.message };
-    }
-
-    if (existingSessions && existingSessions.length > 0) {
-      return { error: 'Du har allerede registrert trening på denne lokasjonen i dag' };
-    }
-
-    // Get location details to determine correct discipline
+    // Get location details to determine correct discipline first
     const { data: location, error: locationError } = await supabase
       .from('training_locations')
       .select('nsf_enabled, dfs_enabled, dssn_enabled')
@@ -1018,6 +995,55 @@ export async function startTrainingSession(
       finalDiscipline = enabledDisciplines[0] || 'NSF';
     }
 
+    // Smart duplicate detection - check for existing sessions today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const { data: existingSessions, error: checkError } = await supabase
+      .from('member_training_sessions')
+      .select('id, discipline, start_time')
+      .eq('organization_id', organizationId)
+      .eq('member_id', memberId)
+      .eq('location_id', locationId)
+      .gte('start_time', today.toISOString())
+      .lt('start_time', tomorrow.toISOString())
+      .order('start_time', { ascending: false });
+
+    if (checkError) {
+      console.error('Error checking existing sessions:', checkError);
+      return { error: checkError.message };
+    }
+
+    // Smart duplicate logic
+    if (existingSessions && existingSessions.length > 0) {
+      // Check if there's a session with the same discipline
+      const sameDisciplineSession = existingSessions.find(s => s.discipline === finalDiscipline);
+      
+      if (sameDisciplineSession && sameDisciplineSession.start_time) {
+        // If same discipline, check if enough time has passed (2+ hours)
+        const lastSessionTime = new Date(sameDisciplineSession.start_time);
+        const now = new Date();
+        const timeDiffHours = (now.getTime() - lastSessionTime.getTime()) / (1000 * 60 * 60);
+        
+        if (timeDiffHours < 2) {
+          console.log(`Blocking duplicate session: Same discipline (${finalDiscipline}) within 2 hours. Last session: ${lastSessionTime}, Time diff: ${timeDiffHours}h`);
+          return { error: `Du har allerede registrert ${finalDiscipline} trening på denne lokasjonen i dag. Vent minst 2 timer mellom økter med samme disiplin.` };
+        } else {
+          console.log(`Allowing new session: Same discipline (${finalDiscipline}) but ${timeDiffHours}h since last session`);
+        }
+      } else if (sameDisciplineSession) {
+        // Session exists but no start time - block it to be safe
+        console.log(`Blocking duplicate session: Same discipline (${finalDiscipline}) but no start_time available`);
+        return { error: `Du har allerede registrert ${finalDiscipline} trening på denne lokasjonen i dag.` };
+      } else {
+        console.log(`Allowing new session: Different discipline (${finalDiscipline}) from existing sessions:`, existingSessions.map(s => s.discipline));
+      }
+    } else {
+      console.log('No existing sessions found for today - allowing new session');
+    }
+
     const { data, error } = await supabase
       .from('member_training_sessions')
       .insert({
@@ -1032,9 +1058,11 @@ export async function startTrainingSession(
       .single();
 
     if (error) {
+      console.error('Error inserting training session:', error);
       return { error: error.message };
     }
 
+    console.log(`Training session created successfully: ${finalDiscipline} at location ${locationId} for member ${memberId}`);
     return { data: data as any };
   } catch (error) {
     console.error('Error starting training session:', error);
