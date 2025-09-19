@@ -8,57 +8,26 @@ export interface SubscriptionPlan {
 }
 
 export const SUBSCRIPTION_PLANS: Record<string, SubscriptionPlan> = {
-  starter: {
-    id: 'starter',
-    name: 'Starter',
-    memberLimit: 50,
+  start: {
+    id: 'start',
+    name: 'Start',
+    memberLimit: 100,
     features: [
-      'Opptil 50 medlemmer',
-      'Grunnleggende treningslogg',
+      'Opptil 100 medlemmer',
+      'Treningslogg',
       'QR-kode skanning',
       'Medlemshåndtering'
     ],
     price: 'Gratis'
   },
-  starter_plus: {
-    id: 'starter_plus',
-    name: 'Starter Plus',
-    memberLimit: 100,
-    features: [
-      'Opptil 100 medlemmer',
-      'Grunnleggende treningslogg',
-      'QR-kode skanning',
-      'Medlemshåndtering',
-      'Utvidet rapportering'
-    ],
-    price: '299 kr/måned',
-    custom: true
-  },
-  professional: {
-    id: 'professional',
-    name: 'Professional',
-    memberLimit: 500,
-    features: [
-      'Opptil 500 medlemmer',
-      'Avansert treningslogg',
-      'QR-kode skanning',
-      'Medlemshåndtering',
-      'Detaljert rapportering',
-      'E-post notifikasjoner',
-      'API tilgang'
-    ],
-    price: '599 kr/måned'
-  },
-  enterprise: {
-    id: 'enterprise',
-    name: 'Enterprise',
+  ubegrenset: {
+    id: 'ubegrenset',
+    name: 'Ubegrenset',
     memberLimit: -1, // Unlimited
     features: [
       'Ubegrenset antall medlemmer',
-      'Alle Professional funksjoner',
-      'Prioritert støtte',
-      'Tilpassede integrasjoner',
-      'Dedicated konto manager'
+      'Alle funksjoner',
+      'Prioritert støtte'
     ],
     price: 'Kontakt oss'
   }
