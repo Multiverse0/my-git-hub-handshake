@@ -755,6 +755,24 @@ export async function updateMemberRole(
       return { error: error.message };
     }
 
+    // Send notification to updated member about role change
+    try {
+      await supabase
+        .channel('role-update-notification')
+        .send({
+          type: 'broadcast',
+          event: 'role_updated',
+          payload: {
+            memberId,
+            newRole: role,
+            timestamp: new Date().toISOString()
+          }
+        });
+    } catch (notificationError) {
+      console.warn('Could not send role update notification:', notificationError);
+      // Don't fail the role update if notification fails
+    }
+
     return { data: data as any };
   } catch (error) {
     console.error('Error updating member role:', error);

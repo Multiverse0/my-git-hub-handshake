@@ -69,6 +69,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Set up real-time role change subscription
+  useEffect(() => {
+    let roleSubscription: any = null;
+
+    const setupRoleSubscription = () => {
+      if (!user?.email) return;
+
+      // Subscribe to changes in organization_members table for current user
+      roleSubscription = supabase
+        .channel('user-role-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'organization_members',
+            filter: `email=eq.${user.email}`
+          },
+          (payload) => {
+            console.log('🔄 Role change detected for user:', payload);
+            // Refresh user data when role changes
+            refreshUserData();
+          }
+        )
+        .subscribe();
+    };
+
+    if (user?.email && isAuthenticated) {
+      setupRoleSubscription();
+    }
+
+    return () => {
+      if (roleSubscription) {
+        roleSubscription.unsubscribe();
+      }
+    };
+  }, [user?.email, isAuthenticated]);
+
   // Initialize auth state with timeout and better error handling
   useEffect(() => {
     const initializeAuth = async () => {

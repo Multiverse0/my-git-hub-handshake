@@ -26,6 +26,7 @@ import { sendMemberApprovalEmail, generateLoginUrl } from '../lib/emailService';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { nullToEmptyString } from '../lib/typeUtils';
+import { toast } from 'sonner';
 import { canManageMembers } from '../lib/authHelpers';
 import type { OrganizationMember } from '../lib/types';
 import { AddMemberModal } from './AddMemberModal';
@@ -374,6 +375,21 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
         setMembers(prev => prev.map(m =>
           m.id === memberId ? { ...m, role: newRole } : m
         ));
+        
+        // Show success notification to admin
+        const roleLabels = {
+          'admin': 'administrator',
+          'range_officer': 'baneleder',
+          'member': 'medlem'
+        };
+        
+        toast.success(
+          `Oppdaterte rolle for ${member.full_name}`,
+          {
+            description: `Medlem er nå ${roleLabels[newRole]}`,
+            duration: 3000
+          }
+        );
       } catch (error) {
         console.error('Error updating member role:', error);
         setError('Kunne ikke oppdatere medlemsrolle');

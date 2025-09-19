@@ -9,6 +9,7 @@ import { LandingPage } from './components/LandingPage';
 import { useAuth } from './contexts/AuthContext';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { Toaster } from './components/ui/toaster';
+import { RoleUpdateNotification } from './components/RoleUpdateNotification';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading, initError } = useAuth();
@@ -165,6 +166,7 @@ function App() {
             }
           />
         </Routes>
+        <RoleUpdateNotification />
         <Toaster />
       </BrowserRouter>
     </ThemeProvider>
