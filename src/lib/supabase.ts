@@ -995,7 +995,7 @@ export async function startTrainingSession(
       finalDiscipline = enabledDisciplines[0] || 'NSF';
     }
 
-    // Smart duplicate detection - check for existing sessions today
+    // Simplified duplicate detection - check for existing sessions today  
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
@@ -1016,29 +1016,15 @@ export async function startTrainingSession(
       return { error: checkError.message };
     }
 
-    // Smart duplicate logic
+    // Check for duplicates - simpler logic
     if (existingSessions && existingSessions.length > 0) {
-      // Check if there's a session with the same discipline
       const sameDisciplineSession = existingSessions.find(s => s.discipline === finalDiscipline);
       
-      if (sameDisciplineSession && sameDisciplineSession.start_time) {
-        // If same discipline, check if enough time has passed (2+ hours)
-        const lastSessionTime = new Date(sameDisciplineSession.start_time);
-        const now = new Date();
-        const timeDiffHours = (now.getTime() - lastSessionTime.getTime()) / (1000 * 60 * 60);
-        
-        if (timeDiffHours < 2) {
-          console.log(`Blocking duplicate session: Same discipline (${finalDiscipline}) within 2 hours. Last session: ${lastSessionTime}, Time diff: ${timeDiffHours}h`);
-          return { error: `Du har allerede registrert ${finalDiscipline} trening på denne lokasjonen i dag. Vent minst 2 timer mellom økter med samme disiplin.` };
-        } else {
-          console.log(`Allowing new session: Same discipline (${finalDiscipline}) but ${timeDiffHours}h since last session`);
-        }
-      } else if (sameDisciplineSession) {
-        // Session exists but no start time - block it to be safe
-        console.log(`Blocking duplicate session: Same discipline (${finalDiscipline}) but no start_time available`);
+      if (sameDisciplineSession) {
+        console.log(`Duplicate session detected: ${finalDiscipline} already registered today at this location`);
         return { error: `Du har allerede registrert ${finalDiscipline} trening på denne lokasjonen i dag.` };
       } else {
-        console.log(`Allowing new session: Different discipline (${finalDiscipline}) from existing sessions:`, existingSessions.map(s => s.discipline));
+        console.log(`Allowing new session: Different discipline (${finalDiscipline}) from existing sessions`);
       }
     } else {
       console.log('No existing sessions found for today - allowing new session');

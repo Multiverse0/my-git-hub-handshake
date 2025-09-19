@@ -73,7 +73,7 @@ export function Navigation() {
               <span>{t('nav.home')}</span>
             </NavLink>
             
-            <NavLink to="/scanner" active={isActive('/scanner')}>
+            <NavLink to="/scanner?auto=true" active={isActive('/scanner')}>
               <QrCode className="w-5 h-5" />
               <span>{t('nav.scanner')}</span>
             </NavLink>
@@ -114,7 +114,7 @@ export function Navigation() {
           {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center gap-2">
             <Link
-              to="/scanner"
+              to="/scanner?auto=true"
               className="p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
               style={isActive('/scanner') ? { color: branding.primary_color } : {}}
             >
@@ -152,7 +152,7 @@ export function Navigation() {
             </MobileNavLink>
             
             <MobileNavLink 
-              to="/scanner" 
+              to="/scanner?auto=true" 
               active={isActive('/scanner')}
               onClick={() => setIsMenuOpen(false)}
             >

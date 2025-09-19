@@ -28,18 +28,21 @@ export function Scanner() {
     // Check if we have a code parameter in the URL
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code') || params.get('c'); // Support both 'code' and 'c' parameters
+    const autoStart = params.get('auto') === 'true';
     
     if (code) {
       handleQRCode(code);
     }
 
     // Check if we should auto-start the camera
-    if (location.state?.autoStart) {
+    if (location.state?.autoStart || autoStart) {
       setScanning(true);
       setError(null);
       setLastScannedCode(null);
       setIsProcessing(false);
       setScanAttempts(0);
+      setSuccess(false);
+      setShowDuplicateModal(false);
     }
 
     return () => {
@@ -222,20 +225,26 @@ export function Scanner() {
       
       if (sessionResult.error) {
         if (sessionResult.error.includes('allerede registrert') || sessionResult.error.includes('Du har allerede registrert')) {
-          // Show duplicate registration modal
+          // Show duplicate registration modal - ensure no conflicts with success state
           setError(null);
           setSuccess(false);
           setScanning(false);
           setIsProcessing(false);
+          cleanup(); // Clean up camera resources
           setShowDuplicateModal(true);
           return;
         }
         throw new Error(sessionResult.error);
       }
       
-      // Show success message
-      setSuccess(true);
-      setScanning(false);
+      // Show success message - ensure no conflicts with duplicate modal
+      if (!showDuplicateModal) {
+        setError(null);
+        setShowDuplicateModal(false);
+        setSuccess(true);
+        setScanning(false);
+        cleanup(); // Clean up camera resources
+      }
       
       // Redirect to training log after 2 seconds
       setTimeout(() => {
