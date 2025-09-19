@@ -7,7 +7,7 @@ import { QRCodeManagement } from '../components/QRCodeManagement';
 import { ManualTrainingModal } from '../components/ManualTrainingModal';
 import { AdminFullTrainingLog } from '../components/AdminFullTrainingLog';
 import { OrganizationSettings } from '../components/OrganizationSettings';
-import { RangeOfficerManagement } from '../components/RangeOfficerManagement';
+
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { SupabaseStatus } from '../components/SupabaseStatus';
@@ -16,7 +16,7 @@ import { StatisticsCard } from '../components/StatisticsCard';
 export function Admin() {
   const { user, profile, organization } = useAuth();
   const { t } = useLanguage();
-  const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'approvals' | 'qr' | 'log' | 'officers' | 'settings' | 'email'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'approvals' | 'qr' | 'log' | 'settings' | 'email'>('overview');
   const [showManualModal, setShowManualModal] = useState(false);
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
   const [pendingMembersCount, setPendingMembersCount] = useState(0);
@@ -239,16 +239,6 @@ export function Admin() {
           )}
         </button>
         <button
-          onClick={() => setActiveTab('officers')}
-          className={`px-3 py-2 text-sm font-medium rounded-t-lg whitespace-nowrap ${
-            activeTab === 'officers'
-              ? 'bg-svpk-yellow text-gray-900 border-b-2 border-svpk-yellow'
-              : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          Ledere
-        </button>
-        <button
           onClick={() => setActiveTab('settings')}
           className={`px-3 py-2 text-sm font-medium rounded-t-lg whitespace-nowrap ${
             activeTab === 'settings'
@@ -361,9 +351,6 @@ export function Admin() {
         <AdminFullTrainingLog />
       )}
 
-      {activeTab === 'officers' && (
-        <RangeOfficerManagement />
-      )}
 
       {activeTab === 'settings' && (
         <OrganizationSettings />

@@ -110,8 +110,7 @@ function EditModal({ member, onClose, onSave }: EditModalProps) {
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               >
                 <option value="member">Medlem</option>
-                <option value="admin">Administrator</option>
-                <option value="range_officer">Baneansvarlig</option>
+                <option value="range_officer">Baneansv.</option>
               </select>
             </div>
 

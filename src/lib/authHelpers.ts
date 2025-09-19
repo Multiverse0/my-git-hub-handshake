@@ -33,7 +33,8 @@ export function canManageMembers(user: AuthUser | null): boolean {
   if (!user) return false;
   
   return user.user_type === 'super_user' || 
-         (user.user_type === 'organization_member' && user.member_profile?.role === 'admin');
+         (user.user_type === 'organization_member' &&
+          (user.member_profile?.role === 'admin' || user.member_profile?.role === 'range_officer'));
 }
 
 /**
@@ -54,7 +55,8 @@ export function canManageOrganization(user: AuthUser | null): boolean {
   if (!user) return false;
   
   return user.user_type === 'super_user' || 
-         (user.user_type === 'organization_member' && user.member_profile?.role === 'admin');
+         (user.user_type === 'organization_member' &&
+          (user.member_profile?.role === 'admin' || user.member_profile?.role === 'range_officer'));
 }
 
 /**
@@ -89,7 +91,7 @@ export function getUserRoleText(user: AuthUser | null): string {
       case 'admin':
         return 'Administrator';
       case 'range_officer':
-        return 'Standplassleder';
+        return 'Baneansv.';
       case 'member':
         return 'Medlem';
       default:
