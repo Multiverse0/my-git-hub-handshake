@@ -76,13 +76,13 @@ export function DatePicker({
           {selectedDate ? format(selectedDate, "dd.MM.yyyy", { locale: nb }) : placeholder}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
+      <PopoverContent className="w-auto p-1 bg-background" align="start">
         <Calendar
           mode="single"
           selected={selectedDate}
           onSelect={handleSelect}
           initialFocus
-          className="pointer-events-auto"
+          className="pointer-events-auto bg-background"
         />
       </PopoverContent>
     </Popover>
