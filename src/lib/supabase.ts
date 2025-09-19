@@ -762,6 +762,21 @@ export async function updateMemberRole(
   }
 }
 
+/**
+ * Add organization member with subscription limit validation
+ */
+export async function addOrganizationMember(
+  organizationId: string,
+  memberData: {
+    email: string;
+    full_name: string;
+    member_number?: string;
+    role?: 'member' | 'admin' | 'range_officer';
+    approved?: boolean;
+    password?: string;
+    sendWelcomeEmail?: boolean;
+  }
+): Promise<ApiResponse<OrganizationMember>> {
   try {
     // Generate password if sending welcome email but no password provided
     let generatedPassword = memberData.password;
