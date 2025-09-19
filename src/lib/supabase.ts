@@ -1347,10 +1347,10 @@ export async function updateTrainingLocation(
 /**
  * Upload profile image
  */
-export async function uploadProfileImage(file: File, userId: string): Promise<string> {
+export async function uploadProfileImage(file: File, memberId: string): Promise<string> {
   const fileExt = file.name.split('.').pop();
-  const fileName = `${userId}-${Math.random()}.${fileExt}`;
-  const filePath = `profiles/${userId}/${fileName}`;
+  const fileName = `${memberId}-${Math.random()}.${fileExt}`;
+  const filePath = `profiles/${memberId}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('profiles')
@@ -1370,10 +1370,10 @@ export async function uploadProfileImage(file: File, userId: string): Promise<st
 /**
  * Upload startkort PDF
  */
-export async function uploadStartkortPDF(file: File, userId: string): Promise<string> {
+export async function uploadStartkortPDF(file: File, memberId: string): Promise<string> {
   const fileExt = file.name.split('.').pop();
-  const fileName = `${userId}-startkort-${Date.now()}.${fileExt}`;
-  const filePath = `documents/${userId}/${fileName}`;
+  const fileName = `${memberId}-startkort-${Date.now()}.${fileExt}`;
+  const filePath = `documents/${memberId}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('documents')
@@ -1393,10 +1393,10 @@ export async function uploadStartkortPDF(file: File, userId: string): Promise<st
 /**
  * Upload diploma PDF
  */
-export async function uploadDiplomaPDF(file: File, userId: string): Promise<string> {
+export async function uploadDiplomaPDF(file: File, memberId: string): Promise<string> {
   const fileExt = file.name.split('.').pop();
-  const fileName = `${userId}-diploma-${Date.now()}.${fileExt}`;
-  const filePath = `documents/${userId}/${fileName}`;
+  const fileName = `${memberId}-diploma-${Date.now()}.${fileExt}`;
+  const filePath = `documents/${memberId}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('documents')

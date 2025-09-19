@@ -48,18 +48,43 @@ export function ForgotPassword() {
       setIsLoading(true);
       setError(null);
 
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password?org=${orgSlug}`,
+      // Instead of using supabase.auth.resetPasswordForEmail, 
+      // we need to use the custom password reset system
+      const { data, error } = await supabase.functions.invoke('send-email', {
+        body: {
+          to: email,
+          template: 'password_reset',
+          data: {
+            organizationName: organization?.name || 'Aktivlogg',
+            recipientName: 'Bruker', // We don't have the name at this point
+            email: email,
+            password: 'TEMP_PASSWORD', // The edge function should generate this
+            loginUrl: `${window.location.origin}/login?org=${orgSlug}`
+          },
+          organizationId: organization?.id || 'default',
+          resetPassword: true // Special flag to indicate password reset
+        }
       });
 
       if (error) {
         throw error;
       }
 
+      // Handle response from Edge Function
+      if (data && typeof data === 'object') {
+        if (data.success === false) {
+          throw new Error(data.error || 'Password reset failed');
+        }
+      }
+
       setSuccess(true);
     } catch (error) {
       console.error('Password reset error:', error);
-      setError('Det oppstod en feil. Prøv igjen senere.');
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('Det oppstod en feil. Prøv igjen senere.');
+      }
     } finally {
       setIsLoading(false);
     }

@@ -272,7 +272,7 @@ export function Profile() {
         throw new Error('Kun PDF og bildefiler (JPG, PNG) er tillatt.');
       }
       
-      const publicUrl = await uploadStartkortPDF(file, user!.id);
+      const publicUrl = await uploadStartkortPDF(file, userId || 'fallback');
       
       // Update profile with new startkort URL in organization_members table using email
       const { error } = await supabase
@@ -311,7 +311,7 @@ export function Profile() {
         throw new Error('Kun PDF og bildefiler (JPG, PNG) er tillatt.');
       }
       
-      const publicUrl = await uploadDiplomaPDF(file, user!.id);
+      const publicUrl = await uploadDiplomaPDF(file, userId || 'fallback');
 
       // Update profile with new diploma URL in organization_members table using email  
       const { error } = await supabase
@@ -363,7 +363,7 @@ export function Profile() {
         // Upload to Supabase Storage
         const fileExt = fileName.split('.').pop();
         const uniqueFileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-        const filePath = `other_files/${user.id}/${uniqueFileName}`;
+        const filePath = `other_files/${userId}/${uniqueFileName}`;
         
         const { data, error } = await supabase.storage
           .from('documents')
@@ -441,7 +441,7 @@ export function Profile() {
           if (filePath) {
             await supabase.storage
               .from('documents')
-              .remove([`other_files/${user?.id}/${fileToDelete.name}`]);
+              .remove([`other_files/${userId}/${fileToDelete.name}`]);
           }
         }
         

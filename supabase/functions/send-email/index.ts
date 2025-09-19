@@ -1,5 +1,13 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "npm:resend@2.0.0";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import * as bcrypt from 'https://deno.land/x/bcrypt@v0.4.1/mod.ts';
+
+// Create admin client for database operations
+const supabaseAdmin = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+);
 
 interface EmailRequest {
   to: string
@@ -16,6 +24,7 @@ interface EmailRequest {
     [key: string]: any
   }
   organizationId: string
+  resetPassword?: boolean // New flag for password reset
 }
 
 const corsHeaders = {
@@ -434,8 +443,61 @@ const handler = async (req: Request): Promise<Response> => {
     console.log('Email request received:', {
       to: emailData.to,
       template: emailData.template,
-      organizationId: emailData.organizationId
+      organizationId: emailData.organizationId,
+      resetPassword: emailData.resetPassword
     });
+
+    // Handle password reset logic
+    if (emailData.resetPassword) {
+      console.log('Processing password reset request for:', emailData.to);
+      
+      // Check if user exists in organization_members
+      const { data: memberData, error: memberError } = await supabaseAdmin
+        .from('organization_members')
+        .select('*')
+        .eq('email', emailData.to)
+        .single();
+
+      if (memberError || !memberData) {
+        console.error('User not found for password reset:', emailData.to);
+        return new Response(
+          JSON.stringify({ error: 'E-post not found in system' }),
+          {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          }
+        );
+      }
+
+      // Generate new password
+      const newPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+      
+      // Hash the new password
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      
+      // Update password in database
+      const { error: updateError } = await supabaseAdmin
+        .from('organization_members')
+        .update({ password_hash: hashedPassword })
+        .eq('email', emailData.to);
+
+      if (updateError) {
+        console.error('Failed to update password:', updateError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to reset password' }),
+          {
+            status: 500,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          }
+        );
+      }
+
+      // Update email data with actual member info and new password
+      emailData.data.recipientName = memberData.full_name || 'Bruker';
+      emailData.data.password = newPassword;
+      
+      console.log('Password reset successful, sending email to:', emailData.to);
+    }
 
     // Validate required fields
     if (!emailData.to || !emailData.template || !emailData.data) {
