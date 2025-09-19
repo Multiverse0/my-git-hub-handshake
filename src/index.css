@@ -17,6 +17,13 @@
   --secondary-color: #1F2937;
   --background-color: #111827;
   
+  /* Tailwind semantic tokens (dark mode) */
+  --background: 217 19% 10%; /* Dark gray background */
+  --foreground: 210 40% 98%; /* Light text */
+  --muted: 217 13% 18%; /* Muted background */
+  --muted-foreground: 215 20% 65%; /* Muted text */
+  --border: 217 13% 23%; /* Border color */
+  
   /* Organization theme colors (HSL format for CSS custom properties) */
   --org-primary: 51 100% 50%; /* Default: #FFD700 */
   --org-secondary: 217 11% 25%; /* Default: #1F2937 */
@@ -32,6 +39,13 @@
   --text-tertiary: #64748b;
   --border-primary: #e2e8f0;
   --background-color: #ffffff;
+  
+  /* Tailwind semantic tokens (light mode) */
+  --background: 0 0% 100%; /* White background */
+  --foreground: 222 84% 5%; /* Dark text */
+  --muted: 210 40% 96%; /* Light muted background */
+  --muted-foreground: 215 16% 47%; /* Muted text */
+  --border: 214 32% 91%; /* Light border */
 }
 
 body {
