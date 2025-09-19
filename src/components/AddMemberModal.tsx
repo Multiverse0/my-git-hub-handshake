@@ -38,7 +38,7 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
     const loadLimitInfo = async () => {
       const currentCount = await getOrganizationMemberCount(organizationId);
       const { data: orgData } = await getOrganizationById(organizationId);
-      const planId = orgData?.subscription_type || 'starter';
+      const planId = orgData?.subscription_type || 'start';
       const limitInfo = getMemberLimitInfo(currentCount, planId);
       setMemberLimitInfo(limitInfo);
     };

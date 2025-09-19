@@ -126,9 +126,12 @@ export function Admin() {
         const adminName = profile?.full_name || 'Admin';
         
         // Verify all today's sessions
-        for (const session of todayPending) {
-          await verifyTrainingSession(session.id, adminName);
-        }
+        // Process all sessions in parallel for faster bulk approval
+        await Promise.all(
+          todayPending.map(session => 
+            verifyTrainingSession(session.id, adminName)
+          )
+        );
         
         // Reset counts
         setTodaysUnapprovedCount(0);
@@ -162,9 +165,12 @@ export function Admin() {
         const adminName = profile?.full_name || 'Admin';
         
         // Verify all selected date's sessions
-        for (const session of selectedPending) {
-          await verifyTrainingSession(session.id, adminName);
-        }
+        // Process all sessions in parallel for faster bulk approval
+        await Promise.all(
+          selectedPending.map(session => 
+            verifyTrainingSession(session.id, adminName)
+          )
+        );
         
         // Reset counts
         setSelectedDateUnapprovedCount(0);

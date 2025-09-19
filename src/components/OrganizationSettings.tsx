@@ -52,7 +52,7 @@ export function OrganizationSettings() {
     dfs_enabled: false,
     dssn_enabled: false,
     activity_types: ['Trening', 'Stevne', 'Dugnad'],
-    subscription_type: 'starter'
+    subscription_type: 'start'
   });
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -130,7 +130,7 @@ export function OrganizationSettings() {
             dfs_enabled: org.dfs_enabled !== false,
             dssn_enabled: org.dssn_enabled !== false,
             activity_types: org.activity_types || ['Trening', 'Stevne', 'Dugnad'],
-            subscription_type: org.subscription_type || 'starter'
+            subscription_type: org.subscription_type || 'start'
           });
         } else if (result.error) {
           console.error('Failed to load organization:', result.error);
@@ -157,7 +157,7 @@ export function OrganizationSettings() {
             dfs_enabled: orgInfo.dfs_enabled !== false,
             dssn_enabled: orgInfo.dssn_enabled !== false,
             activity_types: orgInfo.activity_types || ['Trening', 'Stevne', 'Dugnad'],
-            subscription_type: orgInfo.subscription_type || 'starter'
+            subscription_type: orgInfo.subscription_type || 'start'
           });
         }
       }
@@ -185,7 +185,7 @@ export function OrganizationSettings() {
         setMemberCount(count);
         
         // Get current plan from orgData or default
-        const currentPlan = orgData.subscription_type || 'starter';
+        const currentPlan = orgData.subscription_type || 'start';
         const limitInfo = getMemberLimitInfo(count, currentPlan);
         setMemberLimitInfo(limitInfo);
       }

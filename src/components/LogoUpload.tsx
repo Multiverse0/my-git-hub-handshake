@@ -54,11 +54,11 @@ export function LogoUpload({ onLogoUpdated }: LogoUploadProps) {
     },
     maxSize: 2 * 1024 * 1024, // 2MB
     multiple: false,
-    disabled: uploading || !organization || user?.user_type !== 'super_user'
+    disabled: uploading || !organization || (user?.user_type !== 'super_user' && user?.member_profile?.role !== 'admin')
   });
 
-  // Only show for super users
-  if (!user || user.user_type !== 'super_user' || !organization) {
+  // Show for super users and organization admins
+  if (!user || !organization || (user.user_type !== 'super_user' && user.member_profile?.role !== 'admin')) {
     return null;
   }
 
@@ -67,7 +67,7 @@ export function LogoUpload({ onLogoUpdated }: LogoUploadProps) {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">Organisasjonslogo</h3>
         <div className="text-sm text-gray-400">
-          Kun super-brukere
+          Super-brukere og administratorer
         </div>
       </div>
 
