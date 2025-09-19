@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { languages } from '../lib/translations';
 import { EmailTestPanel } from './EmailTestPanel';
+import { LogoUpload } from './LogoUpload';
 import { DEFAULT_ORGANIZATION_COLORS } from '../lib/constants';
 
 interface OrganizationData {
@@ -20,7 +21,7 @@ interface OrganizationData {
   dfs_enabled: boolean;
   dssn_enabled: boolean;
   activity_types: string[];
-  subscription_plan: 'starter' | 'professional';
+  subscription_type: 'starter' | 'professional';
 }
 
 interface SalesBanner {
@@ -49,7 +50,7 @@ export function OrganizationSettings() {
     dfs_enabled: false,
     dssn_enabled: false,
     activity_types: ['Trening', 'Stevne', 'Dugnad'],
-    subscription_plan: 'professional'
+    subscription_type: 'professional'
   });
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -63,62 +64,6 @@ export function OrganizationSettings() {
   const [requestedLanguage, setRequestedLanguage] = useState('');
   const [languageRequestSent, setLanguageRequestSent] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
-
-  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    const orgId = user?.organization?.id || organization?.id || user?.organization_id;
-    
-    if (!file || !orgId) {
-      console.log('Missing file or organization ID:', { file: !!file, orgId });
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setError(null);
-
-      // Validate file type
-      const fileExt = file.name.split('.').pop()?.toLowerCase();
-      const allowedTypes = ['svg', 'png', 'jpg', 'jpeg'];
-      
-      if (!fileExt || !allowedTypes.includes(fileExt)) {
-        setError('Ugyldig filtype. Kun SVG, PNG og JPG er tillatt.');
-        return;
-      }
-
-      if (file.size > 2 * 1024 * 1024) { // 2MB limit
-        setError('Filen er for stor. Maksimal størrelse er 2MB.');
-        return;
-      }
-
-      // Upload logo to Supabase
-      const { updateOrganizationLogo } = await import('../lib/supabase');
-      const result = await updateOrganizationLogo(orgId, file);
-      
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-
-      // Trigger branding update
-      const brandingUpdateEvent = new CustomEvent('brandingUpdated', {
-        detail: {
-          ...branding,
-          logo_url: result.data
-        }
-      });
-      window.dispatchEvent(brandingUpdateEvent);
-      
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-      
-    } catch (error) {
-      console.error('Error uploading logo:', error);
-      setError('Kunne ikke laste opp logo');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   // Load organization data on mount
   useEffect(() => {
@@ -152,7 +97,7 @@ export function OrganizationSettings() {
             dfs_enabled: organization.dfs_enabled !== false,
             dssn_enabled: organization.dssn_enabled !== false,
             activity_types: organization.activity_types || ['Trening', 'Stevne', 'Dugnad'],
-            subscription_plan: 'professional'
+            subscription_type: 'professional'
           });
         }
         return;
@@ -181,7 +126,7 @@ export function OrganizationSettings() {
             dfs_enabled: org.dfs_enabled !== false,
             dssn_enabled: org.dssn_enabled !== false,
             activity_types: org.activity_types || ['Trening', 'Stevne', 'Dugnad'],
-            subscription_plan: 'professional' // This would come from subscription data
+            subscription_type: 'professional' // This would come from subscription data
           });
         } else if (result.error) {
           console.error('Failed to load organization:', result.error);
@@ -208,7 +153,7 @@ export function OrganizationSettings() {
             dfs_enabled: orgInfo.dfs_enabled !== false,
             dssn_enabled: orgInfo.dssn_enabled !== false,
             activity_types: orgInfo.activity_types || ['Trening', 'Stevne', 'Dugnad'],
-            subscription_plan: orgInfo.subscription_plan || 'professional'
+            subscription_type: orgInfo.subscription_type || 'professional'
           });
         }
       }
@@ -257,7 +202,7 @@ export function OrganizationSettings() {
         email: orgData.email,
         phone: orgData.phone,
         website: orgData.website,
-        address: orgData.address,
+        subscription_type: orgData.subscription_type,
         primary_color: orgData.primary_color,
         secondary_color: orgData.secondary_color,
         background_color: orgData.background_color,
@@ -536,8 +481,8 @@ export function OrganizationSettings() {
               Abonnementsplan
             </label>
             <select
-              value={orgData.subscription_plan}
-              onChange={(e) => setOrgData(prev => ({ ...prev, subscription_plan: e.target.value as 'starter' | 'professional' }))}
+              value={orgData.subscription_type}
+              onChange={(e) => setOrgData(prev => ({ ...prev, subscription_type: e.target.value as 'starter' | 'professional' }))}
               className="w-full bg-gray-700 rounded-md px-3 py-2"
             >
               <option value="starter">Starter (Kr 299/mnd - maks 50 medlemmer)</option>
@@ -629,45 +574,10 @@ export function OrganizationSettings() {
         </h3>
 
         <div className="space-y-6">
-          {/* Logo Upload Section */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="font-medium">Organisasjonslogo</h4>
-            </div>
-            
-            <div className="space-y-4">
-              {branding.logo_url && (
-                <div className="flex items-center gap-4 p-4 bg-gray-700 rounded-lg">
-                  <img 
-                    src={branding.logo_url} 
-                    alt="Nåværende logo" 
-                    className="h-12 max-w-[120px] object-contain"
-                  />
-                  <div>
-                    <p className="text-sm font-medium">Nåværende logo</p>
-                    <p className="text-xs text-gray-400">Klikk "Last opp ny logo" for å endre</p>
-                  </div>
-                </div>
-              )}
-              
-              <label className="btn-secondary cursor-pointer inline-flex">
-                <input
-                  type="file"
-                  accept=".svg,.png,.jpg,.jpeg"
-                  onChange={handleLogoUpload}
-                  className="hidden"
-                />
-                <Upload className="w-4 h-4" />
-                <span>Last opp ny logo</span>
-              </label>
-              
-              <div className="text-xs text-gray-400 space-y-1">
-                <p><strong>Støttede formater:</strong> SVG, PNG, JPG</p>
-                <p><strong>Maksimal størrelse:</strong> 2MB</p>
-                <p><strong>Anbefalt størrelse:</strong> 200x80 piksler</p>
-              </div>
-            </div>
-          </div>
+          {/* Logo Upload - Enhanced with LogoUpload component */}
+          <LogoUpload onLogoUpdated={(logoUrl) => {
+            setOrgData(prev => ({ ...prev, logo_url: logoUrl }));
+          }} />
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>

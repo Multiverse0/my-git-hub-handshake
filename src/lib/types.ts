@@ -16,7 +16,9 @@ export interface Organization {
   created_at: string | null;
   updated_at: string | null;
   active: boolean | null;
-  subscription_plan?: 'starter' | 'professional';
+  subscription_type?: string | null;
+  subscription_status?: string | null;
+  subscription_expires_at?: string | null;
   admin_notes?: string;
   background_color?: string | null;
   nsf_enabled?: boolean | null;
