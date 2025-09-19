@@ -5,6 +5,7 @@ import QrScanner from 'qr-scanner';
 import { startTrainingSession, getTrainingLocationByQR } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { DuplicateRegistrationModal } from '../components/DuplicateRegistrationModal';
 
 
 export function Scanner() {
@@ -19,6 +20,7 @@ export function Scanner() {
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
   const [scanAttempts, setScanAttempts] = useState(0);
   const [lastProcessTime, setLastProcessTime] = useState<number>(0);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const qrScannerRef = useRef<QrScanner | null>(null);
 
@@ -225,36 +227,7 @@ export function Scanner() {
           setSuccess(false);
           setScanning(false);
           setIsProcessing(false);
-          
-          const duplicateModal = document.createElement('div');
-          duplicateModal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50';
-          duplicateModal.innerHTML = `
-            <div class="bg-white rounded-2xl max-w-lg w-full mx-4 shadow-2xl">
-              <div class="flex flex-col items-center p-8 text-center">
-                <div class="text-8xl mb-4">🤔</div>
-                <div class="bg-yellow-100 text-yellow-800 px-6 py-3 rounded-full mb-6">
-                  <span class="text-2xl font-bold">ALLEREDE REGISTRERT!</span>
-                </div>
-                <h2 class="text-3xl font-bold text-gray-900 mb-4">
-                  Rolig an der, ivrig skytter! 😄
-                </h2>
-                <p class="text-gray-600 mb-6 text-lg">
-                  Du har allerede registrert trening i dag.<br>
-                  <strong>Én trening per dag</strong> er nok for å holde seg i form! 🎯
-                </p>
-                <div class="bg-gray-50 rounded-lg p-4 mb-6 w-full">
-                  <p class="text-sm text-gray-600">
-                    💡 <strong>Tips:</strong> Kom tilbake i morgen for å registrere ny trening!
-                  </p>
-                </div>
-                <button onclick="this.closest('.fixed').remove()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-4 px-8 rounded-xl text-lg transition-colors duration-200 w-full">
-                  Skjønner! 👍
-                </button>
-              </div>
-            </div>
-          `;
-          
-          document.body.appendChild(duplicateModal);
+          setShowDuplicateModal(true);
           return;
         }
         throw new Error(sessionResult.error);
@@ -332,81 +305,78 @@ export function Scanner() {
 
   return (
     <div className="space-y-6">
-      <header className="text-center">
-        <h1 className="text-3xl font-bold text-svpk-yellow mb-4">
-          {t('scanner.title')}
-        </h1>
-        <p className="text-gray-400 max-w-2xl mx-auto">
+      <div className="bg-card rounded-lg shadow-sm border p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <QrCode className="w-6 h-6 text-primary" />
+          <h1 className="text-2xl font-bold text-foreground">{t('scanner.title')}</h1>
+        </div>
+        
+        <p className="text-muted-foreground mb-6">
           {t('scanner.description')}
         </p>
-      </header>
 
-      <div className="card max-w-md mx-auto">
-        {!scanning ? (
-          <div className="flex flex-col items-center p-6 text-center">
-            <div className="bg-gray-700 p-4 rounded-full mb-4">
-              <QrCode className="w-12 h-12 text-svpk-yellow" />
-            </div>
-            <h2 className="text-xl font-semibold mb-4">{t('scanner.start_scanning')}</h2>
-            <p className="text-gray-400 mb-6">
-              {t('scanner.start_camera_description')}
-            </p>
-            <button
-              onClick={() => {
-                setError(null);
-                setScanning(true);
-                setLastScannedCode(null);
-                setIsProcessing(false);
-                setScanAttempts(0);
-              }}
-              className="btn-primary w-full"
-              disabled={isProcessing}
-            >
-              {isProcessing ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                t('scanner.start_camera')
-              )}
-            </button>
-          </div>
-        ) : (
-          <div className="relative">
-            <video
-              ref={videoRef}
-              className="w-full h-64 bg-black rounded-lg object-cover"
-              autoPlay
-              playsInline
-              muted
-            />
-          </div>
+        {!scanning && !isProcessing && (
+          <button
+            onClick={() => {
+              setScanning(true);
+              setError(null);
+              setLastScannedCode(null);
+              setScanAttempts(0);
+            }}
+            className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
+          >
+            <QrCode className="w-5 h-5" />
+            {t('scanner.startButton')}
+          </button>
         )}
 
         {scanning && (
-          <div className="mt-4 flex justify-center">
+          <div className="space-y-4">
+            <div className="relative bg-black rounded-lg overflow-hidden aspect-square max-w-md mx-auto">
+              <video
+                ref={videoRef}
+                className="w-full h-full object-cover"
+                playsInline
+                muted
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-48 h-48 border-2 border-white rounded-lg opacity-50"></div>
+              </div>
+            </div>
+
             <button
-              onClick={() => {
-                setScanning(false);
-                setError(null);
-                setLastScannedCode(null);
-                setIsProcessing(false);
-                setScanAttempts(0);
-              }}
-              className="btn-secondary"
-              disabled={isProcessing}
+              onClick={() => setScanning(false)}
+              className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 font-medium py-3 px-4 rounded-lg transition-colors duration-200"
             >
-              {t('scanner.cancel_scanning')}
+              {t('scanner.cancelButton')}
             </button>
+          </div>
+        )}
+
+        {isProcessing && (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+              <p className="text-muted-foreground">Behandler QR-kode...</p>
+            </div>
           </div>
         )}
 
         {error && (
-          <div className="mt-4 p-4 bg-red-900/50 border border-red-700 rounded-lg flex items-center gap-2 text-red-200">
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            <p>{error}</p>
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mt-4">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-destructive" />
+              <p className="text-destructive font-medium">Feil</p>
+            </div>
+            <p className="text-destructive/80 mt-1">{error}</p>
           </div>
         )}
-
       </div>
+
+      <DuplicateRegistrationModal 
+        isOpen={showDuplicateModal}
+        onClose={() => setShowDuplicateModal(false)}
+      />
     </div>
   );
 }
