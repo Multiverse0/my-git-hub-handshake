@@ -264,7 +264,8 @@ export function MemberManagement({ onMemberCountChange }: MemberManagementProps)
           full_name: newMemberData.full_name!,
           member_number: newMemberData.member_number || undefined,
           role: (newMemberData.role || 'member') as 'member' | 'admin' | 'range_officer',
-          approved: true
+          approved: true,
+          sendWelcomeEmail: (newMemberData as any).sendWelcomeEmail || false
         }
       );
       

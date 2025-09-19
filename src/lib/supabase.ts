@@ -490,18 +490,16 @@ export async function updateOrganizationSettings(
  * Search for existing users by email across all organizations
  */
 export async function searchExistingUsers(
-  searchTerm: string,
-  excludeOrganizationId: string
+  searchTerm: string
 ): Promise<ApiResponse<OrganizationMember[]>> {
   try {
     const { data, error } = await supabase
       .from('organization_members')
       .select('id, email, full_name, member_number, organization_id, organizations(name)')
-      .ilike('email', `%${searchTerm}%`)
-      .neq('organization_id', excludeOrganizationId)
+      .or(`email.ilike.%${searchTerm}%,full_name.ilike.%${searchTerm}%`)
       .eq('approved', true)
       .eq('active', true)
-      .limit(10);
+      .limit(20);
 
     if (error) {
       return { error: error.message };
@@ -755,14 +753,21 @@ export async function addOrganizationMember(
     role: 'member' | 'admin' | 'range_officer';
     approved: boolean;
     password?: string;
+    sendWelcomeEmail?: boolean;
   }
 ): Promise<ApiResponse<OrganizationMember>> {
   try {
+    // Generate password if sending welcome email but no password provided
+    let generatedPassword = memberData.password;
+    if (memberData.sendWelcomeEmail && !generatedPassword) {
+      generatedPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12).toUpperCase() + '123!';
+    }
+
     // If password is provided, create auth user
-    if (memberData.password) {
+    if (generatedPassword) {
       const { error: authError } = await supabase.auth.signUp({
         email: memberData.email,
-        password: memberData.password,
+        password: generatedPassword,
         options: {
           data: {
             full_name: memberData.full_name
@@ -791,6 +796,42 @@ export async function addOrganizationMember(
 
     if (error) {
       return { error: error.message };
+    }
+
+    // Send welcome email if requested
+    if (memberData.sendWelcomeEmail && generatedPassword) {
+      try {
+        // Get organization details for email
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('name, slug')
+          .eq('id', organizationId)
+          .single();
+        
+        if (org) {
+          const { sendMemberApprovalEmail, generateLoginUrl } = await import('./emailService');
+          const loginUrl = generateLoginUrl(org.slug);
+          
+          // Get current user for admin name
+          const currentUser = await getCurrentUser();
+          const adminName = currentUser?.member_profile?.full_name || 
+                           currentUser?.super_user_profile?.full_name || 
+                           currentUser?.email || 'Administrator';
+          
+          await sendMemberApprovalEmail(
+            memberData.email,
+            memberData.full_name,
+            org.name,
+            organizationId,
+            generatedPassword,
+            loginUrl,
+            adminName
+          );
+        }
+      } catch (emailError) {
+        console.error('Error sending welcome email:', emailError);
+        // Don't fail the member creation if email fails
+      }
     }
 
     return { data: data as any };

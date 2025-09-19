@@ -34,7 +34,7 @@ function EditModal({ officer, onClose, onSave }: EditModalProps) {
         setError(null);
         
         try {
-          const result = await searchExistingUsers(searchTerm, organization.id);
+          const result = await searchExistingUsers(searchTerm);
           if (result.error) {
             setError(result.error);
             setSearchResults([]);

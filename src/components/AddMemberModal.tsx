@@ -5,7 +5,7 @@ import { searchExistingUsers, addExistingUserToOrganization } from '../lib/supab
 
 interface AddMemberModalProps {
   onClose: () => void;
-  onSave: (member: Partial<OrganizationMember>) => void;
+  onSave: (member: Partial<OrganizationMember> & { sendWelcomeEmail?: boolean }) => void;
   organizationId: string;
 }
 
@@ -16,11 +16,13 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
     email: string;
     member_number: string;
     role: 'member' | 'admin' | 'range_officer';
+    sendWelcomeEmail: boolean;
   }>({
     full_name: '',
     email: '',
     member_number: '',
     role: 'member',
+    sendWelcomeEmail: true,
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<OrganizationMember[]>([]);
@@ -34,7 +36,7 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
     if (mode === 'existing' && searchTerm.length > 2) {
       const searchTimer = setTimeout(async () => {
         setSearching(true);
-        const result = await searchExistingUsers(searchTerm, organizationId);
+        const result = await searchExistingUsers(searchTerm);
         if (result.data) {
           setSearchResults(result.data);
         } else {
@@ -75,6 +77,7 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
           role: formData.role,
           approved: true, // Auto-approve members added by admin
           active: true,
+          sendWelcomeEmail: formData.sendWelcomeEmail,
         });
       } else if (mode === 'existing' && selectedUser) {
         // Add existing user to organization
@@ -139,7 +142,7 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
                 setMode('new');
                 setSelectedUser(null);
                 setSearchTerm('');
-                setFormData({ full_name: '', email: '', member_number: '', role: 'member' });
+                setFormData({ full_name: '', email: '', member_number: '', role: 'member', sendWelcomeEmail: true });
               }}
               className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
                 mode === 'new'
@@ -156,7 +159,7 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
                 setMode('existing');
                 setSelectedUser(null);
                 setSearchTerm('');
-                setFormData({ full_name: '', email: '', member_number: '', role: 'member' });
+                setFormData({ full_name: '', email: '', member_number: '', role: 'member', sendWelcomeEmail: true });
               }}
               className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
                 mode === 'existing'
@@ -178,11 +181,11 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                   <input
-                    type="email"
+                    type="text"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full bg-gray-700 rounded-md pl-10 pr-3 py-2"
-                    placeholder="Søk på e-postadresse..."
+                    placeholder="Søk på navn eller e-postadresse..."
                   />
                 </div>
                 
@@ -207,6 +210,7 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
                             {user.member_number && (
                               <div className="text-gray-500 text-xs">ID: {user.member_number}</div>
                             )}
+                            <div className="text-gray-500 text-xs">Organisasjon: {(user as any).organizations?.name || 'Ukjent'}</div>
                           </button>
                         ))}
                       </div>
@@ -275,6 +279,21 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
                 <option value="range_officer">Standplassleder</option>
               </select>
             </div>
+
+            {mode === 'new' && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="sendWelcomeEmail"
+                  checked={formData.sendWelcomeEmail}
+                  onChange={(e) => setFormData(prev => ({ ...prev, sendWelcomeEmail: e.target.checked }))}
+                  className="rounded border-gray-600 bg-gray-700 text-primary focus:ring-primary focus:ring-offset-gray-800"
+                />
+                <label htmlFor="sendWelcomeEmail" className="text-sm text-gray-300">
+                  Send velkomst-e-post med innloggingsinfo
+                </label>
+              </div>
+            )}
 
             {error && (
               <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg flex items-center gap-2 text-red-200">
