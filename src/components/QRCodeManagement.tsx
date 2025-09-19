@@ -519,6 +519,27 @@ export function QRCodeManagement() {
         )}
       </div>
 
+      {/* QR Generator Tips Info Box */}
+      <div className="bg-yellow-500/20 border border-yellow-400/30 rounded-lg p-4 mb-6">
+        <div className="flex items-start gap-3">
+          <span className="text-2xl">💡</span>
+          <div className="flex-1">
+            <p className="text-yellow-200 text-sm leading-relaxed">
+              <strong>Tips:</strong> Disse kodene kan brukes til å generere QR-koder for hver bane. Bruk QR-kode teksten over i en QR-kodegenerator som f.eks.{' '}
+              <a 
+                href="https://qrgenerator.org/#text" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-yellow-300 hover:text-yellow-100 underline font-medium"
+              >
+                QR Code Generator
+              </a>
+              . Skriv inn QR-kode teksten (f.eks. "svpk-innendors-25m") i generatoren og skriv ut QR-koden.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Information section */}
       <div className="grid md:grid-cols-2 gap-6">
         <div className="card">
