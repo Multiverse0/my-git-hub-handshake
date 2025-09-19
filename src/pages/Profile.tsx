@@ -23,7 +23,7 @@ interface ProfileData {
 }
 
 export function Profile() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { t } = useLanguage();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
@@ -56,55 +56,62 @@ export function Profile() {
       if (!user?.id) return;
       
       try {
-        // Load profile from Supabase profiles table
-        const { data: profileData, error } = await supabase
-          .from('profiles')
+        // Load profile data from organization_members table
+        const { data: memberData, error } = await supabase
+          .from('organization_members')
           .select('*')
           .eq('id', user.id)
           .single();
 
         if (error) {
-          console.error('Error loading profile:', error);
-          // Fallback to auth context data
-          if (profile) {
+          console.error('Error loading member profile:', error);
+          // Fallback to auth context data from member_profile
+          if (user.member_profile) {
             const fallbackData: ProfileData = {
-              name: profile.full_name || '',
-              email: profile.email || user.email || '',
-              memberNumber: (profile as any)?.member_number || '',
-              joinDate: profile.created_at ? new Date(profile.created_at).toLocaleDateString('nb-NO') : '',
-              avatarUrl: (profile as any)?.avatar_url,
-              startkortUrl: (profile as any)?.startkort_url,
-              startkortFileName: (profile as any)?.startkort_file_name,
-              diplomaUrl: (profile as any)?.diploma_url,
-              diplomaFileName: (profile as any)?.diploma_file_name,
+              name: user.member_profile.full_name || '',
+              email: user.member_profile.email || user.email || '',
+              memberNumber: user.member_profile.member_number || '',
+              joinDate: user.member_profile.created_at ? new Date(user.member_profile.created_at).toLocaleDateString('nb-NO') : '',
+              avatarUrl: user.member_profile.avatar_url || undefined,
+              startkortUrl: user.member_profile.startkort_url || undefined,
+              startkortFileName: user.member_profile.startkort_file_name || undefined,
+              diplomaUrl: user.member_profile.diploma_url || undefined,
+              diplomaFileName: user.member_profile.diploma_file_name || undefined,
             };
             setProfileData(fallbackData);
             setEditData(fallbackData);
-            setProfileRole((profile as any)?.role || 'admin');
+            setProfileRole(user.member_profile.role as 'super_user' | 'member' | 'admin' | 'range_officer' || 'member');
+            
+            // Load other files from member profile
+            if (user.member_profile.other_files && Array.isArray(user.member_profile.other_files)) {
+              setOtherFiles(user.member_profile.other_files as { url: string; name: string; }[]);
+            } else {
+              setOtherFiles([]);
+            }
           }
           return;
         }
 
-        // Use data from profiles table
+        // Use data from organization_members table
         const newProfileData: ProfileData = {
-          name: profileData.full_name || '',
-          email: profileData.email || '',
-          memberNumber: profileData.member_number || '',
-          joinDate: profileData.created_at ? new Date(profileData.created_at).toLocaleDateString('nb-NO') : '',
-          avatarUrl: profileData.avatar_url || undefined,
-          startkortUrl: profileData.startkort_url || undefined,
-          startkortFileName: profileData.startkort_file_name || undefined,
-          diplomaUrl: profileData.diploma_url || undefined,
-          diplomaFileName: profileData.diploma_file_name || undefined,
+          name: memberData.full_name || '',
+          email: memberData.email || '',
+          memberNumber: memberData.member_number || '',
+          joinDate: memberData.created_at ? new Date(memberData.created_at).toLocaleDateString('nb-NO') : '',
+          avatarUrl: memberData.avatar_url || undefined,
+          startkortUrl: memberData.startkort_url || undefined,
+          startkortFileName: memberData.startkort_file_name || undefined,
+          diplomaUrl: memberData.diploma_url || undefined,
+          diplomaFileName: memberData.diploma_file_name || undefined,
         };
         
         setProfileData(newProfileData);
         setEditData(newProfileData);
-        setProfileRole(profileData.role as 'super_user' | 'member' | 'admin' | 'range_officer' || 'member');
+        setProfileRole(memberData.role as 'super_user' | 'member' | 'admin' | 'range_officer' || 'member');
         
-        // Load other files from profiles table
-        if (profileData.other_files && Array.isArray(profileData.other_files)) {
-          setOtherFiles(profileData.other_files as { url: string; name: string; }[]);
+        // Load other files from organization_members table
+        if (memberData.other_files && Array.isArray(memberData.other_files)) {
+          setOtherFiles(memberData.other_files as { url: string; name: string; }[]);
         } else {
           setOtherFiles([]);
         }
@@ -115,17 +122,14 @@ export function Profile() {
     };
 
     loadProfileData();
-  }, [user, profile]);
+  }, [user]);
 
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUserId(user.id);
-      }
-    };
-    getUser();
-  }, []);
+    // Use the user ID from our auth context (which is the member ID)
+    if (user?.id) {
+      setUserId(user.id);
+    }
+  }, [user]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
@@ -136,9 +140,9 @@ export function Profile() {
       const file = acceptedFiles[0];
       const imageUrl = await uploadProfileImage(file, userId);
       
-      // Update profile with new avatar URL
+      // Update profile with new avatar URL in organization_members table
       const { error } = await supabase
-        .from('profiles')
+        .from('organization_members')
         .update({ avatar_url: imageUrl })
         .eq('id', userId);
 
@@ -167,9 +171,9 @@ export function Profile() {
     try {
       setIsLoading(true);
       
-      // Update profile in Supabase (DO NOT update auth.users)
+      // Update profile in organization_members table
       const { error } = await supabase
-        .from('profiles')
+        .from('organization_members')
         .update({
           full_name: editData.name,
           email: editData.email,
@@ -222,9 +226,9 @@ export function Profile() {
       
       const publicUrl = await uploadStartkortPDF(file, user!.id);
       
-      // Update profile with new startkort URL
+      // Update profile with new startkort URL in organization_members table
       const { error } = await supabase
-        .from('profiles')
+        .from('organization_members')
         .update({ startkort_url: publicUrl, startkort_file_name: fileName })
         .eq('id', user!.id);
 
@@ -261,9 +265,9 @@ export function Profile() {
       
       const publicUrl = await uploadDiplomaPDF(file, user!.id);
 
-      // Update profile with new diploma URL
+      // Update profile with new diploma URL in organization_members table
       const { error } = await supabase
-        .from('profiles')
+        .from('organization_members')
         .update({ diploma_url: publicUrl, diploma_file_name: fileName })
         .eq('id', user!.id);
 
@@ -337,9 +341,9 @@ export function Profile() {
       const updatedFiles = [...otherFiles, ...uploadedFiles];
       setOtherFiles(updatedFiles);
 
-      // Update the user's profile with the new list of other files (as JSONB)
+      // Update the user's profile with the new list of other files (as JSONB) in organization_members table
       const { error: updateError } = await supabase
-        .from('profiles')
+        .from('organization_members')
         .update({ other_files: updatedFiles })
         .eq('id', user.id);
 
@@ -373,9 +377,9 @@ export function Profile() {
         const updatedFiles = otherFiles.filter((_, index) => index !== fileIndex);
         setOtherFiles(updatedFiles);
 
-        // Update the user's profile in Supabase with the modified list
+        // Update the user's profile in organization_members table with the modified list
         const { error } = await supabase
-          .from('profiles')
+          .from('organization_members')
           .update({ other_files: updatedFiles })
           .eq('id', user?.id || '');
 
