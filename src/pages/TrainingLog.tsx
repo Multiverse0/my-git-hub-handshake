@@ -375,199 +375,176 @@ export function TrainingLog() {
 
     const doc = new jsPDF();
     
-    // Add SVPK logo
-    const SVPK_LOGO_URL = 'https://medlem.svpk.no/wp-content/uploads/2025/01/Logo-SVPK-orginal.png';
-    
-    try {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      
-      img.onload = () => {
-        if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
-          doc.addImage(img, 'PNG', 15, 8, 30, 15);
-        }
-        generatePDFContent();
-      };
-      
-      img.onerror = () => {
-        console.warn('Logo could not be loaded, continuing without logo');
-        generatePDFContent();
-      };
-      
-      img.src = SVPK_LOGO_URL;
-    } catch (error) {
-      console.warn('Error loading logo, continuing without logo:', error);
-      generatePDFContent();
-    }
-
     function generatePDFContent() {
-      // Add title
+      // Add title - match new template format
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(18);
-      const titleSuffix = organizationFilter !== 'all' ? ` - ${organizationFilter}` : '';
-      const activitySuffix = activityFilter !== 'all' ? ` (${activityFilter})` : '';
-      doc.text(`TRENINGSLOGG${titleSuffix}${activitySuffix}`, 50, 18);
+      doc.setFontSize(16);
+      const organizationName = organizationFilter !== 'all' ? organizationFilter : 'NSF';
+      doc.text(`TRENINGSLOGG - ${organizationName} (Trening)`, 15, 20);
 
-      // Add member info
+      // Add member info section
       doc.setFontSize(12);
       doc.setFont('helvetica', 'normal');
       doc.text(`Medlem: ${profile?.full_name || 'Ukjent'}`, 15, 35);
-      doc.text(`Medlemsnummer: ${(profile as any)?.member_number || 'Ukjent'}`, 15, 42);
-      doc.text(`Generert: ${format(new Date(), 'dd.MM.yyyy')}`, 15, 49);
-      doc.text(`Filter: ${organizationFilter !== 'all' ? organizationFilter : 'Alle organisasjoner'}${activityFilter !== 'all' ? ` - ${activityFilter}` : ''}`, 15, 56);
+      
+      // Add birth date (placeholder - would need to be added to profile)
+      doc.text(`Fødelsdato: [Ikke oppgitt]`, 15, 42);
+      
+      // Add organization info
+      doc.text(`Medlemsorganisasjon: ${organizationName}`, 15, 49);
+      doc.text(`Skytterlag/skytterklubb: Svolvær Pistolklubb`, 15, 56);
 
-      // Add requirements status
+      // Add requirements status - simplified based on current filter
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.text('KRAVSTATUS:', 15, 60);
+      doc.setFontSize(14);
+      doc.text('KRAVSTATUS:', 15, 70);
       
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
+      doc.setFontSize(12);
       
-      // NSF requirements (6 months)
-      doc.setTextColor(requirements.nsf.met ? 0 : 255, requirements.nsf.met ? 128 : 0, 0);
-      doc.text(`NSF (6 måneder): ${requirements.nsf.count}/10 treninger (${requirements.nsf.met ? 'OPPFYLT' : 'IKKE OPPFYLT'})`, 15, 67);
+      // Show only relevant requirement based on filter
+      let requirementText = '';
       
-      // DFS requirements (24 months)
-      doc.setTextColor(requirements.dfs.met ? 0 : 255, requirements.dfs.met ? 128 : 0, 0);
-      doc.text(`DFS (24 måneder): ${requirements.dfs.count}/10 treninger (${requirements.dfs.met ? 'OPPFYLT' : 'IKKE OPPFYLT'})`, 15, 74);
+      if (organizationFilter === 'NSF' || organizationFilter === 'all') {
+        requirementText = `Standard våpensøknad: ${requirements.nsf.count}/10 treninger (${requirements.nsf.met ? 'OPPFYLT' : 'IKKE OPPFYLT'})`;
+      } else if (organizationFilter === 'DFS') {
+        requirementText = `Standard våpensøknad: ${requirements.dfs.count}/10 treninger (${requirements.dfs.met ? 'OPPFYLT' : 'IKKE OPPFYLT'})`;
+      } else if (organizationFilter === 'DSSN') {
+        requirementText = `Standard våpensøknad: ${requirements.dynamic.trainings.count + requirements.dynamic.competitions.count}/20 treninger (${requirements.dynamic.overallMet ? 'OPPFYLT' : 'IKKE OPPFYLT'})`;
+      }
       
-      // Dynamic requirements
-      doc.setTextColor(requirements.dynamic.overallMet ? 0 : 255, requirements.dynamic.overallMet ? 128 : 0, 0);
-      doc.text(`Dynamisk våpensøknad: ${requirements.dynamic.trainings.count}/10 treninger, ${requirements.dynamic.competitions.count}/10 stevner (${requirements.dynamic.overallMet ? 'OPPFYLT' : 'IKKE OPPFYLT'})`, 15, 81);
-      
-      doc.setTextColor(0, 0, 0); // Reset to black
+      doc.text(requirementText, 15, 80);
 
-      // Table headers
-      const headers = ['Dato', 'Aktivitet', 'Bane', 'Varighet', 'Verifisert av'];
-      const columnWidths = [25, 35, 35, 25, 40];
-      let startY = 85;
+      // Table headers - removed "Varighet" column
+      const headers = ['Dato', 'Aktivitet', 'Bane/sted', 'Verifisert av'];
+      const columnWidths = [30, 40, 60, 50];
+      let startY = 95;
       let startX = 15;
 
-      // Add header background
-      doc.setFillColor(255, 215, 0); // SVPK yellow
-      doc.rect(startX, startY - 5, columnWidths.reduce((a, b) => a + b, 0), 8, 'F');
+      // Add table border
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.5);
+      const tableWidth = columnWidths.reduce((a, b) => a + b, 0);
+      doc.rect(startX, startY - 7, tableWidth, 12);
 
       // Add headers
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
+      doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
       headers.forEach((header, i) => {
-        doc.text(header, startX + 1, startY);
+        doc.text(header, startX + 2, startY);
+        if (i < headers.length - 1) {
+          doc.line(startX + columnWidths[i], startY - 7, startX + columnWidths[i], startY + 5);
+        }
         startX += columnWidths[i];
       });
 
+      // Add header bottom border
+      doc.line(15, startY + 5, 15 + tableWidth, startY + 5);
+
       // Add data rows
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      let yPos = startY + 8;
+      doc.setFontSize(9);
+      let yPos = startY + 15;
 
-      const exportSessions = sessionsToExport;
-      
-      exportSessions.forEach((session, index) => {
+      sessionsToExport.forEach((session: any) => {
         if (yPos > 250) {
           doc.addPage();
           yPos = 40;
           
           // Re-add headers on new page
-          doc.setFillColor(255, 215, 0);
-          doc.rect(15, yPos - 5, columnWidths.reduce((a, b) => a + b, 0), 8, 'F');
+          startX = 15;
+          doc.rect(startX, yPos - 7, tableWidth, 12);
           doc.setFont('helvetica', 'bold');
-          doc.setFontSize(9);
-          let headerX = 15;
+          doc.setFontSize(10);
           headers.forEach((header, i) => {
-            doc.text(header, headerX + 1, yPos);
-            headerX += columnWidths[i];
+            doc.text(header, startX + 2, yPos);
+            if (i < headers.length - 1) {
+              doc.line(startX + columnWidths[i], yPos - 7, startX + columnWidths[i], yPos + 5);
+            }
+            startX += columnWidths[i];
           });
+          doc.line(15, yPos + 5, 15 + tableWidth, yPos + 5);
           doc.setFont('helvetica', 'normal');
-          doc.setFontSize(8);
-          yPos += 8;
-        }
-
-        // Add alternating row background
-        if (index % 2 === 0) {
-          doc.setFillColor(248, 248, 248);
-          doc.rect(15, yPos - 2, columnWidths.reduce((a, b) => a + b, 0), 5, 'F');
+          doc.setFontSize(9);
+          yPos += 15;
         }
 
         startX = 15;
         
+        // Add row border
+        doc.rect(startX, yPos - 5, tableWidth, 10);
+        
         // Date
         doc.setTextColor(0, 0, 0);
         const sessionDate = safeDate((session as any).date) || safeDate(session.created_at) || new Date();
-        doc.text(format(sessionDate, 'dd.MM.yyyy'), startX + 1, yPos);
+        doc.text(format(sessionDate, 'dd.MM.yyyy'), startX + 2, yPos);
+        doc.line(startX + columnWidths[0], yPos - 5, startX + columnWidths[0], yPos + 5);
         startX += columnWidths[0];
         
-        // Activity - color code DSSN activities
-        if ((session as any).organization === 'DSSN') {
-          doc.setTextColor(74, 222, 128); // Green for DSSN
-        } else if ((session as any).organization === 'DFS') {
-          doc.setTextColor(20, 136, 252); // Blue for DFS
-        } else {
-          doc.setTextColor(0, 0, 0);
-        }
-        doc.text((session as any).activity || 'Trening', startX + 1, yPos);
-        doc.setTextColor(0, 0, 0); // Reset to black
+        // Activity
+        doc.text((session as any).activity || 'Trening', startX + 2, yPos);
+        doc.line(startX + columnWidths[1], yPos - 5, startX + columnWidths[1], yPos + 5);
         startX += columnWidths[1];
         
         // Location
-        doc.text((session as any).location || 'Ukjent', startX + 1, yPos);
+        doc.text((session as any).location || 'Ukjent', startX + 2, yPos);
+        doc.line(startX + columnWidths[2], yPos - 5, startX + columnWidths[2], yPos + 5);
         startX += columnWidths[2];
         
-        // Duration
-        doc.text((session as any).duration || '1t', startX + 1, yPos);
-        startX += columnWidths[3];
-        
         // Verified by
-        doc.setTextColor(0, 128, 0); // Green color
-        doc.text((session as any).verifiedBy || session.verified_by || 'Verifisert', startX + 1, yPos);
-        doc.setTextColor(0, 0, 0); // Reset to black
+        doc.text((session as any).verifiedBy || session.verified_by || 'Verifisert', startX + 2, yPos);
 
-        yPos += 6;
+        yPos += 10;
       });
 
-      // Add signature field at bottom
-      yPos += 15;
-      if (yPos > 240) {
+      // Add signature section - match new template
+      yPos += 20;
+      if (yPos > 200) {
         doc.addPage();
         yPos = 40;
       }
 
-      // Signature section
+      // Signature section header
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text('SIGNATUR OG STEMPEL', 15, yPos);
+      
+      yPos += 15;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(11);
+      
+      // Styremedlem/skyteleders signature
+      doc.text('Styremedlem/skyteleders signatur:', 15, yPos);
+      doc.line(80, yPos, 140, yPos);
+      
+      yPos += 15;
+      doc.text('Dato:', 15, yPos);
+      doc.line(30, yPos, 80, yPos);
+      
+      yPos += 15;
+      doc.text('Signatur søker:', 15, yPos);
+      doc.text('STEMPEL', 120, yPos);
+      
+      // Draw stamp box
       doc.setDrawColor(0, 0, 0);
       doc.setLineWidth(0.5);
+      doc.rect(110, yPos - 10, 30, 20);
       
-      // Signature box
-      doc.rect(15, yPos, 120, 30);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.text('SIGNATUR OG STEMPEL', 17, yPos + 5);
+      // Footer - match new template format
+      yPos += 25;
+      doc.setFontSize(9);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Generert: ${format(new Date(), 'dd.MM.yyyy HH:mm')}`, 15, yPos);
       
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.text('Styremedlem signatur:', 17, yPos + 12);
-      doc.text('Dato:', 17, yPos + 20);
-      doc.text('Stempel:', 17, yPos + 28);
-      
-      // Signature lines
-      doc.line(50, yPos + 12, 110, yPos + 12); // Signature line
-      doc.line(30, yPos + 20, 70, yPos + 20);  // Date line
-      
-      // Stamp area
-      doc.setDrawColor(200, 200, 200);
-      doc.rect(80, yPos + 22, 25, 15);
-      doc.setFontSize(6);
-      doc.setTextColor(150, 150, 150);
-      doc.text('STEMPEL', 85, yPos + 30);
-      
-      // Footer
-      doc.setFontSize(7);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Generert: ${format(new Date(), 'dd.MM.yyyy HH:mm')}`, 140, yPos + 35);
-      doc.text('Svolvær Pistolklubb - www.svpk.no', 140, yPos + 40);
+      yPos += 8;
+      doc.text(`Svolvær Pistolklubb - www.svpk.no`, 15, yPos);
 
       doc.save(`${profile?.full_name || 'medlem'}-treningslogg.pdf`);
     }
+    
+    // Generate PDF content directly (removing logo loading)
+    generatePDFContent();
   };
 
   const generateExampleSessions = () => {

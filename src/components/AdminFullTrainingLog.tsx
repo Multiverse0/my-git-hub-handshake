@@ -419,160 +419,159 @@ export function AdminFullTrainingLog() {
       format: 'a4'
     });
 
-    // SVPK logo URL
-    const SVPK_LOGO_URL = 'https://medlem.svpk.no/wp-content/uploads/2025/01/Logo-SVPK-orginal.png';
-
-    // Try to add logo
-    try {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      
-      img.onload = () => {
-        if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
-          doc.addImage(img, 'PNG', 15, 8, 30, 15);
-        }
-        generatePDFContent();
-      };
-      
-      img.onerror = () => {
-        console.warn('Logo could not be loaded, continuing without logo');
-        generatePDFContent();
-      };
-      
-      img.src = SVPK_LOGO_URL;
-    } catch (error) {
-      console.warn('Error loading logo, continuing without logo:', error);
-      generatePDFContent();
-    }
-
     function generatePDFContent() {
-      // Add title
+      // Add title - match new template format
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(20);
-      doc.text('SVPK Treningslogg - Full Oversikt', 50, 18);
+      doc.setFontSize(16);
+      doc.text(`TRENINGSLOGG - ${organization?.name || 'SVPK'} (Trening)`, 15, 20);
 
-      // Add generation info
-      doc.setFontSize(10);
+      // Add admin info section
+      doc.setFontSize(12);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Generert: ${format(new Date(), 'dd.MM.yyyy HH:mm')}`, 50, 30);
-      doc.text(`Totalt antall økter: ${filteredAndSortedData.length}`, 50, 35);
-      doc.text(`Organisasjon: ${organization?.name || 'Ukjent'}`, 50, 40);
+      doc.text(`Administrator: Admin`, 15, 35);
+      doc.text(`Organisasjon: ${organization?.name || 'Ukjent'}`, 15, 42);
+      doc.text(`Antall økter: ${filteredAndSortedData.length}`, 15, 49);
 
-      // Table headers
-      const headers = ['Dato', 'Medlem', 'Aktivitet', 'Bane', 'Standplassleder', 'Status'];
-      const columnWidths = [25, 50, 25, 35, 40, 25];
-      let startY = 50;
+      // Add requirements status header
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text('KRAVSTATUS:', 15, 65);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(12);
+      doc.text(`Totalt ${filteredAndSortedData.length} registrerte treningsøkter`, 15, 75);
+
+      // Table headers - match new template (removed "Status" column to fit landscape better)
+      const headers = ['Dato', 'Aktivitet', 'Bane/sted', 'Verifisert av'];
+      const columnWidths = [35, 50, 80, 60];
+      let startY = 90;
       let startX = 15;
 
-      // Add header background
-      doc.setFillColor(255, 215, 0); // SVPK yellow
-      doc.rect(startX, startY - 5, columnWidths.reduce((a, b) => a + b, 0), 10, 'F');
+      // Add table border
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.5);
+      const tableWidth = columnWidths.reduce((a, b) => a + b, 0);
+      doc.rect(startX, startY - 7, tableWidth, 12);
 
       // Add headers
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
+      doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
       headers.forEach((header, i) => {
-        doc.text(header, startX + 1, startY);
+        doc.text(header, startX + 2, startY);
+        if (i < headers.length - 1) {
+          doc.line(startX + columnWidths[i], startY - 7, startX + columnWidths[i], startY + 5);
+        }
         startX += columnWidths[i];
       });
 
+      // Add header bottom border
+      doc.line(15, startY + 5, 15 + tableWidth, startY + 5);
+
       // Add data rows
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      let yPos = startY + 10;
+      doc.setFontSize(9);
+      let yPos = startY + 15;
 
-      filteredAndSortedData.forEach((entry, index) => {
+      filteredAndSortedData.forEach((entry) => {
         if (yPos > 180) {
           doc.addPage();
           yPos = 40;
           
           // Re-add headers on new page
-          doc.setFillColor(255, 215, 0);
-          doc.rect(15, yPos - 5, columnWidths.reduce((a, b) => a + b, 0), 10, 'F');
+          startX = 15;
+          doc.rect(startX, yPos - 7, tableWidth, 12);
           doc.setFont('helvetica', 'bold');
-          doc.setFontSize(9);
-          let headerX = 15;
+          doc.setFontSize(10);
           headers.forEach((header, i) => {
-            doc.text(header, headerX + 1, yPos);
-            headerX += columnWidths[i];
+            doc.text(header, startX + 2, yPos);
+            if (i < headers.length - 1) {
+              doc.line(startX + columnWidths[i], yPos - 7, startX + columnWidths[i], yPos + 5);
+            }
+            startX += columnWidths[i];
           });
+          doc.line(15, yPos + 5, 15 + tableWidth, yPos + 5);
           doc.setFont('helvetica', 'normal');
-          doc.setFontSize(8);
-          yPos += 10;
-        }
-
-        // Add alternating row background
-        if (index % 2 === 0) {
-          doc.setFillColor(248, 248, 248);
-          doc.rect(15, yPos - 2, columnWidths.reduce((a, b) => a + b, 0), 5, 'F');
+          doc.setFontSize(9);
+          yPos += 15;
         }
 
         startX = 15;
         
+        // Add row border
+        doc.rect(startX, yPos - 5, tableWidth, 10);
+        
         // Date
         doc.setTextColor(0, 0, 0);
-        doc.text(format(entry.date, 'dd.MM.yyyy'), startX + 1, yPos);
+        doc.text(format(entry.date, 'dd.MM.yyyy'), startX + 2, yPos);
+        doc.line(startX + columnWidths[0], yPos - 5, startX + columnWidths[0], yPos + 5);
         startX += columnWidths[0];
         
-        // Member
-        doc.text(entry.memberName, startX + 1, yPos);
+        // Activity
+        doc.text(entry.activity || 'Trening', startX + 2, yPos);
+        doc.line(startX + columnWidths[1], yPos - 5, startX + columnWidths[1], yPos + 5);
         startX += columnWidths[1];
         
-        // Activity
-        doc.text(entry.activity || 'Trening', startX + 1, yPos);
-        startX += columnWidths[2];
-        
         // Range
-        doc.text(entry.range, startX + 1, yPos);
-        startX += columnWidths[3];
+        doc.text(entry.range, startX + 2, yPos);
+        doc.line(startX + columnWidths[2], yPos - 5, startX + columnWidths[2], yPos + 5);
+        startX += columnWidths[2];
 
         // Range Officer
-        doc.text(entry.rangeOfficer, startX + 1, yPos);
-        startX += columnWidths[4];
-        
-        // Status - green color for verified
-        if (entry.approved) {
-          doc.setTextColor(0, 128, 0); // Green color
-          doc.text('Verifisert', startX + 1, yPos);
-        } else {
-          doc.setTextColor(255, 0, 0); // Red color
-          doc.text('Ikke verifisert', startX + 1, yPos);
-        }
-        doc.setTextColor(0, 0, 0); // Reset to black
+        doc.text(entry.rangeOfficer, startX + 2, yPos);
 
-        yPos += 8;
+        yPos += 10;
       });
 
-      // Add signature field at bottom
-      yPos += 15;
-      if (yPos > 170) {
+      // Add signature section - match new template
+      yPos += 20;
+      if (yPos > 140) {
         doc.addPage();
         yPos = 40;
       }
 
-      // Signature section
+      // Signature section header
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text('SIGNATUR OG STEMPEL', 15, yPos);
+      
+      yPos += 15;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(11);
+      
+      // Styremedlem/skyteleders signature
+      doc.text('Styremedlem/skyteleders signatur:', 15, yPos);
+      doc.line(80, yPos, 140, yPos);
+      
+      yPos += 15;
+      doc.text('Dato:', 15, yPos);
+      doc.line(30, yPos, 80, yPos);
+      
+      yPos += 15;
+      doc.text('Signatur søker:', 15, yPos);
+      doc.text('STEMPEL', 120, yPos);
+      
+      // Draw stamp box
       doc.setDrawColor(0, 0, 0);
       doc.setLineWidth(0.5);
+      doc.rect(110, yPos - 10, 30, 20);
       
-      // Signature box
-      doc.rect(15, yPos, 120, 30);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.text('SIGNATUR OG STEMPEL', 17, yPos + 5);
+      // Footer - match new template format
+      yPos += 25;
+      doc.setFontSize(9);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Generert: ${format(new Date(), 'dd.MM.yyyy HH:mm')}`, 15, yPos);
       
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.text('Styremedlem signatur:', 17, yPos + 12);
-      doc.text('Dato:', 17, yPos + 20);
-      
-      // Signature line
-      doc.line(70, yPos + 25, 130, yPos + 25);
+      yPos += 8;
+      doc.text(`${organization?.name || 'Svolvær Pistolklubb'} - www.svpk.no`, 15, yPos);
 
       // Save and download the PDF
       const fileName = `SVPK_Treningslogg_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
       doc.save(fileName);
     }
+    
+    // Generate PDF content directly (removing logo loading)
+    generatePDFContent();
   };
 
   if (loading) {
