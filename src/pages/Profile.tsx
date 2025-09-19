@@ -55,13 +55,28 @@ export function Profile() {
     const loadProfileData = async () => {
       if (!user?.id) return;
       
+      console.log('🔍 Profile Debug - User object:', {
+        id: user.id,
+        email: user.email,
+        member_profile: !!user.member_profile
+      });
+      
+      // Get user email from auth context or member profile
+      const userEmailForQuery = user.email || user.member_profile?.email;
+      if (!userEmailForQuery) {
+        console.error('❌ No email available for profile query');
+        return;
+      }
+      
       try {
-        // Load profile data from organization_members table
+        // Load profile data from organization_members table using email (matches RLS policy)
         const { data: memberData, error } = await supabase
           .from('organization_members')
           .select('*')
-          .eq('id', user.id)
+          .eq('email', userEmailForQuery)
           .single();
+
+        console.log('🔍 Profile Debug - Member query result:', { memberData, error });
 
         if (error) {
           console.error('Error loading member profile:', error);
@@ -92,7 +107,9 @@ export function Profile() {
           return;
         }
 
-        // Use data from organization_members table
+        // Use data from organization_members table and store member ID for updates
+        setUserId(memberData.id); // Store the actual member ID from the database
+        
         const newProfileData: ProfileData = {
           name: memberData.full_name || '',
           email: memberData.email || '',
@@ -109,52 +126,70 @@ export function Profile() {
         setEditData(newProfileData);
         setProfileRole(memberData.role as 'super_user' | 'member' | 'admin' | 'range_officer' || 'member');
         
-        // Load other files from organization_members table
+        // Load other files from organization_members
         if (memberData.other_files && Array.isArray(memberData.other_files)) {
           setOtherFiles(memberData.other_files as { url: string; name: string; }[]);
         } else {
           setOtherFiles([]);
         }
+
+        console.log('✅ Profile data loaded successfully from organization_members');
         
       } catch (error) {
-        console.error('Error in loadProfileData:', error);
+        console.error('Unexpected error in loadProfileData:', error);
       }
     };
 
     loadProfileData();
   }, [user]);
 
-  useEffect(() => {
-    // Use the user ID from our auth context (which is the member ID)
-    if (user?.id) {
-      setUserId(user.id);
-    }
-  }, [user]);
-
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
-    if (!userId) return;
+    if (!user?.email) {
+      console.error('❌ No user email available for avatar upload');
+      return;
+    }
+
+    console.log('🔍 Avatar Upload Debug - Starting upload:', {
+      userEmail: user.email,
+      userId,
+      fileCount: acceptedFiles.length
+    });
 
     try {
       setIsLoading(true);
       const file = acceptedFiles[0];
-      const imageUrl = await uploadProfileImage(file, userId);
+      const imageUrl = await uploadProfileImage(file, userId || 'fallback');
       
-      // Update profile with new avatar URL in organization_members table
+      console.log('🔍 Avatar Upload Debug - Image uploaded:', imageUrl);
+      
+      // Update profile with new avatar URL in organization_members table using email
       const { error } = await supabase
         .from('organization_members')
         .update({ avatar_url: imageUrl })
-        .eq('id', userId);
+        .eq('email', user.email);
+
+      console.log('🔍 Avatar Upload Debug - Database update result:', { error });
 
       if (error) throw error;
 
+      // Update local state
       setProfileData(prev => ({ ...prev, avatarUrl: imageUrl }));
+      setEditData(prev => ({ ...prev, avatarUrl: imageUrl }));
+
+      console.log('✅ Avatar uploaded successfully');
+      
     } catch (error) {
-      console.error('Error uploading image:', error);
+      console.error('❌ Error uploading avatar:', error);
+      toast({
+        title: "Feil",
+        description: "Kunne ikke laste opp profilbilde. Prøv igjen.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [userId]);
+  }, [user, userId, toast]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -166,12 +201,21 @@ export function Profile() {
   });
 
   const handleSave = async () => {
-    if (!user?.id) return;
+    if (!user?.email) {
+      console.error('❌ No user email available for save');
+      return;
+    }
+    
+    console.log('🔍 Profile Save Debug - Starting save with:', {
+      userEmail: user.email,
+      editData,
+      userId
+    });
     
     try {
       setIsLoading(true);
       
-      // Update profile in organization_members table
+      // Update profile in organization_members table using email (matches RLS policy)
       const { error } = await supabase
         .from('organization_members')
         .update({
@@ -180,7 +224,9 @@ export function Profile() {
           member_number: editData.memberNumber,
           updated_at: new Date().toISOString()
         })
-        .eq('id', user.id);
+        .eq('email', user.email);
+
+      console.log('🔍 Profile Save Debug - Update result:', { error });
 
       if (error) {
         throw error;
@@ -195,9 +241,11 @@ export function Profile() {
         title: "Profil oppdatert",
         description: "Profilendringene dine har blitt lagret.",
       });
+
+      console.log('✅ Profile saved successfully');
       
     } catch (error) {
-      console.error('Error updating profile:', error);
+      console.error('❌ Error updating profile:', error);
       toast({
         title: "Feil",
         description: "Kunne ikke lagre profilendringene. Prøv igjen.",
@@ -226,11 +274,11 @@ export function Profile() {
       
       const publicUrl = await uploadStartkortPDF(file, user!.id);
       
-      // Update profile with new startkort URL in organization_members table
+      // Update profile with new startkort URL in organization_members table using email
       const { error } = await supabase
         .from('organization_members')
         .update({ startkort_url: publicUrl, startkort_file_name: fileName })
-        .eq('id', user!.id);
+        .eq('email', user!.email);
 
       if (error) throw error;
 
@@ -265,11 +313,11 @@ export function Profile() {
       
       const publicUrl = await uploadDiplomaPDF(file, user!.id);
 
-      // Update profile with new diploma URL in organization_members table
+      // Update profile with new diploma URL in organization_members table using email  
       const { error } = await supabase
         .from('organization_members')
         .update({ diploma_url: publicUrl, diploma_file_name: fileName })
-        .eq('id', user!.id);
+        .eq('email', user!.email);
 
       if (error) throw error;
 
@@ -341,11 +389,11 @@ export function Profile() {
       const updatedFiles = [...otherFiles, ...uploadedFiles];
       setOtherFiles(updatedFiles);
 
-      // Update the user's profile with the new list of other files (as JSONB) in organization_members table
+      // Update the user's profile with the new list of other files (as JSONB) in organization_members table using email
       const { error: updateError } = await supabase
         .from('organization_members')
         .update({ other_files: updatedFiles })
-        .eq('id', user.id);
+        .eq('email', user.email);
 
       if (updateError) {
         throw new Error(`Kunne ikke oppdatere profilen med filinformasjon: ${updateError.message}`);
@@ -377,11 +425,11 @@ export function Profile() {
         const updatedFiles = otherFiles.filter((_, index) => index !== fileIndex);
         setOtherFiles(updatedFiles);
 
-        // Update the user's profile in organization_members table with the modified list
+        // Update the user's profile in organization_members table with the modified list using email
         const { error } = await supabase
           .from('organization_members')
           .update({ other_files: updatedFiles })
-          .eq('id', user?.id || '');
+          .eq('email', user?.email || '');
 
         if (error) {
           throw new Error(`Kunne ikke slette filen fra profilen: ${error.message}`);
