@@ -14,7 +14,6 @@ interface TrainingEntry {
   id: string;
   date: Date;
   location: string;
-  duration: string;
   verified: boolean;
   verifiedBy?: string;
   activity?: string;
@@ -576,7 +575,6 @@ export function TrainingLog() {
             id: session.id,
             date: new Date(session.date),
             location: session.location || session.rangeName || 'Ukjent',
-            duration: session.duration || '2 timer',
             verified: session.verified || session.approved || false,
             verifiedBy: session.verifiedBy || session.rangeOfficer,
             activity: session.activity || 'Trening',
@@ -638,6 +636,16 @@ export function TrainingLog() {
     try {
       if (updatedEntry.details) {
         await updateTrainingDetails(updatedEntry.id, updatedEntry.details);
+        
+        // Show success message
+        const event = new CustomEvent('show-toast', {
+          detail: {
+            title: 'Endringer lagret',
+            description: 'Treningsinformasjonen har blitt oppdatert.',
+            type: 'success'
+          }
+        });
+        window.dispatchEvent(event);
       }
       
       // Refresh sessions from database
@@ -649,6 +657,16 @@ export function TrainingLog() {
       }
     } catch (error) {
       console.error('Error saving training details:', error);
+      
+      // Show error message
+      const event = new CustomEvent('show-toast', {
+        detail: {
+          title: 'Feil ved lagring',
+          description: 'Kunne ikke lagre endringene. Prøv igjen senere.',
+          type: 'error'
+        }
+      });
+      window.dispatchEvent(event);
     }
     setEditingEntry(null);
   };
@@ -1017,7 +1035,6 @@ export function TrainingLog() {
                     </div>
                     <div className="text-gray-300 space-y-1">
                       <p><strong>{t('log.range')}</strong> {(session as any).location || 'Ukjent'}</p>
-                      <p><strong>{t('log.duration')}</strong> {(session as any).duration || '1t'}</p>
                       {((session as any).verifiedBy || session.verified_by) && (
                         <p><strong>{t('log.verified_by')}</strong> {(session as any).verifiedBy || session.verified_by}</p>
                       )}
@@ -1069,7 +1086,6 @@ export function TrainingLog() {
                   id: session.id,
                   date: new Date(session.date),
                   location: session.location || session.rangeName || 'Ukjent',
-                  duration: session.duration || '2 timer',
                   verified: session.verified || session.approved || false,
                   verifiedBy: session.verifiedBy || session.rangeOfficer,
                   activity: session.activity || 'Trening',
