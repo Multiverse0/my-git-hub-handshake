@@ -562,8 +562,29 @@ export async function addExistingUserToOrganization(
 }
 
 /**
- * Register new organization member with optional organization code
+ * Get current member count for an organization
  */
+export async function getOrganizationMemberCount(organizationId: string): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from('organization_members')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', organizationId)
+      .eq('approved', true)
+      .eq('active', true);
+
+    if (error) {
+      console.error('Error getting member count:', error);
+      return 0;
+    }
+
+    return count || 0;
+  } catch (error) {
+    console.error('Error getting member count:', error);
+    return 0;
+  }
+}
+
 export async function registerOrganizationMember(
   organizationSlug: string,
   email: string,
@@ -741,21 +762,6 @@ export async function updateMemberRole(
   }
 }
 
-/**
- * Add organization member (admin function)
- */
-export async function addOrganizationMember(
-  organizationId: string,
-  memberData: {
-    email: string;
-    full_name: string;
-    member_number?: string;
-    role: 'member' | 'admin' | 'range_officer';
-    approved: boolean;
-    password?: string;
-    sendWelcomeEmail?: boolean;
-  }
-): Promise<ApiResponse<OrganizationMember>> {
   try {
     // Generate password if sending welcome email but no password provided
     let generatedPassword = memberData.password;

@@ -6,6 +6,8 @@ import { languages } from '../lib/translations';
 import { EmailTestPanel } from './EmailTestPanel';
 import { LogoUpload } from './LogoUpload';
 import { DEFAULT_ORGANIZATION_COLORS } from '../lib/constants';
+import { getAllSubscriptionPlans, getMemberLimitInfo } from '../lib/subscriptionPlans';
+import { getOrganizationMemberCount } from '../lib/supabase';
 
 interface OrganizationData {
   name: string;
@@ -21,7 +23,7 @@ interface OrganizationData {
   dfs_enabled: boolean;
   dssn_enabled: boolean;
   activity_types: string[];
-  subscription_type: 'starter' | 'professional';
+  subscription_type: string;
 }
 
 interface SalesBanner {
@@ -50,7 +52,7 @@ export function OrganizationSettings() {
     dfs_enabled: false,
     dssn_enabled: false,
     activity_types: ['Trening', 'Stevne', 'Dugnad'],
-    subscription_type: 'professional'
+    subscription_type: 'starter'
   });
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -64,6 +66,8 @@ export function OrganizationSettings() {
   const [requestedLanguage, setRequestedLanguage] = useState('');
   const [languageRequestSent, setLanguageRequestSent] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [memberCount, setMemberCount] = useState(0);
+  const [memberLimitInfo, setMemberLimitInfo] = useState<any>(null);
 
   // Load organization data on mount
   useEffect(() => {
@@ -126,7 +130,7 @@ export function OrganizationSettings() {
             dfs_enabled: org.dfs_enabled !== false,
             dssn_enabled: org.dssn_enabled !== false,
             activity_types: org.activity_types || ['Trening', 'Stevne', 'Dugnad'],
-            subscription_type: 'professional' // This would come from subscription data
+            subscription_type: org.subscription_type || 'starter'
           });
         } else if (result.error) {
           console.error('Failed to load organization:', result.error);
@@ -153,7 +157,7 @@ export function OrganizationSettings() {
             dfs_enabled: orgInfo.dfs_enabled !== false,
             dssn_enabled: orgInfo.dssn_enabled !== false,
             activity_types: orgInfo.activity_types || ['Trening', 'Stevne', 'Dugnad'],
-            subscription_type: orgInfo.subscription_type || 'professional'
+            subscription_type: orgInfo.subscription_type || 'starter'
           });
         }
       }
@@ -172,7 +176,23 @@ export function OrganizationSettings() {
 
     loadOrganizationData();
     loadSalesBanners();
-  }, [user?.organization?.id, organization?.id, user?.organization_id]);
+    
+    // Load member count and calculate limits
+    const loadMemberData = async () => {
+      const orgId = user?.organization?.id || organization?.id || user?.organization_id;
+      if (orgId) {
+        const count = await getOrganizationMemberCount(orgId);
+        setMemberCount(count);
+        
+        // Get current plan from orgData or default
+        const currentPlan = orgData.subscription_type || 'starter';
+        const limitInfo = getMemberLimitInfo(count, currentPlan);
+        setMemberLimitInfo(limitInfo);
+      }
+    };
+    
+    loadMemberData();
+  }, [user?.organization?.id, organization?.id, user?.organization_id, orgData.subscription_type]);
 
   const handleSave = async () => {
     const orgId = user?.organization?.id || organization?.id || user?.organization_id;
@@ -482,12 +502,58 @@ export function OrganizationSettings() {
             </label>
             <select
               value={orgData.subscription_type}
-              onChange={(e) => setOrgData(prev => ({ ...prev, subscription_type: e.target.value as 'starter' | 'professional' }))}
+              onChange={(e) => {
+                const newPlan = e.target.value;
+                setOrgData(prev => ({ ...prev, subscription_type: newPlan }));
+                const limitInfo = getMemberLimitInfo(memberCount, newPlan);
+                setMemberLimitInfo(limitInfo);
+              }}
               className="w-full bg-gray-700 rounded-md px-3 py-2"
             >
-              <option value="starter">Starter (Kr 299/mnd - maks 50 medlemmer)</option>
-              <option value="professional">Professional (Kr 599/mnd - ubegrenset medlemmer)</option>
+              {getAllSubscriptionPlans().map(plan => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name} ({plan.memberLimit === -1 ? 'Ubegrenset' : `${plan.memberLimit} medlemmer`})
+                  {plan.price && ` - ${plan.price}`}
+                </option>
+              ))}
             </select>
+            
+            {/* Current Usage Display */}
+            {memberLimitInfo && (
+              <div className="mt-3 p-3 bg-gray-700/50 rounded-lg">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs text-gray-400">Medlemsbruk</span>
+                  <span className="text-xs text-gray-300">
+                    {memberLimitInfo.currentCount} / {memberLimitInfo.isUnlimited ? '∞' : memberLimitInfo.limit}
+                  </span>
+                </div>
+                {!memberLimitInfo.isUnlimited && (
+                  <div className="w-full bg-gray-600 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full transition-all ${
+                        memberLimitInfo.isAtLimit ? 'bg-red-500' :
+                        memberLimitInfo.isNearLimit ? 'bg-yellow-500' : 'bg-green-500'
+                      }`}
+                      style={{ width: `${Math.min(100, memberLimitInfo.usagePercentage)}%` }}
+                    />
+                  </div>
+                )}
+                {memberLimitInfo.isAtLimit && (
+                  <p className="text-xs text-red-400 mt-1">
+                    Medlemsgrensen er nådd. Oppgrader for å legge til flere medlemmer.
+                  </p>
+                )}
+                {memberLimitInfo.isNearLimit && !memberLimitInfo.isAtLimit && (
+                  <p className="text-xs text-yellow-400 mt-1">
+                    Nærmer seg medlemsgrensen ({memberLimitInfo.remaining} igjen).
+                  </p>
+                )}
+              </div>
+            )}
+            
+            <p className="text-xs text-gray-400 mt-1">
+              Velg abonnementsplan som passer for organisasjonen
+            </p>
           </div>
 
           <div className="md:col-span-2">

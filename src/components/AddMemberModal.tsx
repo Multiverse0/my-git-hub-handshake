@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { X, AlertCircle, Search, User, Users } from 'lucide-react';
 import type { OrganizationMember } from '../lib/types';
-import { searchExistingUsers, addExistingUserToOrganization } from '../lib/supabase';
+import { searchExistingUsers, addExistingUserToOrganization, getOrganizationMemberCount, getOrganizationById } from '../lib/supabase';
+import { getMemberLimitInfo } from '../lib/subscriptionPlans';
 
 interface AddMemberModalProps {
   onClose: () => void;
@@ -30,6 +31,20 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
   const [selectedUser, setSelectedUser] = useState<OrganizationMember | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [memberLimitInfo, setMemberLimitInfo] = useState<any>(null);
+
+  // Load member limit info
+  useEffect(() => {
+    const loadLimitInfo = async () => {
+      const currentCount = await getOrganizationMemberCount(organizationId);
+      const { data: orgData } = await getOrganizationById(organizationId);
+      const planId = orgData?.subscription_type || 'starter';
+      const limitInfo = getMemberLimitInfo(currentCount, planId);
+      setMemberLimitInfo(limitInfo);
+    };
+    
+    loadLimitInfo();
+  }, [organizationId]);
 
   // Search for existing users when search term changes
   useEffect(() => {
@@ -57,6 +72,12 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
     setError(null);
     
     try {
+      // Check member limits before proceeding
+      if (memberLimitInfo?.isAtLimit) {
+        setError(`Medlemsgrensen for ${memberLimitInfo.plan.name} (${memberLimitInfo.limit} medlemmer) er nådd. Oppgrader abonnementet for å legge til flere medlemmer.`);
+        return;
+      }
+
       if (mode === 'new') {
         if (!formData.full_name.trim() || !formData.email.trim()) {
           setError('Navn og e-post må fylles ut');
@@ -135,6 +156,26 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
           </div>
 
           {/* Mode Toggle */}
+          {/* Member Limit Warning */}
+          {memberLimitInfo && (memberLimitInfo.isNearLimit || memberLimitInfo.isAtLimit) && (
+            <div className={`p-3 rounded-lg mb-4 ${
+              memberLimitInfo.isAtLimit 
+                ? 'bg-red-900/50 border border-red-700 text-red-200' 
+                : 'bg-yellow-900/50 border border-yellow-700 text-yellow-200'
+            }`}>
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <div className="text-sm">
+                  {memberLimitInfo.isAtLimit ? (
+                    <p>Medlemsgrensen for {memberLimitInfo.plan.name} ({memberLimitInfo.limit} medlemmer) er nådd.</p>
+                  ) : (
+                    <p>Du har {memberLimitInfo.remaining} medlemsplasser igjen av {memberLimitInfo.limit}.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex bg-gray-700 rounded-lg p-1 mb-6">
             <button
               type="button"
@@ -313,7 +354,7 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
               <button
                 type="submit"
                 className="btn-primary"
-                disabled={loading || (mode === 'existing' && !selectedUser)}
+                disabled={loading || (mode === 'existing' && !selectedUser) || memberLimitInfo?.isAtLimit}
               >
                 {loading ? 'Legger til...' : mode === 'new' ? 'Legg til medlem' : 'Legg til eksisterende medlem'}
               </button>
