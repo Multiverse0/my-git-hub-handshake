@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 
 export interface EmailData {
   to: string;
-  template: 'welcome_admin' | 'welcome_member' | 'member_approved' | 'password_reset';
+  template: 'welcome_admin' | 'welcome_member' | 'member_approved' | 'password_reset' | 'training_verified' | 'training_rejected' | 'role_updated' | 'password_changed' | 'account_suspended' | 'organization_announcement';
   data: {
     organizationName: string;
     recipientName: string;
@@ -11,6 +11,17 @@ export interface EmailData {
     password?: string;
     memberNumber?: string;
     adminName?: string;
+    trainingDate?: string;
+    duration?: number;
+    discipline?: string;
+    verifiedBy?: string;
+    notes?: string;
+    rejectionReason?: string;
+    newRole?: string;
+    changeTime?: string;
+    suspensionReason?: string;
+    announcementTitle?: string;
+    announcementContent?: string;
     [key: string]: any;
   };
   organizationId: string;
@@ -141,6 +152,159 @@ export async function sendMemberApprovalEmail(
       password,
       loginUrl,
       adminName
+    },
+    organizationId
+  });
+}
+
+/**
+ * Send training verification email to member
+ */
+export async function sendTrainingVerificationEmail(
+  memberEmail: string,
+  memberName: string,
+  organizationName: string,
+  organizationId: string,
+  trainingDetails: {
+    trainingDate: string;
+    duration: number;
+    discipline: string;
+    verifiedBy: string;
+    notes?: string;
+  }
+): Promise<EmailResult> {
+  return sendEmail({
+    to: memberEmail,
+    template: 'training_verified',
+    data: {
+      organizationName,
+      recipientName: memberName,
+      ...trainingDetails
+    },
+    organizationId
+  });
+}
+
+/**
+ * Send training rejection email to member
+ */
+export async function sendTrainingRejectionEmail(
+  memberEmail: string,
+  memberName: string,
+  organizationName: string,
+  organizationId: string,
+  trainingDetails: {
+    trainingDate: string;
+    duration: number;
+    discipline: string;
+    verifiedBy: string;
+    rejectionReason?: string;
+  }
+): Promise<EmailResult> {
+  return sendEmail({
+    to: memberEmail,
+    template: 'training_rejected',
+    data: {
+      organizationName,
+      recipientName: memberName,
+      ...trainingDetails
+    },
+    organizationId
+  });
+}
+
+/**
+ * Send role update email to member
+ */
+export async function sendRoleUpdateEmail(
+  memberEmail: string,
+  memberName: string,
+  organizationName: string,
+  organizationId: string,
+  newRole: string,
+  loginUrl: string
+): Promise<EmailResult> {
+  const roleLabels = {
+    'admin': 'Administrator',
+    'range_officer': 'Baneleder',
+    'member': 'Medlem'
+  };
+
+  return sendEmail({
+    to: memberEmail,
+    template: 'role_updated',
+    data: {
+      organizationName,
+      recipientName: memberName,
+      newRole: roleLabels[newRole as keyof typeof roleLabels] || newRole,
+      loginUrl
+    },
+    organizationId
+  });
+}
+
+/**
+ * Send password change confirmation email
+ */
+export async function sendPasswordChangeConfirmationEmail(
+  memberEmail: string,
+  memberName: string,
+  organizationName: string,
+  organizationId: string
+): Promise<EmailResult> {
+  return sendEmail({
+    to: memberEmail,
+    template: 'password_changed',
+    data: {
+      organizationName,
+      recipientName: memberName,
+      changeTime: new Date().toLocaleString('no-NO')
+    },
+    organizationId
+  });
+}
+
+/**
+ * Send account suspension email
+ */
+export async function sendAccountSuspensionEmail(
+  memberEmail: string,
+  memberName: string,
+  organizationName: string,
+  organizationId: string,
+  suspensionReason?: string
+): Promise<EmailResult> {
+  return sendEmail({
+    to: memberEmail,
+    template: 'account_suspended',
+    data: {
+      organizationName,
+      recipientName: memberName,
+      suspensionReason
+    },
+    organizationId
+  });
+}
+
+/**
+ * Send organization announcement email
+ */
+export async function sendOrganizationAnnouncementEmail(
+  memberEmail: string,
+  memberName: string,
+  organizationName: string,
+  organizationId: string,
+  announcementTitle: string,
+  announcementContent: string
+): Promise<EmailResult> {
+  return sendEmail({
+    to: memberEmail,
+    template: 'organization_announcement',
+    data: {
+      organizationName,
+      recipientName: memberName,
+      announcementTitle,
+      announcementContent
     },
     organizationId
   });

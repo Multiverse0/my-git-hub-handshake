@@ -14,6 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
+      email_logs: {
+        Row: {
+          delivered_at: string | null
+          error_message: string | null
+          id: string
+          member_id: string | null
+          organization_id: string | null
+          recipient_email: string
+          retry_count: number
+          sent_at: string
+          status: string
+          subject: string
+          template_type: string
+        }
+        Insert: {
+          delivered_at?: string | null
+          error_message?: string | null
+          id?: string
+          member_id?: string | null
+          organization_id?: string | null
+          recipient_email: string
+          retry_count?: number
+          sent_at?: string
+          status?: string
+          subject: string
+          template_type: string
+        }
+        Update: {
+          delivered_at?: string | null
+          error_message?: string | null
+          id?: string
+          member_id?: string | null
+          organization_id?: string | null
+          recipient_email?: string
+          retry_count?: number
+          sent_at?: string
+          status?: string
+          subject?: string
+          template_type?: string
+        }
+        Relationships: []
+      }
+      email_preferences: {
+        Row: {
+          created_at: string
+          id: string
+          member_id: string
+          organization_announcements: boolean
+          password_notifications: boolean
+          role_change_notifications: boolean
+          training_notifications: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          member_id: string
+          organization_announcements?: boolean
+          password_notifications?: boolean
+          role_change_notifications?: boolean
+          training_notifications?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          member_id?: string
+          organization_announcements?: boolean
+          password_notifications?: boolean
+          role_change_notifications?: boolean
+          training_notifications?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       member_training_sessions: {
         Row: {
           created_at: string | null
@@ -670,6 +745,15 @@ export type Database = {
           id: string
           member_id: string
           permissions: Json
+        }[]
+      }
+      get_user_email_preferences: {
+        Args: { user_member_id: string }
+        Returns: {
+          organization_announcements: boolean
+          password_notifications: boolean
+          role_change_notifications: boolean
+          training_notifications: boolean
         }[]
       }
       get_user_member_id: {

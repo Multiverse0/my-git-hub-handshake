@@ -148,7 +148,7 @@ async function sendEmail(
 interface EmailRequest {
   to: string
   subject: string
-  template: 'welcome_admin' | 'welcome_member' | 'member_approved' | 'password_reset'
+  template: 'welcome_admin' | 'welcome_member' | 'member_approved' | 'password_reset' | 'training_verified' | 'training_rejected' | 'role_updated' | 'password_changed' | 'account_suspended' | 'organization_announcement'
   data: {
     organizationName: string
     recipientName: string
@@ -157,10 +157,21 @@ interface EmailRequest {
     password?: string
     memberNumber?: string
     adminName?: string
+    trainingDate?: string
+    duration?: number
+    discipline?: string
+    verifiedBy?: string
+    notes?: string
+    rejectionReason?: string
+    newRole?: string
+    changeTime?: string
+    suspensionReason?: string
+    announcementTitle?: string
+    announcementContent?: string
     [key: string]: any
   }
   organizationId: string
-  resetPassword?: boolean // New flag for password reset
+  resetPassword?: boolean
 }
 
 const corsHeaders = {
