@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      email_delivery_logs: {
+        Row: {
+          bounced_at: string | null
+          clicked_at: string | null
+          created_at: string
+          email_type: string
+          error_message: string | null
+          id: string
+          member_id: string | null
+          metadata: Json | null
+          opened_at: string | null
+          organization_id: string | null
+          recipient_email: string
+          status: string
+          tracking_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          bounced_at?: string | null
+          clicked_at?: string | null
+          created_at?: string
+          email_type: string
+          error_message?: string | null
+          id?: string
+          member_id?: string | null
+          metadata?: Json | null
+          opened_at?: string | null
+          organization_id?: string | null
+          recipient_email: string
+          status?: string
+          tracking_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bounced_at?: string | null
+          clicked_at?: string | null
+          created_at?: string
+          email_type?: string
+          error_message?: string | null
+          id?: string
+          member_id?: string | null
+          metadata?: Json | null
+          opened_at?: string | null
+          organization_id?: string | null
+          recipient_email?: string
+          status?: string
+          tracking_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       email_logs: {
         Row: {
           delivered_at: string | null
@@ -85,6 +136,33 @@ export type Database = {
           password_notifications?: boolean
           role_change_notifications?: boolean
           training_notifications?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      email_settings: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string
+          setting_key: string
+          setting_value: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id: string
+          setting_key: string
+          setting_value?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string
+          setting_key?: string
+          setting_value?: Json
           updated_at?: string
         }
         Relationships: []

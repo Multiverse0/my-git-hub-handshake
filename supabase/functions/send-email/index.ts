@@ -3,6 +3,73 @@ import { Resend } from "npm:resend@2.0.0";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import * as bcrypt from 'https://deno.land/x/bcrypt@v0.4.1/mod.ts';
 
+// Environment-aware URL generation
+const getBaseUrl = (): string => {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  if (supabaseUrl?.includes('localhost')) {
+    return 'http://localhost:3000';
+  }
+  return 'https://lovable.app'; // Replace with your actual domain
+};
+
+// Get organization URL configuration
+const getOrganizationUrlConfig = async (organizationId: string) => {
+  const { data } = await supabaseAdmin
+    .from('email_settings')
+    .select('setting_value')
+    .eq('organization_id', organizationId)
+    .eq('setting_key', 'url_config')
+    .maybeSingle();
+    
+  return data?.setting_value || {
+    base_url: getBaseUrl(),
+    reset_password_path: '/reset-password',
+    login_path: '/login',
+    email_preferences_path: '/profile/email-preferences'
+  };
+};
+
+// Get organization branding
+const getOrganizationBranding = async (organizationId: string) => {
+  const { data } = await supabaseAdmin
+    .from('email_settings')
+    .select('setting_value')
+    .eq('organization_id', organizationId)
+    .eq('setting_key', 'branding')
+    .maybeSingle();
+    
+  return data?.setting_value || {
+    header_color: '#FFD700',
+    footer_text: 'Powered by AktivLogg',
+    logo_url: null
+  };
+};
+
+// Log email delivery
+const logEmailDelivery = async (
+  organizationId: string,
+  memberId: string | null,
+  emailType: string,
+  recipientEmail: string,
+  status: string = 'sent'
+) => {
+  const trackingId = crypto.randomUUID();
+  
+  await supabaseAdmin
+    .from('email_delivery_logs')
+    .insert({
+      organization_id: organizationId,
+      member_id: memberId,
+      email_type: emailType,
+      recipient_email: recipientEmail,
+      status: status,
+      tracking_id: trackingId,
+      metadata: { sent_at: new Date().toISOString() }
+    });
+    
+  return trackingId;
+};
+
 // Mailgun interface
 interface MailgunResponse {
   id: string;
