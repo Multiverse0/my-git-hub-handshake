@@ -7,8 +7,8 @@ import {
   generateEmailPreferencesUrl,
   getOrganizationUrlConfig,
   getOrganizationBranding,
-  UrlConfig,
-  EmailBranding
+  type UrlConfig,
+  type EmailBranding
 } from '../lib/emailUrls';
 import { Loader2, TestTube, BarChart3, Globe, Palette } from 'lucide-react';
 

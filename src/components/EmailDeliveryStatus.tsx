@@ -113,6 +113,12 @@ export const EmailDeliveryStatus: React.FC<EmailDeliveryStatusProps> = ({
     return (
       <div className="bg-white p-6 rounded-lg border border-red-200">
         <div className="text-red-600">{error}</div>
+        <button 
+          onClick={loadEmailData}
+          className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Prøv igjen
+        </button>
       </div>
     );
   }
@@ -168,10 +174,21 @@ export const EmailDeliveryStatus: React.FC<EmailDeliveryStatusProps> = ({
 
       {/* Recent Email Logs */}
       <div className="bg-white p-6 rounded-lg border">
-        <h3 className="text-lg font-semibold mb-2">Nylige e-poster</h3>
-        <p className="text-sm text-gray-600 mb-4">
-          De siste 50 e-postene som er sendt fra organisasjonen
-        </p>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold">Nylige e-poster</h3>
+            <p className="text-sm text-gray-600">
+              De siste 50 e-postene som er sendt fra organisasjonen
+            </p>
+          </div>
+          <button 
+            onClick={loadEmailData}
+            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded"
+            disabled={loading}
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Oppdater'}
+          </button>
+        </div>
         
         {logs.length === 0 ? (
           <p className="text-center text-gray-500 py-8">
@@ -180,7 +197,7 @@ export const EmailDeliveryStatus: React.FC<EmailDeliveryStatusProps> = ({
         ) : (
           <div className="space-y-2">
             {logs.map((log) => (
-              <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg">
+              <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
                 <div className="flex items-center space-x-3">
                   {getStatusIcon(log.status)}
                   <div>
