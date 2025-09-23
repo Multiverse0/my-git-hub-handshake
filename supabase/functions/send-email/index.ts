@@ -155,6 +155,8 @@ interface EmailRequest {
     loginUrl?: string
     email?: string
     password?: string
+    resetLink?: string
+    resetUrl?: string
     memberNumber?: string
     adminName?: string
     trainingDate?: string
@@ -494,9 +496,10 @@ ${data.organizationName}
           .header { background: linear-gradient(135deg, #3B82F6, #1D4ED8); padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
           .header h1 { color: white; margin: 0; font-size: 28px; }
           .content { background: #ffffff; padding: 30px; border: 1px solid #e0e0e0; }
-          .info-box { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3B82F6; }
-          .button { display: inline-block; background: #3B82F6; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; }
+          .info-box { background: #f0f7ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3B82F6; }
+          .button { display: inline-block; background: #3B82F6; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; text-align: center; }
           .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 10px 10px; }
+          .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 8px; margin: 20px 0; }
         </style>
       </head>
       <body>
@@ -511,18 +514,27 @@ ${data.organizationName}
             <p>Du har bedt om å tilbakestille passordet ditt for <strong>${data.organizationName}</strong>.</p>
             
             <div class="info-box">
-              <h3>🔑 Ditt nye passord:</h3>
-              <p><strong>E-post:</strong> ${data.email}</p>
-              <p><strong>Nytt passord:</strong> <code style="background: #e9ecef; padding: 4px 8px; border-radius: 4px; font-family: monospace;">${data.password}</code></p>
+              <h3>🔗 Tilbakestill passordet ditt</h3>
+              <p>Klikk på knappen nedenfor for å opprette et nytt passord. Denne linken er gyldig i 1 time.</p>
             </div>
-            
-            <p><strong>⚠️ Viktig:</strong> Endre dette passordet så snart du logger inn av sikkerhetsmessige årsaker.</p>
             
             <div style="text-align: center;">
-              <a href="${data.loginUrl}" class="button">🚀 Logg inn nå</a>
+              <a href="${data.resetLink}" class="button">🔑 Tilbakestill passord</a>
             </div>
             
-            <p>Hvis du ikke ba om denne passordtilbakestillingen, kan du trygt ignorere denne e-posten.</p>
+            <div class="warning">
+              <strong>⚠️ Sikkerhetsinformasjon:</strong>
+              <ul>
+                <li>Denne linken utløper om 1 time</li>
+                <li>Hvis du ikke ba om denne tilbakestillingen, kan du trygt ignorere denne e-posten</li>
+                <li>Del aldri denne linken med andre</li>
+              </ul>
+            </div>
+            
+            <p>Alternativt kan du kopiere og lime inn denne linken i nettleseren din:</p>
+            <p style="word-break: break-all; font-family: monospace; background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 12px;">
+              ${data.resetLink}
+            </p>
             
             <p>Med vennlig hilsen,<br>
             <strong>${data.organizationName}</strong></p>
@@ -543,11 +555,15 @@ Hei ${data.recipientName}!
 
 Du har bedt om å tilbakestille passordet ditt for ${data.organizationName}.
 
-Dine nye innloggingsopplysninger:
-E-post: ${data.email}
-Nytt passord: ${data.password}
+Klikk på denne linken for å tilbakestille passordet ditt:
+${data.resetLink}
 
-VIKTIG: Endre dette passordet så snart du logger inn av sikkerhetsmessige årsaker.
+VIKTIG: Denne linken utløper om 1 time.
+
+Hvis du ikke ba om denne passordtilbakestillingen, kan du trygt ignorere denne e-posten.
+
+Med vennlig hilsen,
+${data.organizationName}
 
 Logg inn her: ${data.loginUrl}
 
@@ -602,52 +618,45 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Handle password reset logic
     if (emailData.resetPassword) {
-      console.log('Processing password reset request for:', emailData.to);
+      console.log('Processing Supabase Auth password reset request for:', emailData.to);
       
-      // Check if user exists in organization_members
-      const { data: memberData, error: memberError } = await supabaseAdmin
+      // Check if user exists in organization_members to get their name
+      const { data: memberData } = await supabaseAdmin
         .from('organization_members')
-        .select('*')
+        .select('full_name, organization_id')
         .eq('email', emailData.to)
         .single();
 
-      if (memberError || !memberData) {
-        console.error('User not found for password reset:', emailData.to);
+      if (!memberData) {
+        console.log('User not found in organization_members, checking auth.users');
+      }
+
+      // Generate password reset link using Supabase Auth
+      const { data: resetData, error: resetError } = await supabaseAdmin.auth.admin.generatePasswordResetLink(
+        emailData.to,
+        {
+          redirectTo: `${emailData.data.resetUrl || emailData.data.loginUrl}`
+        }
+      );
+
+      if (resetError) {
+        console.error('Failed to generate reset link:', resetError);
         return new Response(
-          JSON.stringify({ error: 'E-post not found in system' }),
+          JSON.stringify({ 
+            error: 'Failed to generate password reset link. Make sure the user exists in the system.' 
+          }),
           {
-            status: 404,
+            status: 400,
             headers: { 'Content-Type': 'application/json', ...corsHeaders },
           }
         );
       }
 
-      // Generate new password
-      const newPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
-      
-      // Hash the new password
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      
-      // Update password in database
-      const { error: updateError } = await supabaseAdmin
-        .from('organization_members')
-        .update({ password_hash: hashedPassword })
-        .eq('email', emailData.to);
+      console.log('Password reset link generated successfully for:', emailData.to);
 
-      if (updateError) {
-        console.error('Failed to update password:', updateError);
-        return new Response(
-          JSON.stringify({ error: 'Failed to reset password' }),
-          {
-            status: 500,
-            headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          }
-        );
-      }
-
-      // Update email data with actual member info and new password
-      emailData.data.recipientName = memberData.full_name || 'Bruker';
-      emailData.data.password = newPassword;
+      // Update email data with actual member info and reset link
+      emailData.data.recipientName = memberData?.full_name || 'Bruker';
+      emailData.data.resetLink = resetData.properties.action_link;
       
       console.log('Password reset successful, sending email to:', emailData.to);
     }

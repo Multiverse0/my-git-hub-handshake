@@ -48,17 +48,18 @@ export function ForgotPassword() {
       setIsLoading(true);
       setError(null);
 
-      // Instead of using supabase.auth.resetPasswordForEmail, 
-      // we need to use the custom password reset system
+      // Use Supabase Auth password reset via edge function
+      const resetUrl = `${window.location.origin}/reset-password?org=${orgSlug}`;
+      
       const { data, error } = await supabase.functions.invoke('send-email', {
         body: {
           to: email,
           template: 'password_reset',
           data: {
             organizationName: organization?.name || 'Aktivlogg',
-            recipientName: 'Bruker', // We don't have the name at this point
+            recipientName: 'Bruker', // Will be updated by edge function
             email: email,
-            password: 'TEMP_PASSWORD', // The edge function should generate this
+            resetUrl: resetUrl,
             loginUrl: `${window.location.origin}/login?org=${orgSlug}`
           },
           organizationId: organization?.id || 'default',

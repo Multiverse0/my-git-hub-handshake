@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Lock, Loader2, AlertCircle, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { Lock, Loader2, AlertCircle, Eye, EyeOff, CheckCircle, ArrowLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getOrganizationBySlug } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import type { Organization } from '../lib/types';
 
 export function ResetPassword() {
+  const { branding } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const orgSlug = searchParams.get('org') || 'svpk';
+  
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -13,10 +19,30 @@ export function ResetPassword() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [loadingOrg, setLoadingOrg] = useState(true);
 
   // Check if we have the required tokens
   const accessToken = searchParams.get('access_token');
   const refreshToken = searchParams.get('refresh_token');
+
+  // Load organization info
+  useEffect(() => {
+    const loadOrganization = async () => {
+      try {
+        const result = await getOrganizationBySlug(orgSlug);
+        if (result.data) {
+          setOrganization(result.data);
+        }
+      } catch (error) {
+        console.error('Error loading organization:', error);
+      } finally {
+        setLoadingOrg(false);
+      }
+    };
+
+    loadOrganization();
+  }, [orgSlug]);
 
   useEffect(() => {
     if (!accessToken || !refreshToken) {
@@ -70,7 +96,7 @@ export function ResetPassword() {
       } else {
         setSuccess(true);
         setTimeout(() => {
-          navigate('/login');
+          navigate(`/login?org=${orgSlug}`);
         }, 2000);
       }
     } catch (error) {
@@ -80,6 +106,17 @@ export function ResetPassword() {
     }
   };
 
+  if (loadingOrg) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mx-auto mb-4"></div>
+          <p className="text-gray-400">Laster...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (success) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
@@ -88,9 +125,17 @@ export function ResetPassword() {
           <h1 className="text-2xl font-bold text-white mb-2">
             Passord oppdatert!
           </h1>
-          <p className="text-gray-400 mb-4">
+          <p className="text-gray-400 mb-6">
             Ditt passord har blitt oppdatert. Du blir omdirigert til innloggingssiden...
           </p>
+          <Link
+            to={`/login?org=${orgSlug}`}
+            className="inline-flex items-center gap-2 text-sm hover:opacity-80"
+            style={{ color: organization?.primary_color || branding.primary_color }}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Gå til innlogging
+          </Link>
         </div>
       </div>
     );
@@ -100,10 +145,28 @@ export function ResetPassword() {
     <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
       <div className="bg-gray-800 rounded-lg p-8 max-w-md w-full">
         <div className="flex flex-col items-center mb-8">
-          <div className="h-16 px-6 flex items-center rounded font-bold text-2xl mb-6 bg-yellow-500 text-gray-900">
-            SVPK
-          </div>
-          <h1 className="text-2xl font-bold text-yellow-500">
+          {organization?.logo_url ? (
+            <img 
+              src={organization.logo_url} 
+              alt={`${organization.name} Logo`} 
+              className="h-16 max-w-[200px] object-contain mb-6"
+            />
+          ) : (
+            <div 
+              className="h-16 px-6 flex items-center rounded font-bold text-2xl mb-6"
+              style={{ 
+                backgroundColor: organization?.primary_color || branding.primary_color, 
+                color: organization?.secondary_color || branding.secondary_color 
+              }}
+            >
+              {(organization?.name || branding.organization_name).split(' ').map(word => word[0]).join('').toUpperCase()}
+            </div>
+          )}
+          
+          <h1 
+            className="text-2xl font-bold"
+            style={{ color: organization?.primary_color || branding.primary_color }}
+          >
             Tilbakestill passord
           </h1>
           <p className="text-gray-400 text-center mt-2">
@@ -171,7 +234,11 @@ export function ResetPassword() {
 
           <button
             type="submit"
-            className="btn-primary w-full"
+            className="w-full font-medium py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            style={{ 
+              backgroundColor: organization?.primary_color || branding.primary_color,
+              color: organization?.secondary_color || branding.secondary_color
+            }}
             disabled={isLoading}
           >
             {isLoading ? (
@@ -185,13 +252,13 @@ export function ResetPassword() {
           </button>
 
           <div className="text-center">
-            <button
-              type="button"
-              onClick={() => navigate('/login')}
-              className="text-gray-400 hover:text-gray-300 text-sm"
+            <Link
+              to={`/login?org=${orgSlug}`}
+              className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-gray-300 transition-colors"
             >
+              <ArrowLeft className="w-4 h-4" />
               Tilbake til innlogging
-            </button>
+            </Link>
           </div>
         </form>
       </div>
