@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "../integrations/supabase/client";
 import { UrlConfig, EmailBranding } from "./emailUrls";
 
 export interface EmailSettings {
@@ -9,7 +9,7 @@ export interface EmailSettings {
 
 export interface EmailDeliveryLog {
   id: string;
-  organization_id: string;
+  organization_id: string | null;
   member_id?: string;
   email_type: string;
   recipient_email: string;
@@ -62,7 +62,7 @@ export class EmailConfigManager {
       .upsert({
         organization_id: organizationId,
         setting_key: 'url_config',
-        setting_value: config
+        setting_value: config as any
       }, {
         onConflict: 'organization_id,setting_key'
       });
@@ -85,7 +85,7 @@ export class EmailConfigManager {
       .upsert({
         organization_id: organizationId,
         setting_key: 'branding',
-        setting_value: branding
+        setting_value: branding as any
       }, {
         onConflict: 'organization_id,setting_key'
       });
@@ -253,7 +253,7 @@ export class EmailDeliveryTracker {
       return [];
     }
 
-    return data || [];
+    return (data || []) as EmailDeliveryLog[];
   }
 }
 

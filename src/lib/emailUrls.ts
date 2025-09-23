@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "../integrations/supabase/client";
 
 export interface UrlConfig {
   base_url: string;
@@ -64,7 +64,7 @@ export const getOrganizationUrlConfig = async (organizationId: string): Promise<
     return getDefaultUrlConfig();
   }
 
-  return data?.setting_value || getDefaultUrlConfig();
+  return (data?.setting_value as unknown as UrlConfig) || getDefaultUrlConfig();
 };
 
 // Get organization branding configuration
@@ -81,7 +81,7 @@ export const getOrganizationBranding = async (organizationId: string): Promise<E
     return getDefaultBranding();
   }
 
-  return data?.setting_value || getDefaultBranding();
+  return (data?.setting_value as unknown as EmailBranding) || getDefaultBranding();
 };
 
 // Default configurations

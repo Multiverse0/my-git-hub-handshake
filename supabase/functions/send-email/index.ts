@@ -240,6 +240,8 @@ interface EmailRequest {
     [key: string]: any
   }
   organizationId: string
+  memberId?: string
+  organizationSlug?: string
   resetPassword?: boolean
 }
 
