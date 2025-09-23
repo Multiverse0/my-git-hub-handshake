@@ -3,11 +3,147 @@ import { Resend } from "npm:resend@2.0.0";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import * as bcrypt from 'https://deno.land/x/bcrypt@v0.4.1/mod.ts';
 
+// Mailgun interface
+interface MailgunResponse {
+  id: string;
+  message: string;
+}
+
 // Create admin client for database operations
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
+
+// Email service interface
+interface EmailServiceResponse {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}
+
+// Send email with Mailgun
+async function sendWithMailgun(
+  to: string,
+  from: string,
+  subject: string,
+  html: string,
+  text: string
+): Promise<EmailServiceResponse> {
+  const mailgunApiKey = Deno.env.get('MAILGUN_API_KEY');
+  const mailgunDomain = Deno.env.get('MAILGUN_DOMAIN');
+  
+  if (!mailgunApiKey || !mailgunDomain) {
+    throw new Error('Mailgun not configured: MAILGUN_API_KEY or MAILGUN_DOMAIN missing');
+  }
+
+  const formData = new FormData();
+  formData.append('from', from);
+  formData.append('to', to);
+  formData.append('subject', subject);
+  formData.append('html', html);
+  formData.append('text', text);
+
+  const response = await fetch(`https://api.mailgun.net/v3/${mailgunDomain}/messages`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${btoa(`api:${mailgunApiKey}`)}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Mailgun error:', errorText);
+    throw new Error(`Mailgun API error: ${response.status} - ${errorText}`);
+  }
+
+  const result: MailgunResponse = await response.json();
+  return {
+    success: true,
+    messageId: result.id
+  };
+}
+
+// Send email with Resend
+async function sendWithResend(
+  to: string,
+  from: string,
+  subject: string,
+  html: string,
+  text: string
+): Promise<EmailServiceResponse> {
+  const resendApiKey = Deno.env.get('RESEND_API_KEY');
+  
+  if (!resendApiKey) {
+    throw new Error('Resend not configured: RESEND_API_KEY missing');
+  }
+
+  const resend = new Resend(resendApiKey);
+  
+  const emailResponse = await resend.emails.send({
+    from: from,
+    to: [to],
+    subject: subject,
+    html: html,
+    text: text
+  });
+
+  if (emailResponse.error) {
+    throw new Error(`Resend error: ${emailResponse.error.message}`);
+  }
+
+  return {
+    success: true,
+    messageId: emailResponse.data?.id
+  };
+}
+
+// Send email using configured service
+async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  text: string
+): Promise<EmailServiceResponse> {
+  const emailService = Deno.env.get('EMAIL_SERVICE') || 'resend';
+  const fromAddress = Deno.env.get('EMAIL_FROM_ADDRESS') || 'Aktivlogg <noreply@aktivlogg.no>';
+  const fromName = Deno.env.get('EMAIL_FROM_NAME') || 'Aktivlogg';
+  
+  const fromEmail = fromAddress.includes('<') ? fromAddress : `${fromName} <${fromAddress}>`;
+  
+  console.log(`Sending email via ${emailService}:`, {
+    to,
+    from: fromEmail,
+    subject,
+    service: emailService
+  });
+
+  try {
+    if (emailService === 'mailgun') {
+      return await sendWithMailgun(to, fromEmail, subject, html, text);
+    } else {
+      return await sendWithResend(to, fromEmail, subject, html, text);
+    }
+  } catch (error) {
+    console.error(`${emailService} failed, error:`, error.message);
+    
+    // Try fallback service if primary fails
+    const fallbackService = emailService === 'mailgun' ? 'resend' : 'mailgun';
+    console.log(`Attempting fallback to ${fallbackService}`);
+    
+    try {
+      if (fallbackService === 'mailgun') {
+        return await sendWithMailgun(to, fromEmail, subject, html, text);
+      } else {
+        return await sendWithResend(to, fromEmail, subject, html, text);
+      }
+    } catch (fallbackError) {
+      console.error(`Fallback ${fallbackService} also failed:`, fallbackError.message);
+      throw new Error(`Both ${emailService} and ${fallbackService} failed to send email`);
+    }
+  }
+}
 
 interface EmailRequest {
   to: string
@@ -421,13 +557,20 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    // Check if RESEND_API_KEY is configured
+    // Check if at least one email service is configured
+    const emailService = Deno.env.get('EMAIL_SERVICE') || 'resend';
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
-    if (!resendApiKey) {
-      console.error('RESEND_API_KEY environment variable is not configured');
+    const mailgunApiKey = Deno.env.get('MAILGUN_API_KEY');
+    const mailgunDomain = Deno.env.get('MAILGUN_DOMAIN');
+    
+    const resendConfigured = !!resendApiKey;
+    const mailgunConfigured = !!(mailgunApiKey && mailgunDomain);
+    
+    if (!resendConfigured && !mailgunConfigured) {
+      console.error('No email service configured');
       return new Response(
         JSON.stringify({ 
-          error: 'Email service not configured. RESEND_API_KEY is missing.' 
+          error: 'Email service not configured. Please configure either Resend (RESEND_API_KEY) or Mailgun (MAILGUN_API_KEY + MAILGUN_DOMAIN).' 
         }),
         {
           status: 500,
@@ -436,8 +579,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    console.log('RESEND_API_KEY found, initializing Resend client');
-    const resend = new Resend(resendApiKey);
+    console.log(`Email service configured: ${emailService} (Resend: ${resendConfigured}, Mailgun: ${mailgunConfigured})`);
 
     const emailData: EmailRequest = await req.json();
     console.log('Email request received:', {
@@ -533,27 +675,15 @@ const handler = async (req: Request): Promise<Response> => {
     const htmlContent = template.html(emailData.data);
     const textContent = template.text(emailData.data);
 
-    console.log('Sending email with Resend:', {
-      to: emailData.to,
-      subject: subject,
-      from: 'Aktivlogg <noreply@aktivlogg.no>'
-    });
+    // Send email using configured service
+    const emailResult = await sendEmail(emailData.to, subject, htmlContent, textContent);
 
-    // Send email using Resend
-    const emailResponse = await resend.emails.send({
-      from: 'Aktivlogg <noreply@aktivlogg.no>',
-      to: [emailData.to],
-      subject: subject,
-      html: htmlContent,
-      text: textContent
-    });
-
-    console.log('Email sent successfully:', emailResponse);
+    console.log('Email sent successfully:', emailResult);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        messageId: emailResponse.data?.id,
+        messageId: emailResult.messageId,
         message: 'Email sent successfully' 
       }),
       {
@@ -565,14 +695,27 @@ const handler = async (req: Request): Promise<Response> => {
   } catch (error: any) {
     console.error('Error in send-email function:', error);
     
-    // Handle specific Resend errors
-    if (error.message?.includes('API key')) {
+    // Handle specific email service errors
+    if (error.message?.includes('API key') || error.message?.includes('not configured')) {
       return new Response(
         JSON.stringify({ 
-          error: 'Invalid RESEND API key. Please check your configuration.' 
+          error: `Email service configuration error: ${error.message}` 
         }),
         {
           status: 401,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        }
+      );
+    }
+
+    // Handle service-specific errors
+    if (error.message?.includes('Mailgun') || error.message?.includes('Resend')) {
+      return new Response(
+        JSON.stringify({ 
+          error: `Email delivery failed: ${error.message}` 
+        }),
+        {
+          status: 502,
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         }
       );

@@ -1,1 +1,4 @@
 project_id = "lwhrtzlpxgpmozrcxtrw"
+
+[functions.manage-email-config]
+verify_jwt = false

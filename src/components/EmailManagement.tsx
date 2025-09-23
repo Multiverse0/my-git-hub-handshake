@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Mail, Save, TestTube, Settings, Edit3, Eye, EyeOff, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { testEmailConfiguration, sendEmail } from '../lib/emailService';
+import { supabase } from '../integrations/supabase/client';
 
 interface EmailTemplate {
   id: string;
@@ -12,9 +13,10 @@ interface EmailTemplate {
 
 interface EmailConfig {
   apiKey: string;
-  service: 'sendgrid' | 'mailgun';
+  service: 'resend' | 'mailgun';
   fromAddress: string;
   fromName: string;
+  domain?: string; // For Mailgun
 }
 
 const defaultTemplates: EmailTemplate[] = [
@@ -108,7 +110,7 @@ export function EmailManagement() {
   const [activeTab, setActiveTab] = useState<'config' | 'templates' | 'test'>('config');
   const [emailConfig, setEmailConfig] = useState<EmailConfig>({
     apiKey: '',
-    service: 'sendgrid',
+    service: 'resend',
     fromAddress: '',
     fromName: ''
   });
@@ -124,35 +126,62 @@ export function EmailManagement() {
     loadEmailSettings();
   }, []);
 
-  const loadEmailSettings = () => {
-    const savedConfig = localStorage.getItem('emailConfig');
-    if (savedConfig) {
-      setEmailConfig(JSON.parse(savedConfig));
-    }
+  // Load email configuration from Supabase secrets  
+  const loadEmailSettings = async () => {
+    try {
+      // In a real implementation, we would need to create an edge function to retrieve secrets
+      // For now, keep using localStorage as fallback until the edge function is implemented
+      const savedConfig = localStorage.getItem('emailConfig');
+      if (savedConfig) {
+        setEmailConfig(JSON.parse(savedConfig));
+      }
 
-    const savedTemplates = localStorage.getItem('emailTemplates');
-    if (savedTemplates) {
-      setTemplates(JSON.parse(savedTemplates));
+      const savedTemplates = localStorage.getItem('emailTemplates');
+      if (savedTemplates) {
+        setTemplates(JSON.parse(savedTemplates));
+      }
+    } catch (error) {
+      console.error('Failed to load email settings:', error);
     }
   };
 
   const saveEmailConfig = async () => {
     setSaving(true);
     try {
+      // Save to Supabase edge function to update secrets
+      const { error } = await supabase.functions.invoke('manage-email-config', {
+        body: {
+          action: 'save',
+          config: {
+            emailService: emailConfig.service,
+            emailFromAddress: emailConfig.fromAddress,
+            emailFromName: emailConfig.fromName,
+            apiKey: emailConfig.apiKey,
+            domain: emailConfig.domain // For Mailgun
+          }
+        }
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      // Also save to localStorage as backup
       localStorage.setItem('emailConfig', JSON.stringify(emailConfig));
       
-      // I en ekte implementasjon ville vi oppdatere Supabase environment variables her
-      console.log('📧 Email config saved:', {
+      console.log('📧 Email config saved to Supabase secrets:', {
         service: emailConfig.service,
         fromAddress: emailConfig.fromAddress,
         fromName: emailConfig.fromName,
-        hasApiKey: !!emailConfig.apiKey
+        hasApiKey: !!emailConfig.apiKey,
+        hasDomain: !!emailConfig.domain
       });
 
       setTestResult({ success: true });
       setTimeout(() => setTestResult(null), 3000);
-    } catch (error) {
-      setTestResult({ success: false, error: 'Kunne ikke lagre konfigurasjon' });
+    } catch (error: any) {
+      console.error('Failed to save email config:', error);
+      setTestResult({ success: false, error: error.message || 'Kunne ikke lagre konfigurasjon' });
     } finally {
       setSaving(false);
     }
@@ -286,10 +315,10 @@ export function EmailManagement() {
               </label>
               <select
                 value={emailConfig.service}
-                onChange={(e) => setEmailConfig(prev => ({ ...prev, service: e.target.value as 'sendgrid' | 'mailgun' }))}
+                onChange={(e) => setEmailConfig(prev => ({ ...prev, service: e.target.value as 'resend' | 'mailgun' }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
               >
-                <option value="sendgrid">SendGrid</option>
+                <option value="resend">Resend</option>
                 <option value="mailgun">Mailgun</option>
               </select>
             </div>
@@ -341,12 +370,64 @@ export function EmailManagement() {
                 placeholder="Klubbnavn"
               />
             </div>
+
+            {/* Mailgun Domain field - only show for Mailgun */}
+            {emailConfig.service === 'mailgun' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Mailgun Domene *
+                </label>
+                <input
+                  type="text"
+                  value={emailConfig.domain || ''}
+                  onChange={(e) => setEmailConfig(prev => ({ ...prev, domain: e.target.value }))}
+                  className="w-full bg-gray-700 rounded-md px-3 py-2"
+                  placeholder="mg.klubbnavn.no"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Mailgun sender domenet ditt (f.eks. mg.klubbnavn.no)
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Current Service Status */}
+          <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-4">
+            <h4 className="font-medium text-gray-300 mb-3">📊 Gjeldende Konfigurasjon</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">E-post Tjeneste:</span>
+                <span className="font-medium text-white capitalize">{emailConfig.service}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">API Nøkkel:</span>
+                <span className={`font-medium ${emailConfig.apiKey ? 'text-green-400' : 'text-red-400'}`}>
+                  {emailConfig.apiKey ? '✓ Konfigurert' : '✗ Mangler'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Avsender E-post:</span>
+                <span className="font-medium text-white">{emailConfig.fromAddress || 'Ikke satt'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Avsender Navn:</span>
+                <span className="font-medium text-white">{emailConfig.fromName || 'Ikke satt'}</span>
+              </div>
+              {emailConfig.service === 'mailgun' && (
+                <div className="flex justify-between md:col-span-2">
+                  <span className="text-gray-400">Mailgun Domene:</span>
+                  <span className={`font-medium ${emailConfig.domain ? 'text-green-400' : 'text-red-400'}`}>
+                    {emailConfig.domain || '✗ Ikke satt'}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4">
             <h4 className="font-medium text-blue-400 mb-2">📋 Setup Instruksjoner</h4>
             <ol className="text-sm text-blue-200 space-y-1 list-decimal list-inside">
-              <li>Opprett konto hos {emailConfig.service === 'sendgrid' ? 'SendGrid' : 'Mailgun'}</li>
+              <li>Opprett konto hos {emailConfig.service === 'resend' ? 'Resend' : 'Mailgun'}</li>
               <li>Generer API-nøkkel fra leverandørens dashboard</li>
               <li>Fyll inn konfigurasjon over</li>
               <li>Klikk "Lagre Konfigurasjon"</li>
