@@ -689,24 +689,6 @@ const handler = async (req: Request): Promise<Response> => {
         }
       );
     }
-          JSON.stringify({ 
-            error: 'Failed to generate password reset link. Make sure the user exists in the system.' 
-          }),
-          {
-            status: 400,
-            headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          }
-        );
-      }
-
-      console.log('Password reset link generated successfully for:', emailData.to);
-
-      // Update email data with actual member info and reset link
-      emailData.data.recipientName = memberData?.full_name || 'Bruker';
-      emailData.data.resetLink = resetData.properties.action_link;
-      
-      console.log('Password reset successful, sending email to:', emailData.to);
-    }
 
     // Validate required fields
     if (!emailData.to || !emailData.template || !emailData.data) {
