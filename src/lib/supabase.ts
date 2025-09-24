@@ -64,13 +64,38 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     }
 
     // Check if user is an organization member using user_id
-    const { data: memberData } = await supabase
+    let { data: memberData } = await supabase
       .from('organization_members')
       .select('*')
       .eq('user_id', user.id)
       .eq('approved', true)
       .eq('active', true)
       .maybeSingle();
+
+    // Fallback: if no member found by user_id, try by email (for migration transition)
+    if (!memberData && user.email) {
+      console.log('Falling back to email lookup for user:', user.email);
+      const fallbackResult = await supabase
+        .from('organization_members')
+        .select('*')
+        .eq('email', user.email)
+        .eq('approved', true)
+        .eq('active', true)
+        .maybeSingle();
+      
+      memberData = fallbackResult.data;
+
+      // If found by email, update the user_id to fix the data
+      if (memberData) {
+        console.log('Found member by email, updating user_id');
+        await supabase
+          .from('organization_members')
+          .update({ user_id: user.id })
+          .eq('id', memberData.id);
+        
+        memberData.user_id = user.id; // Update local data
+      }
+    }
 
     if (memberData) {
       // Get organization data
@@ -634,6 +659,7 @@ export async function registerOrganizationMember(
       .from('organization_members')
       .insert({
         organization_id: organization.id,
+        user_id: authData.user.id, // Add user_id to link to auth user
         email,
         full_name: fullName,
         member_number: memberNumber,
