@@ -6,12 +6,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../hooks/use-toast';
+import { DatePicker } from '../components/ui/date-picker';
 
 interface ProfileData {
   name: string;
   email: string;
   memberNumber: string;
   joinDate: string;
+  birthDate: string;
   avatarUrl?: string;
   startkortUrl?: string;
   startkortFileName?: string;
@@ -44,6 +46,7 @@ export function Profile() {
     email: '',
     memberNumber: '',
     joinDate: '',
+    birthDate: '',
     avatarUrl: undefined,
     startkortUrl: undefined,
     startkortFileName: undefined,
@@ -110,6 +113,7 @@ export function Profile() {
           email: memberData.email || '',
           memberNumber: memberData.member_number || '',
           joinDate: memberData.created_at ? new Date(memberData.created_at).toLocaleDateString('nb-NO') : '',
+          birthDate: memberData.birth_date ? new Date(memberData.birth_date).toLocaleDateString('nb-NO') : '',
           avatarUrl: memberData.avatar_url || undefined,
           startkortUrl: memberData.startkort_url || undefined,
           startkortFileName: memberData.startkort_file_name || undefined,
@@ -220,6 +224,19 @@ export function Profile() {
     try {
       setIsLoading(true);
       
+      // Parse birth date from Norwegian format to ISO date
+      let birthDateISO = null;
+      if (editData.birthDate) {
+        try {
+          const [day, month, year] = editData.birthDate.split('.');
+          if (day && month && year) {
+            birthDateISO = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          }
+        } catch (error) {
+          console.warn('Could not parse birth date:', editData.birthDate);
+        }
+      }
+
       // Update profile using user_id
       const { error } = await supabase
         .from('organization_members')
@@ -227,6 +244,7 @@ export function Profile() {
           full_name: editData.name,
           email: editData.email,
           member_number: editData.memberNumber,
+          birth_date: birthDateISO,
           updated_at: new Date().toISOString()
         })
         .eq('user_id', user.id);
@@ -619,12 +637,23 @@ export function Profile() {
             </div>
           </div>
 
-          {/* Join Date Card */}
+          {/* Birth Date Card */}
           <div className="bg-muted/50 p-4 rounded-lg flex items-center gap-3">
             <Calendar className="w-5 h-5 text-primary" />
-            <div>
-              <p className="text-sm text-muted-foreground">Medlem siden</p>
-              <p className="font-medium">{profileData.joinDate || 'Ikke angitt'}</p>
+            <div className="flex-1">
+              <p className="text-sm text-muted-foreground">Min fødselsdato</p>
+              {isEditing ? (
+                <div className="mt-1">
+                  <DatePicker
+                    value={editData.birthDate}
+                    onChange={(date) => setEditData({ ...editData, birthDate: date })}
+                    placeholder="Velg fødselsdato"
+                    className="w-full"
+                  />
+                </div>
+              ) : (
+                <p className="font-medium">{profileData.birthDate || 'Ikke angitt'}</p>
+              )}
             </div>
           </div>
         </div>

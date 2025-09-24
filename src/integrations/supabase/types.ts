@@ -287,6 +287,7 @@ export type Database = {
           active: boolean | null
           approved: boolean | null
           avatar_url: string | null
+          birth_date: string | null
           created_at: string | null
           diploma_file_name: string | null
           diploma_url: string | null
@@ -307,6 +308,7 @@ export type Database = {
           active?: boolean | null
           approved?: boolean | null
           avatar_url?: string | null
+          birth_date?: string | null
           created_at?: string | null
           diploma_file_name?: string | null
           diploma_url?: string | null
@@ -327,6 +329,7 @@ export type Database = {
           active?: boolean | null
           approved?: boolean | null
           avatar_url?: string | null
+          birth_date?: string | null
           created_at?: string | null
           diploma_file_name?: string | null
           diploma_url?: string | null

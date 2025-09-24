@@ -4,6 +4,7 @@ import { format, subMonths, isAfter } from 'date-fns';
 import { jsPDF } from 'jspdf';
 import { useDropzone } from 'react-dropzone';
 import { getMemberTrainingSessions, updateTrainingDetails } from '../lib/supabase';
+import { supabase } from '../integrations/supabase/client';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { ManualTrainingModal } from '../components/ManualTrainingModal';
@@ -245,6 +246,7 @@ export function TrainingLog() {
     dssn_enabled: true
   });
   const [availableActivities, setAvailableActivities] = useState(['Trening', 'Stevne', 'Dugnad']);
+  const [memberProfile, setMemberProfile] = useState<any>(null);
 
   useEffect(() => {
     const loadTrainingSessions = async () => {
@@ -257,6 +259,17 @@ export function TrainingLog() {
         }
 
         setTrainingSessions(result.data || []);
+
+        // Load member birth date
+        const { data: memberData } = await supabase
+          .from('organization_members')
+          .select('birth_date, full_name')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        if (memberData) {
+          setMemberProfile(memberData);
+        }
       } catch (error) {
         console.error('Error loading training sessions:', error);
         setTrainingSessions([]);
@@ -386,8 +399,9 @@ export function TrainingLog() {
       doc.setFont('helvetica', 'normal');
       doc.text(`Medlem: ${profile?.full_name || 'Ukjent'}`, 15, 35);
       
-      // Add birth date (placeholder - would need to be added to profile)
-      doc.text(`Fødelsdato: [Ikke oppgitt]`, 15, 42);
+      // Add birth date from member profile
+      const birthDate = memberProfile?.birth_date ? new Date(memberProfile.birth_date).toLocaleDateString('nb-NO') : '[Ikke oppgitt]';
+      doc.text(`Fødelsdato: ${birthDate}`, 15, 42);
       
       // Add organization info
       doc.text(`Medlemsorganisasjon: ${organizationName}`, 15, 49);
