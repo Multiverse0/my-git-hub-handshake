@@ -763,13 +763,18 @@ export function Profile() {
             <div className="flex-1">
               <p className="text-sm text-muted-foreground">Min fødselsdato</p>
               {isEditing ? (
-                <div className="mt-1">
+                <div className="mt-1 space-y-2">
                   <DatePicker
                     value={editData.birthDate}
-                    onChange={(date) => setEditData({ ...editData, birthDate: date })}
+                    onChange={(date: string) => {
+                      setEditData(prev => ({ ...prev, birthDate: date }));
+                    }}
                     placeholder="Velg fødselsdato"
                     className="w-full"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Fødselsdato brukes i treningsloggen og for aldersgrupper
+                  </p>
                 </div>
               ) : (
                 <p className="font-medium">{profileData.birthDate || 'Ikke angitt'}</p>
