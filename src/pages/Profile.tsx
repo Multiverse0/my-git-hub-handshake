@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { User, Mail, Hash, Calendar, Camera, Pencil, X, Check, Loader2, ExternalLink, FileText, Download, Upload, Shield } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
-import { supabase, uploadProfileImage, uploadStartkortPDF, uploadDiplomaPDF } from '../lib/supabase';
+import { supabase, uploadProfileImage, uploadStartkortPDF, uploadDiplomaPDF, setUserContext } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -50,65 +50,54 @@ export function Profile() {
   });
   const [editData, setEditData] = useState<ProfileData>(profileData);
 
-  // Load profile data from auth context
+  // Load profile data from database with RLS support
   useEffect(() => {
     const loadProfileData = async () => {
-      if (!user?.id) return;
-      
-      console.log('🔍 Profile Debug - User object:', {
-        id: user.id,
-        email: user.email,
-        member_profile: !!user.member_profile
-      });
-      
-      // Get user email from auth context or member profile
-      const userEmailForQuery = user.email || user.member_profile?.email;
-      if (!userEmailForQuery) {
-        console.error('❌ No email available for profile query');
+      if (!user?.email) {
+        console.log('🔍 Profile Debug - No user email available');
         return;
       }
       
+      console.log('🔍 Profile Debug - User email:', user.email);
+      
       try {
+        setIsLoading(true);
+        
+        // Ensure user context is set for RLS
+        await setUserContext(user.email);
+        console.log('🔍 User context set for RLS');
+        
         // Load profile data from organization_members table using email (matches RLS policy)
         const { data: memberData, error } = await supabase
           .from('organization_members')
           .select('*')
-          .eq('email', userEmailForQuery)
-          .single();
+          .eq('email', user.email)
+          .maybeSingle(); // Use maybeSingle to avoid errors when no data found
 
         console.log('🔍 Profile Debug - Member query result:', { memberData, error });
 
         if (error) {
-          console.error('Error loading member profile:', error);
-          // Fallback to auth context data from member_profile
-          if (user.member_profile) {
-            const fallbackData: ProfileData = {
-              name: user.member_profile.full_name || '',
-              email: user.member_profile.email || user.email || '',
-              memberNumber: user.member_profile.member_number || '',
-              joinDate: user.member_profile.created_at ? new Date(user.member_profile.created_at).toLocaleDateString('nb-NO') : '',
-              avatarUrl: user.member_profile.avatar_url || undefined,
-              startkortUrl: user.member_profile.startkort_url || undefined,
-              startkortFileName: user.member_profile.startkort_file_name || undefined,
-              diplomaUrl: user.member_profile.diploma_url || undefined,
-              diplomaFileName: user.member_profile.diploma_file_name || undefined,
-            };
-            setProfileData(fallbackData);
-            setEditData(fallbackData);
-            setProfileRole(user.member_profile.role as 'super_user' | 'member' | 'admin' | 'range_officer' || 'member');
-            
-            // Load other files from member profile
-            if (user.member_profile.other_files && Array.isArray(user.member_profile.other_files)) {
-              setOtherFiles(user.member_profile.other_files as { url: string; name: string; }[]);
-            } else {
-              setOtherFiles([]);
-            }
-          }
+          console.error('❌ Database error loading member profile:', error);
+          toast({
+            title: "Database Error",
+            description: `Could not load profile data: ${error.message}`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (!memberData) {
+          console.warn('⚠️ No member data found for user email:', user.email);
+          toast({
+            title: "Profile Not Found",
+            description: "Your profile could not be found. Please contact your administrator.",
+            variant: "destructive",
+          });
           return;
         }
 
         // Use data from organization_members table and store member ID for updates
-        setUserId(memberData.id); // Store the actual member ID from the database
+        setUserId(memberData.id);
         
         const newProfileData: ProfileData = {
           name: memberData.full_name || '',
@@ -136,12 +125,19 @@ export function Profile() {
         console.log('✅ Profile data loaded successfully from organization_members');
         
       } catch (error) {
-        console.error('Unexpected error in loadProfileData:', error);
+        console.error('❌ Unexpected error in loadProfileData:', error);
+        toast({
+          title: "Error",
+          description: "An unexpected error occurred while loading your profile.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
       }
     };
 
     loadProfileData();
-  }, [user]);
+  }, [user, toast]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
