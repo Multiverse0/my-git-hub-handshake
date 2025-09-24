@@ -301,6 +301,7 @@ export type Database = {
           startkort_file_name: string | null
           startkort_url: string | null
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           active?: boolean | null
@@ -320,6 +321,7 @@ export type Database = {
           startkort_file_name?: string | null
           startkort_url?: string | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           active?: boolean | null
@@ -339,6 +341,7 @@ export type Database = {
           startkort_file_name?: string | null
           startkort_url?: string | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {

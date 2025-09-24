@@ -46,9 +46,6 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       return null;
     }
 
-    // Set user context for database queries
-    await setUserContext(user.email!);
-
     // Check if user is a super user
     const { data: superUserData } = await supabase
       .from('super_users')
@@ -66,11 +63,11 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       };
     }
 
-    // Check if user is an organization member
+    // Check if user is an organization member using user_id
     const { data: memberData } = await supabase
       .from('organization_members')
       .select('*')
-      .eq('email', user.email!)
+      .eq('user_id', user.id)
       .eq('approved', true)
       .eq('active', true)
       .maybeSingle();

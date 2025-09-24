@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase, getCurrentUser, setUserContext } from '../lib/supabase';
+import { supabase, getCurrentUser } from '../lib/supabase';
 import type { AuthUser } from '../lib/types';
 
 export function useSupabaseAuth() {
@@ -18,7 +18,6 @@ export function useSupabaseAuth() {
           if (currentUser) {
             setUser(currentUser);
             setIsAuthenticated(true);
-            await setUserContext(currentUser.email);
           }
         }
       } catch (error) {
@@ -40,7 +39,6 @@ export function useSupabaseAuth() {
           if (currentUser) {
             setUser(currentUser);
             setIsAuthenticated(true);
-            await setUserContext(currentUser.email);
           }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);

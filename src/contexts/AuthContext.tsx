@@ -163,9 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUser(currentUser);
               setIsAuthenticated(true);
               
-              // Set user context for RLS (with timeout)
-              const setContextPromise = setUserContext(currentUser.email);
-              await Promise.race([setContextPromise, timeout]);
+              // No need to set user context - RLS now uses auth.uid()
               
               // Load organization if user is organization member (with timeout)
               if (currentUser.user_type === 'organization_member' && currentUser.organization) {

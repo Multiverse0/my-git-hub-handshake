@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { User, Mail, Hash, Calendar, Camera, Pencil, X, Check, Loader2, ExternalLink, FileText, Download, Upload, Shield } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
-import { supabase, uploadProfileImage, uploadStartkortPDF, uploadDiplomaPDF, setUserContext } from '../lib/supabase';
+import { supabase, uploadProfileImage, uploadStartkortPDF, uploadDiplomaPDF } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -50,32 +50,25 @@ export function Profile() {
   });
   const [editData, setEditData] = useState<ProfileData>(profileData);
 
-  // Load profile data from database with RLS support
+  // Load profile data using auth-based RLS
   useEffect(() => {
     const loadProfileData = async () => {
-      if (!user?.email) {
-        console.log('🔍 Profile Debug - No user email available');
+      if (!user?.id) {
+        console.log('🔍 Profile Debug - No user ID available');
         return;
       }
       
-      console.log('🔍 Profile Debug - User email:', user.email);
+      console.log('🔍 Profile Debug - User ID:', user.id);
       
       try {
         setIsLoading(true);
         
-        // Ensure user context is set for RLS
-        await setUserContext(user.email);
-        console.log('🔍 User context set for RLS');
-        
-        // Small delay to ensure context is properly set
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        // Load profile data from organization_members table using email (matches RLS policy)
+        // Load profile data using auth.uid() - no need for setUserContext
         const { data: memberData, error } = await supabase
           .from('organization_members')
           .select('*')
-          .eq('email', user.email)
-          .maybeSingle(); // Use maybeSingle to avoid errors when no data found
+          .eq('user_id', user.id)
+          .maybeSingle();
 
         console.log('🔍 Profile Debug - Member query result:', { memberData, error });
 
@@ -90,7 +83,7 @@ export function Profile() {
         }
 
         if (!memberData) {
-          console.warn('⚠️ No member data found for user email:', user.email);
+          console.warn('⚠️ No member data found for user ID:', user.id);
           toast({
             title: "Profile Not Found",
             description: "Your profile could not be found. Please contact your administrator or try logging out and back in.",
@@ -162,11 +155,11 @@ export function Profile() {
       
       console.log('🔍 Avatar Upload Debug - Image uploaded:', imageUrl);
       
-      // Update profile with new avatar URL in organization_members table using email
+      // Update profile with new avatar URL using user_id
       const { error } = await supabase
         .from('organization_members')
         .update({ avatar_url: imageUrl })
-        .eq('email', user.email);
+        .eq('user_id', user.id);
 
       console.log('🔍 Avatar Upload Debug - Database update result:', { error });
 
@@ -214,7 +207,7 @@ export function Profile() {
     try {
       setIsLoading(true);
       
-      // Update profile in organization_members table using email (matches RLS policy)
+      // Update profile using user_id
       const { error } = await supabase
         .from('organization_members')
         .update({
@@ -223,7 +216,7 @@ export function Profile() {
           member_number: editData.memberNumber,
           updated_at: new Date().toISOString()
         })
-        .eq('email', user.email);
+        .eq('user_id', user.id);
 
       console.log('🔍 Profile Save Debug - Update result:', { error });
 
@@ -273,11 +266,11 @@ export function Profile() {
       
       const publicUrl = await uploadStartkortPDF(file, userId || 'fallback');
       
-      // Update profile with new startkort URL in organization_members table using email
+      // Update profile with new startkort URL using user_id
       const { error } = await supabase
         .from('organization_members')
         .update({ startkort_url: publicUrl, startkort_file_name: fileName })
-        .eq('email', user!.email);
+        .eq('user_id', user!.id);
 
       if (error) throw error;
 
@@ -312,11 +305,11 @@ export function Profile() {
       
       const publicUrl = await uploadDiplomaPDF(file, userId || 'fallback');
 
-      // Update profile with new diploma URL in organization_members table using email  
+      // Update profile with new diploma URL using user_id
       const { error } = await supabase
         .from('organization_members')
         .update({ diploma_url: publicUrl, diploma_file_name: fileName })
-        .eq('email', user!.email);
+        .eq('user_id', user!.id);
 
       if (error) throw error;
 
@@ -388,11 +381,11 @@ export function Profile() {
       const updatedFiles = [...otherFiles, ...uploadedFiles];
       setOtherFiles(updatedFiles);
 
-      // Update the user's profile with the new list of other files (as JSONB) in organization_members table using email
+      // Update the user's profile with the new list of other files using user_id
       const { error: updateError } = await supabase
         .from('organization_members')
         .update({ other_files: updatedFiles })
-        .eq('email', user.email);
+        .eq('user_id', user.id);
 
       if (updateError) {
         throw new Error(`Kunne ikke oppdatere profilen med filinformasjon: ${updateError.message}`);
@@ -424,11 +417,11 @@ export function Profile() {
         const updatedFiles = otherFiles.filter((_, index) => index !== fileIndex);
         setOtherFiles(updatedFiles);
 
-        // Update the user's profile in organization_members table with the modified list using email
+        // Update the user's profile with the modified list using user_id
         const { error } = await supabase
           .from('organization_members')
           .update({ other_files: updatedFiles })
-          .eq('email', user?.email || '');
+          .eq('user_id', user?.id || '');
 
         if (error) {
           throw new Error(`Kunne ikke slette filen fra profilen: ${error.message}`);
