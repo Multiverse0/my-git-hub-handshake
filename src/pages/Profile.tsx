@@ -55,18 +55,32 @@ export function Profile() {
   });
   const [editData, setEditData] = useState<ProfileData>(profileData);
 
-  // Load profile data using auth-based RLS
+  // Load profile data using auth-based RLS with improved error handling
   useEffect(() => {
     const loadProfileData = async () => {
       if (!user?.id) {
         console.log('🔍 Profile Debug - No user ID available');
+        setIsLoading(false);
         return;
       }
       
-      console.log('🔍 Profile Debug - User ID:', user.id);
+      console.log('🔍 Profile Debug - Loading profile for user ID:', user.id);
       
       try {
         setIsLoading(true);
+        
+        // First check if user has auth session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError || !session) {
+          console.error('❌ No valid auth session:', sessionError);
+          toast({
+            title: "Authentication Error",
+            description: "Please log out and log back in to access your profile.",
+            variant: "destructive",
+          });
+          return;
+        }
         
         // Load profile data with organization information
         const { data: memberData, error } = await supabase
@@ -83,23 +97,47 @@ export function Profile() {
           .eq('user_id', user.id)
           .maybeSingle();
 
-        console.log('🔍 Profile Debug - Member query result:', { memberData, error });
+        console.log('🔍 Profile Debug - Member query result:', { memberData, error, userAuthId: user.id });
 
         if (error) {
           console.error('❌ Database error loading member profile:', error);
           toast({
             title: "Database Error",
-            description: `Could not load profile data: ${error.message}. Please try refreshing the page.`,
+            description: `Could not load profile data: ${error.message}. Please contact support if this persists.`,
             variant: "destructive",
           });
           return;
         }
 
         if (!memberData) {
-          console.warn('⚠️ No member data found for user ID:', user.id);
+          console.warn('⚠️ No organization member record found for user ID:', user.id);
+          
+          // Check if the user exists in auth but not in organization_members
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          
+          if (authUser) {
+            console.log('👤 Auth user exists but no organization member record found');
+            toast({
+              title: "Profile Setup Required",
+              description: "Your account exists but you need to join an organization. Please contact your administrator or register with an organization.",
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Authentication Error", 
+              description: "Your session has expired. Please log out and log back in.",
+              variant: "destructive",
+            });
+          }
+          return;
+        }
+
+        // Validate that this organization_members record properly links to auth
+        if (!memberData.user_id) {
+          console.error('❌ Organization member record found but user_id is null:', memberData);
           toast({
-            title: "Profile Not Found",
-            description: "Your profile could not be found. Please contact your administrator or try logging out and back in.",
+            title: "Data Integrity Error",
+            description: "Your profile has a data issue. Please contact your administrator to fix your account linking.",
             variant: "destructive",
           });
           return;
@@ -119,7 +157,7 @@ export function Profile() {
           startkortFileName: memberData.startkort_file_name || undefined,
           diplomaUrl: memberData.diploma_url || undefined,
           diplomaFileName: memberData.diploma_file_name || undefined,
-          organizationName: memberData.organizations?.name || '',
+          organizationName: memberData.organizations?.name || 'Unknown Organization',
           organizationLogo: memberData.organizations?.logo_url || undefined,
           role: memberData.role || 'member',
         };
@@ -128,20 +166,39 @@ export function Profile() {
         setEditData(newProfileData);
         setProfileRole(memberData.role as 'super_user' | 'member' | 'admin' | 'range_officer' || 'member');
         
-        // Load other files from organization_members
+        // Load other files from organization_members with validation
         if (memberData.other_files && Array.isArray(memberData.other_files)) {
           setOtherFiles(memberData.other_files as { url: string; name: string; }[]);
         } else {
           setOtherFiles([]);
         }
 
-        console.log('✅ Profile data loaded successfully from organization_members');
+        console.log('✅ Profile data loaded successfully:', {
+          memberName: memberData.full_name,
+          memberEmail: memberData.email,
+          organization: memberData.organizations?.name,
+          hasBirthDate: !!memberData.birth_date
+        });
         
       } catch (error) {
         console.error('❌ Unexpected error in loadProfileData:', error);
+        
+        // Provide more specific error messages based on error type
+        let errorMessage = "An unexpected error occurred while loading your profile.";
+        
+        if (error instanceof Error) {
+          if (error.message.includes('JWT')) {
+            errorMessage = "Your session has expired. Please log out and log back in.";
+          } else if (error.message.includes('permission')) {
+            errorMessage = "You don't have permission to access this profile. Please contact your administrator.";
+          } else if (error.message.includes('network')) {
+            errorMessage = "Network error. Please check your connection and try again.";
+          }
+        }
+        
         toast({
-          title: "Error",
-          description: "An unexpected error occurred while loading your profile.",
+          title: "Error Loading Profile",
+          description: errorMessage,
           variant: "destructive",
         });
       } finally {
@@ -150,7 +207,7 @@ export function Profile() {
     };
 
     loadProfileData();
-  }, [user, toast]);
+  }, [user?.id, toast]);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
@@ -210,53 +267,113 @@ export function Profile() {
   });
 
   const handleSave = async () => {
-    if (!user?.email) {
-      console.error('❌ No user email available for save');
+    if (!user?.id) {
+      console.error('❌ No user ID available for save');
+      toast({
+        title: "Feil",
+        description: "Ingen bruker-ID tilgjengelig. Prøv å logge ut og inn igjen.",
+        variant: "destructive",
+      });
       return;
     }
     
-    console.log('🔍 Profile Save Debug - Starting save with:', {
-      userEmail: user.email,
-      editData,
-      userId
-    });
+    console.log('🔍 Profile Save Debug - Starting save for user:', user.id);
     
     try {
       setIsLoading(true);
       
-      // Parse birth date from Norwegian format to ISO date
+      // Validate required fields
+      if (!editData.name?.trim()) {
+        throw new Error('Navn er påkrevd');
+      }
+      
+      if (!editData.email?.trim()) {
+        throw new Error('E-post er påkrevd');
+      }
+      
+      // Parse and validate birth date from Norwegian format to ISO date
       let birthDateISO = null;
-      if (editData.birthDate) {
+      if (editData.birthDate?.trim()) {
         try {
-          const [day, month, year] = editData.birthDate.split('.');
-          if (day && month && year) {
-            birthDateISO = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          // Handle different date formats
+          let day, month, year;
+          
+          if (editData.birthDate.includes('.')) {
+            // Norwegian format: DD.MM.YYYY
+            [day, month, year] = editData.birthDate.split('.');
+          } else if (editData.birthDate.includes('/')) {
+            // Alternative format: DD/MM/YYYY
+            [day, month, year] = editData.birthDate.split('/');
+          } else if (editData.birthDate.includes('-')) {
+            // ISO format: YYYY-MM-DD (convert back)
+            const parts = editData.birthDate.split('-');
+            if (parts.length === 3 && parts[0].length === 4) {
+              year = parts[0];
+              month = parts[1];
+              day = parts[2];
+            }
           }
-        } catch (error) {
-          console.warn('Could not parse birth date:', editData.birthDate);
+          
+          if (day && month && year) {
+            // Validate date components
+            const dayNum = parseInt(day, 10);
+            const monthNum = parseInt(month, 10);
+            const yearNum = parseInt(year, 10);
+            
+            if (dayNum < 1 || dayNum > 31 || monthNum < 1 || monthNum > 12 || yearNum < 1900 || yearNum > new Date().getFullYear()) {
+              throw new Error('Ugyldig fødselsdato');
+            }
+            
+            birthDateISO = `${yearNum}-${monthNum.toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
+            
+            // Validate the ISO date can be parsed
+            const testDate = new Date(birthDateISO);
+            if (isNaN(testDate.getTime())) {
+              throw new Error('Ugyldig fødselsdato format');
+            }
+          }
+        } catch (dateError) {
+          console.warn('Could not parse birth date:', editData.birthDate, dateError);
+          throw new Error('Ugyldig fødselsdato. Bruk format DD.MM.YYYY');
         }
       }
 
-      // Update profile using user_id
-      const { error } = await supabase
-        .from('organization_members')
-        .update({
-          full_name: editData.name,
-          email: editData.email,
-          member_number: editData.memberNumber,
-          birth_date: birthDateISO,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.id);
+      // Update profile using user_id with validation
+      const updateData = {
+        full_name: editData.name.trim(),
+        email: editData.email.trim(),
+        member_number: editData.memberNumber?.trim() || null,
+        birth_date: birthDateISO,
+        updated_at: new Date().toISOString()
+      };
 
-      console.log('🔍 Profile Save Debug - Update result:', { error });
+      console.log('🔍 Profile Save Debug - Update data:', updateData);
+
+      const { data, error, count } = await supabase
+        .from('organization_members')
+        .update(updateData)
+        .eq('user_id', user.id)
+        .select();
+
+      console.log('🔍 Profile Save Debug - Update result:', { data, error, count, updatedRows: data?.length });
 
       if (error) {
-        throw error;
+        throw new Error(`Database update failed: ${error.message}`);
+      }
+      
+      if (!data || data.length === 0) {
+        throw new Error('No profile was updated. Please ensure your profile exists and try again.');
       }
 
-      // Update local state
-      setProfileData(editData);
+      // Update local state with the saved data
+      const updatedProfile = { ...editData };
+      if (birthDateISO) {
+        // Convert back to Norwegian format for display
+        const birthDate = new Date(birthDateISO);
+        updatedProfile.birthDate = birthDate.toLocaleDateString('nb-NO');
+      }
+      
+      setProfileData(updatedProfile);
       setIsEditing(false);
       
       // Show success message
@@ -265,13 +382,16 @@ export function Profile() {
         description: "Profilendringene dine har blitt lagret.",
       });
 
-      console.log('✅ Profile saved successfully');
+      console.log('✅ Profile saved successfully for user:', user.id);
       
     } catch (error) {
       console.error('❌ Error updating profile:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : 'Kunne ikke lagre profilendringene. Prøv igjen.';
+      
       toast({
-        title: "Feil",
-        description: "Kunne ikke lagre profilendringene. Prøv igjen.",
+        title: "Feil ved lagring",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
