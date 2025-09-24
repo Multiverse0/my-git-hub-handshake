@@ -512,8 +512,7 @@ export function OrganizationSettings() {
             >
               {getAllSubscriptionPlans().map(plan => (
                 <option key={plan.id} value={plan.id}>
-                  {plan.name} ({plan.memberLimit === -1 ? 'Ubegrenset' : `${plan.memberLimit} medlemmer`})
-                  {plan.price && ` - ${plan.price}`}
+                  {plan.name}
                 </option>
               ))}
             </select>
