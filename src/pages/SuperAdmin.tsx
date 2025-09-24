@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import type { Organization } from '../lib/types';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { EmailManagement } from '../components/EmailManagement';
+import { EmailTestPanel } from '../components/EmailTestPanel';
 import { DataExportManager } from '../components/DataExportManager';
 import { LanguageFileManager } from '../components/LanguageFileManager';
 import { SupabaseStatus } from '../components/SupabaseStatus';
@@ -1094,7 +1095,10 @@ export function SuperAdmin() {
         )}
 
         {activeTab === 'email' && (
-          <EmailManagement />
+          <div className="space-y-8">
+            <EmailTestPanel />
+            <EmailManagement />
+          </div>
         )}
 
         {activeTab === 'pending' && (
