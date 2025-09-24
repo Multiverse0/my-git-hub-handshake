@@ -5,7 +5,6 @@ import { supabase, uploadProfileImage, uploadStartkortPDF, uploadDiplomaPDF } fr
 import { useAuth } from '../contexts/AuthContext';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { useLanguage } from '../contexts/LanguageContext';
-import { DatePicker } from '../components/ui/date-picker';
 import { useToast } from '../hooks/use-toast';
 
 interface ProfileData {
@@ -20,6 +19,9 @@ interface ProfileData {
   diplomaFileName?: string;
   otherFilesUrl?: string;
   otherFilesFileName?: string;
+  organizationName?: string;
+  organizationLogo?: string;
+  role?: string;
 }
 
 export function Profile() {
@@ -63,10 +65,18 @@ export function Profile() {
       try {
         setIsLoading(true);
         
-        // Load profile data using auth.uid() - no need for setUserContext
+        // Load profile data with organization information
         const { data: memberData, error } = await supabase
           .from('organization_members')
-          .select('*')
+          .select(`
+            *,
+            organizations (
+              name,
+              logo_url,
+              primary_color,
+              secondary_color
+            )
+          `)
           .eq('user_id', user.id)
           .maybeSingle();
 
@@ -105,6 +115,9 @@ export function Profile() {
           startkortFileName: memberData.startkort_file_name || undefined,
           diplomaUrl: memberData.diploma_url || undefined,
           diplomaFileName: memberData.diploma_file_name || undefined,
+          organizationName: memberData.organizations?.name || '',
+          organizationLogo: memberData.organizations?.logo_url || undefined,
+          role: memberData.role || 'member',
         };
         
         setProfileData(newProfileData);
@@ -464,12 +477,29 @@ export function Profile() {
       </header>
 
       <div className="card max-w-2xl mx-auto">
+        {/* Organization Header */}
+        {profileData.organizationName && (
+          <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-700">
+            {profileData.organizationLogo && (
+              <img 
+                src={profileData.organizationLogo} 
+                alt={profileData.organizationName}
+                className="w-12 h-12 object-contain"
+              />
+            )}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-300">{profileData.organizationName}</h3>
+              <p className="text-sm text-gray-500">Medlemsprofil</p>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-6 mb-8">
           <div className="relative group">
             <div 
               {...getRootProps()}
               className={`relative w-24 h-24 rounded-full overflow-hidden cursor-pointer
-                ${isDragActive ? 'ring-2 ring-svpk-yellow' : ''}
+                ${isDragActive ? 'ring-2 ring-primary' : ''}
                 ${isLoading ? 'opacity-50' : ''}`}
             >
               <input {...getInputProps()} />
@@ -480,8 +510,8 @@ export function Profile() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="bg-gray-700 w-full h-full flex items-center justify-center">
-                  <User className="w-12 h-12 text-svpk-yellow" />
+                <div className="bg-muted w-full h-full flex items-center justify-center">
+                  <User className="w-12 h-12 text-primary" />
                 </div>
               )}
               <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -490,33 +520,49 @@ export function Profile() {
             </div>
             {isLoading && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <Loader2 className="w-6 h-6 text-svpk-yellow animate-spin" />
+                <Loader2 className="w-6 h-6 text-primary animate-spin" />
               </div>
             )}
           </div>
-          <div>
-            <h2 className="text-2xl font-bold">
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={editData.name}
-                  onChange={e => setEditData(prev => ({ ...prev, name: e.target.value }))}
-                  className="bg-gray-700 text-white px-3 py-1 rounded-md"
-                />
-              ) : (
-                profileData.name || 'Ikke angitt'
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <h2 className="text-2xl font-bold">
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editData.name}
+                    onChange={e => setEditData(prev => ({ ...prev, name: e.target.value }))}
+                    className="bg-muted border border-border rounded px-3 py-1"
+                  />
+                ) : (
+                  profileData.name || 'Ikke angitt'
+                )}
+              </h2>
+              {!isEditing && (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="ml-2 p-1 rounded-full hover:bg-muted transition-colors"
+                  disabled={isLoading}
+                >
+                  <Pencil className="w-4 h-4 text-primary" />
+                </button>
               )}
-            </h2>
-            <p className="text-gray-400">{t('profile.member')}</p>
+            </div>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Shield className="w-4 h-4" />
+              <span className="capitalize">{profileData.role || 'medlem'}</span>
+            </div>
           </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="flex items-center gap-4 p-4 bg-gray-700 rounded-lg">
-            <Shield className="w-6 h-6 text-svpk-yellow" />
-            <div className="flex-grow">
-              <p className="text-sm text-gray-400">Rolle</p>
-              <p className="font-medium">
+        {/* Profile Information Cards */}
+        <div className="grid gap-4 mb-8">
+          {/* Role Card */}
+          <div className="bg-muted/50 p-4 rounded-lg flex items-center gap-3">
+            <Shield className="w-5 h-5 text-primary" />
+            <div>
+              <p className="text-sm text-muted-foreground">Rolle</p>
+              <p className="font-medium capitalize">
                 {profileRole === 'super_user' ? 'Super Administrator' :
                  profileRole === 'admin' ? 'Administrator' :
                  profileRole === 'range_officer' ? 'Standplassleder' :
@@ -525,16 +571,17 @@ export function Profile() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 p-4 bg-gray-700 rounded-lg">
-            <Mail className="w-6 h-6 text-svpk-yellow" />
-            <div className="flex-grow">
-              <p className="text-sm text-gray-400">{t('profile.email')}</p>
+          {/* Email Card */}
+          <div className="bg-muted/50 p-4 rounded-lg flex items-center gap-3">
+            <Mail className="w-5 h-5 text-primary" />
+            <div className="flex-1">
+              <p className="text-sm text-muted-foreground">E-post</p>
               {isEditing ? (
                 <input
                   type="email"
                   value={editData.email}
-                  onChange={e => setEditData(prev => ({ ...prev, email: e.target.value }))}
-                  className="bg-gray-600 text-white px-2 py-1 rounded w-full"
+                  onChange={(e) => setEditData({ ...editData, email: e.target.value })}
+                  className="w-full bg-background border border-border rounded px-3 py-1 mt-1"
                 />
               ) : (
                 <p className="font-medium">{profileData.email}</p>
@@ -542,18 +589,19 @@ export function Profile() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 p-4 bg-gray-700 rounded-lg">
-            <Hash className="w-6 h-6 text-svpk-yellow" />
-            <div className="flex-grow">
-              <div className="flex items-center gap-2">
-                <p className="text-sm text-gray-400">{t('profile.member_id')}</p>
+          {/* Member Number Card */}
+          <div className="bg-muted/50 p-4 rounded-lg flex items-center gap-3">
+            <Hash className="w-5 h-5 text-primary" />
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm text-muted-foreground">Skytte ID</p>
                 <a
                   href="https://app.skyting.no/user"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-svpk-yellow hover:text-yellow-400 flex items-center gap-1"
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
                 >
-                  <span>{t('profile.find_id')}</span>
+                  <span>Finn din ID</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
@@ -561,34 +609,27 @@ export function Profile() {
                 <input
                   type="text"
                   value={editData.memberNumber}
-                  onChange={e => setEditData(prev => ({ ...prev, memberNumber: e.target.value }))}
-                  className="bg-gray-600 text-white px-2 py-1 rounded w-full"
+                  onChange={(e) => setEditData({ ...editData, memberNumber: e.target.value })}
+                  className="w-full bg-background border border-border rounded px-3 py-1"
+                  placeholder="Skriv inn medlemsnummer"
                 />
               ) : (
-                <p className="font-medium">{profileData.memberNumber}</p>
+                <p className="font-medium">{profileData.memberNumber || 'Ikke angitt'}</p>
               )}
             </div>
           </div>
 
-          <div className="flex items-center gap-4 p-4 bg-gray-700 rounded-lg">
-            <Calendar className="w-6 h-6 text-svpk-yellow" />
-            <div className="flex-grow">
-              <p className="text-sm text-gray-400">{t('profile.member_since')}</p>
-              {isEditing ? (
-                <DatePicker
-                  value={editData.joinDate}
-                  onChange={(date) => setEditData(prev => ({ ...prev, joinDate: date }))}
-                  placeholder="Velg medlemsdato"
-                  className="w-full"
-                />
-              ) : (
-                <p className="font-medium">{profileData.joinDate || t('profile.not_specified')}</p>
-              )}
+          {/* Join Date Card */}
+          <div className="bg-muted/50 p-4 rounded-lg flex items-center gap-3">
+            <Calendar className="w-5 h-5 text-primary" />
+            <div>
+              <p className="text-sm text-muted-foreground">Medlem siden</p>
+              <p className="font-medium">{profileData.joinDate || 'Ikke angitt'}</p>
             </div>
           </div>
         </div>
 
-        <div className="mt-8 pt-8 border-t border-gray-700 flex gap-4">
+        <div className="mt-8 pt-8 border-t border-border flex gap-4">
           {isEditing ? (
             <>
               <button 
@@ -601,7 +642,7 @@ export function Profile() {
                 ) : (
                   <>
                     <Check className="w-5 h-5" />
-                    {t('profile.save')}
+                    Lagre
                   </>
                 )}
               </button>
@@ -614,7 +655,7 @@ export function Profile() {
                 disabled={isLoading}
               >
                 <X className="w-5 h-5" />
-                {t('profile.cancel')}
+                Avbryt
               </button>
             </>
           ) : (
