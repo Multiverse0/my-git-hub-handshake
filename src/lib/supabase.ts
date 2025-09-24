@@ -927,6 +927,114 @@ export async function deleteOrganizationMember(memberId: string): Promise<ApiRes
   }
 }
 
+/**
+ * Get all pending members across all organizations (Super Admin only)
+ */
+export async function getAllPendingMembers(): Promise<ApiResponse<OrganizationMember[]>> {
+  try {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select(`
+        *,
+        organization:organizations(name, slug)
+      `)
+      .eq('approved', false)
+      .eq('active', true)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    return { data: data || [] };
+  } catch (error) {
+    console.error('Error fetching pending members:', error);
+    return { error: 'Kunne ikke hente ventende medlemmer' };
+  }
+}
+
+/**
+ * Get all members across all organizations (Super Admin only)
+ */
+export async function getAllMembers(): Promise<ApiResponse<OrganizationMember[]>> {
+  try {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select(`
+        *,
+        organization:organizations(name, slug)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    return { data: data || [] };
+  } catch (error) {
+    console.error('Error fetching all members:', error);
+    return { error: 'Kunne ikke hente alle medlemmer' };
+  }
+}
+
+/**
+ * Approve multiple members (Super Admin only)
+ */
+export async function approveMultipleMembers(memberIds: string[]): Promise<ApiResponse<OrganizationMember[]>> {
+  try {
+    // Set super user context first
+    const currentUser = await getCurrentUser();
+    if (!currentUser || currentUser.user_type !== 'super_user') {
+      return { error: 'Kun super-brukere kan godkjenne medlemmer på tvers av organisasjoner' };
+    }
+
+    // Update members to approved
+    const { data, error } = await supabase
+      .from('organization_members')
+      .update({ approved: true })
+      .in('id', memberIds)
+      .select(`
+        *,
+        organization:organizations(name, slug)
+      `);
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    // Send approval emails for each member
+    if (data && data.length > 0) {
+      try {
+        const { sendMemberApprovalEmail, generateLoginUrl } = await import('./emailService');
+        const adminName = currentUser.super_user_profile?.full_name || currentUser.email || 'Super Administrator';
+        
+        for (const member of data) {
+          if (member.organization) {
+            const loginUrl = generateLoginUrl(member.organization.slug);
+            await sendMemberApprovalEmail(
+              member.email,
+              member.full_name,
+              member.organization.name,
+              member.organization_id,
+              '', // No password for existing users
+              loginUrl,
+              adminName
+            );
+          }
+        }
+      } catch (emailError) {
+        console.error('Error sending approval emails:', emailError);
+        // Don't fail the approval if email fails
+      }
+    }
+
+    return { data: data || [] };
+  } catch (error) {
+    console.error('Error approving members:', error);
+    return { error: 'Kunne ikke godkjenne medlemmer' };
+  }
+}
+
 // =============================================================================
 // TRAINING SESSION AND LOCATION MANAGEMENT
 // =============================================================================

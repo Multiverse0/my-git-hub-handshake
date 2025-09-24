@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Plus, Edit2, Trash2, Shield, AlertCircle, X, Loader2, Eye, EyeOff, Copy, Save, Package, Globe, Users, CheckCircle, Mail } from 'lucide-react';
-import { supabase, createOrganization, setUserContext } from '../lib/supabase';
+import { Building2, Plus, Edit2, Trash2, Shield, AlertCircle, X, Loader2, Eye, EyeOff, Copy, Save, Package, Globe, Users, CheckCircle, Mail, UserCheck } from 'lucide-react';
+import { supabase, createOrganization, setUserContext, getAllPendingMembers, approveMultipleMembers } from '../lib/supabase';
 import bcrypt from 'bcryptjs';
 import { useAuth } from '../contexts/AuthContext';
 import type { Organization } from '../lib/types';
@@ -678,14 +678,21 @@ export function SuperAdmin() {
   const [superUsers, setSuperUsers] = useState<any[]>([]);
   const [, setSelectedOrg] = useState<string | null>(null);
   const [editingSuperUser, setEditingSuperUser] = useState<any | null>(null);
-  const [activeTab, setActiveTab] = useState<'organizations' | 'languages' | 'email'>('organizations');
+  const [activeTab, setActiveTab] = useState<'organizations' | 'pending' | 'languages' | 'email'>('organizations');
   const [exportingOrg, setExportingOrg] = useState<{ id: string; name: string } | null>(null);
+  
+  // Pending users state
+  const [pendingMembers, setPendingMembers] = useState<any[]>([]);
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [approvingMembers, setApprovingMembers] = useState(false);
   
   // Statistics state
   const [stats, setStats] = useState({
     totalOrganizations: 0,
     activeOrganizations: 0,
     totalUsers: 0,
+    totalPendingUsers: 0,
     totalSuperAdmins: 0
   });
 
@@ -747,6 +754,7 @@ export function SuperAdmin() {
         totalOrganizations: totalOrgs,
         activeOrganizations: activeOrgs,
         totalUsers,
+        totalPendingUsers: 0, // Will be updated when pending users are loaded
         totalSuperAdmins: 0 // Will be updated when super users are loaded
       });
     } catch (error) {
@@ -789,11 +797,89 @@ export function SuperAdmin() {
     }
   };
 
+  const loadPendingMembers = async () => {
+    try {
+      setPendingLoading(true);
+      const result = await getAllPendingMembers();
+      
+      if (result.error) {
+        console.error('Error loading pending members:', result.error);
+      } else {
+        setPendingMembers(result.data || []);
+        setStats(prev => ({ ...prev, totalPendingUsers: result.data?.length || 0 }));
+      }
+    } catch (error) {
+      console.error('Error loading pending members:', error);
+    } finally {
+      setPendingLoading(false);
+    }
+  };
+
+  const handleApproveMember = async (memberId: string) => {
+    try {
+      setApprovingMembers(true);
+      const result = await approveMultipleMembers([memberId]);
+      
+      if (result.error) {
+        alert('Feil ved godkjenning: ' + result.error);
+      } else {
+        await loadPendingMembers();
+        await loadOrganizations(); // Refresh user counts
+      }
+    } catch (error) {
+      console.error('Error approving member:', error);
+      alert('Kunne ikke godkjenne medlem');
+    } finally {
+      setApprovingMembers(false);
+    }
+  };
+
+  const handleApproveSelectedMembers = async () => {
+    if (selectedMembers.length === 0) return;
+    
+    if (!confirm(`Godkjenn ${selectedMembers.length} valgte medlem(mer)?`)) return;
+    
+    try {
+      setApprovingMembers(true);
+      const result = await approveMultipleMembers(selectedMembers);
+      
+      if (result.error) {
+        alert('Feil ved godkjenning: ' + result.error);
+      } else {
+        setSelectedMembers([]);
+        await loadPendingMembers();
+        await loadOrganizations(); // Refresh user counts
+      }
+    } catch (error) {
+      console.error('Error approving members:', error);
+      alert('Kunne ikke godkjenne medlemmer');
+    } finally {
+      setApprovingMembers(false);
+    }
+  };
+
+  const handleSelectMember = (memberId: string) => {
+    setSelectedMembers(prev => 
+      prev.includes(memberId)
+        ? prev.filter(id => id !== memberId)
+        : [...prev, memberId]
+    );
+  };
+
+  const handleSelectAllMembers = () => {
+    setSelectedMembers(
+      selectedMembers.length === pendingMembers.length
+        ? []
+        : pendingMembers.map(member => member.id)
+    );
+  };
+
 
   useEffect(() => {
     const loadData = async () => {
       await loadOrganizations();
       await loadSuperUsers();
+      await loadPendingMembers();
     };
 
     loadData();
@@ -808,6 +894,7 @@ export function SuperAdmin() {
     // Refresh data periodically
     const interval = setInterval(() => {
       loadOrganizations();
+      loadPendingMembers();
     }, 5000);
     
     return () => {
@@ -963,6 +1050,21 @@ export function SuperAdmin() {
               Organisasjoner
             </button>
             <button
+              onClick={() => setActiveTab('pending')}
+              className={`px-4 py-2 text-sm font-medium ${
+                activeTab === 'pending'
+                  ? 'text-svpk-yellow border-b-2 border-svpk-yellow'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <UserCheck className="w-4 h-4 inline mr-2" />
+              Ventende brukere {stats.totalPendingUsers > 0 && (
+                <span className="ml-1 px-2 py-0.5 bg-red-600 text-white text-xs rounded-full">
+                  {stats.totalPendingUsers}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => setActiveTab('languages')}
               className={`px-4 py-2 text-sm font-medium ${
                 activeTab === 'languages'
@@ -995,10 +1097,134 @@ export function SuperAdmin() {
           <EmailManagement />
         )}
 
+        {activeTab === 'pending' && (
+          <div>
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-svpk-yellow">Ventende brukere</h2>
+                <p className="text-gray-400">Godkjenn nye medlemmer på tvers av alle organisasjoner</p>
+              </div>
+              {selectedMembers.length > 0 && (
+                <button
+                  onClick={handleApproveSelectedMembers}
+                  disabled={approvingMembers}
+                  className="btn-primary"
+                >
+                  {approvingMembers ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Godkjenner...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
+                      Godkjenn valgte ({selectedMembers.length})
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+
+            <div className="card">
+              {pendingLoading ? (
+                <div className="text-center py-8">
+                  <Loader2 className="w-8 h-8 animate-spin text-svpk-yellow mx-auto mb-4" />
+                  <p className="text-gray-400">Laster ventende brukere...</p>
+                </div>
+              ) : pendingMembers.length === 0 ? (
+                <div className="text-center py-8">
+                  <UserCheck className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-400 mb-4">Ingen ventende brukere funnet</p>
+                  <p className="text-sm text-gray-500">Alle medlemmer er godkjent eller ingen har registrert seg</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        <th className="py-3 px-4 text-left">
+                          <input
+                            type="checkbox"
+                            checked={selectedMembers.length === pendingMembers.length && pendingMembers.length > 0}
+                            onChange={handleSelectAllMembers}
+                            className="rounded border-gray-600 bg-gray-700"
+                          />
+                        </th>
+                        <th className="py-3 px-4 text-left">Navn</th>
+                        <th className="py-3 px-4 text-left">E-post</th>
+                        <th className="py-3 px-4 text-left">Organisasjon</th>
+                        <th className="py-3 px-4 text-left">Rolle</th>
+                        <th className="py-3 px-4 text-left">Registrert</th>
+                        <th className="py-3 px-4 text-right">Handlinger</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingMembers.map((member) => (
+                        <tr key={member.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                          <td className="py-3 px-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedMembers.includes(member.id)}
+                              onChange={() => handleSelectMember(member.id)}
+                              className="rounded border-gray-600 bg-gray-700"
+                            />
+                          </td>
+                          <td className="py-3 px-4 font-medium">{member.full_name}</td>
+                          <td className="py-3 px-4 text-gray-300">{member.email}</td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-300">{member.organization?.name}</span>
+                              <span className="text-xs text-gray-500">/{member.organization?.slug}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              member.role === 'admin'
+                                ? 'bg-purple-900/50 text-purple-300 border border-purple-700'
+                                : 'bg-blue-900/50 text-blue-300 border border-blue-700'
+                            }`}>
+                              {member.role === 'admin' ? 'Admin' : 'Medlem'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-gray-400">
+                            {new Date(member.created_at).toLocaleDateString('no-NO', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              onClick={() => handleApproveMember(member.id)}
+                              disabled={approvingMembers}
+                              className="btn-primary text-sm"
+                            >
+                              {approvingMembers ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <CheckCircle className="w-4 h-4" />
+                                  Godkjenn
+                                </>
+                              )}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'organizations' && (
           <>
             {/* Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
               <StatisticsCard
                 title="Totale organisasjoner"
                 value={stats.totalOrganizations}
@@ -1016,6 +1242,12 @@ export function SuperAdmin() {
                 value={stats.totalUsers}
                 icon={Users}
                 color="blue"
+              />
+              <StatisticsCard
+                title="Ventende brukere"
+                value={stats.totalPendingUsers}
+                icon={UserCheck}
+                color="red"
               />
               <StatisticsCard
                 title="Super-administratorer"
