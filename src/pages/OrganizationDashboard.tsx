@@ -6,6 +6,7 @@ import { addOrganizationMember, updateMemberRole, updateOrganizationMember, getO
 import { sendAdminWelcomeEmail } from '../lib/emailService';
 import { OrganizationAdmin } from '../lib/types';
 import { OrganizationSettings } from '../components/OrganizationSettings';
+import { MembershipProgressCard } from '../components/MembershipProgressCard';
 
 interface CreateAdminModalProps {
   organizationId: string;
@@ -737,6 +738,20 @@ export function OrganizationDashboard() {
                   </div>
                   <Shield className="w-8 h-8 text-gray-400" />
                 </div>
+              </div>
+            </div>
+
+            {/* Membership Progress */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-1">
+                {organization?.id && (
+                  <MembershipProgressCard 
+                    organizationId={organization.id}
+                    onLimitReached={() => {
+                      setActiveTab('settings');
+                    }}
+                  />
+                )}
               </div>
             </div>
 

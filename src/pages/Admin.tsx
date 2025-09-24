@@ -12,6 +12,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { SupabaseStatus } from '../components/SupabaseStatus';
 import { StatisticsCard } from '../components/StatisticsCard';
+import { MembershipProgressCard } from '../components/MembershipProgressCard';
 
 export function Admin() {
   const { user, profile, organization } = useAuth();
@@ -297,6 +298,21 @@ export function Admin() {
               icon={TrendingUp}
               color="green"
             />
+          </div>
+
+          {/* Membership Progress Card */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div className="lg:col-span-1">
+              {organization?.id && (
+                <MembershipProgressCard 
+                  organizationId={organization.id}
+                  onLimitReached={() => {
+                    // Navigate to settings tab for upgrade
+                    setActiveTab('settings');
+                  }}
+                />
+              )}
+            </div>
           </div>
 
           <div className="card">
