@@ -67,6 +67,9 @@ export function Profile() {
         await setUserContext(user.email);
         console.log('🔍 User context set for RLS');
         
+        // Small delay to ensure context is properly set
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         // Load profile data from organization_members table using email (matches RLS policy)
         const { data: memberData, error } = await supabase
           .from('organization_members')
@@ -80,7 +83,7 @@ export function Profile() {
           console.error('❌ Database error loading member profile:', error);
           toast({
             title: "Database Error",
-            description: `Could not load profile data: ${error.message}`,
+            description: `Could not load profile data: ${error.message}. Please try refreshing the page.`,
             variant: "destructive",
           });
           return;
@@ -90,7 +93,7 @@ export function Profile() {
           console.warn('⚠️ No member data found for user email:', user.email);
           toast({
             title: "Profile Not Found",
-            description: "Your profile could not be found. Please contact your administrator.",
+            description: "Your profile could not be found. Please contact your administrator or try logging out and back in.",
             variant: "destructive",
           });
           return;
