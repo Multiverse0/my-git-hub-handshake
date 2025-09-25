@@ -112,23 +112,86 @@ export function Profile() {
         if (!memberData) {
           console.warn('⚠️ No organization member record found for user ID:', user.id);
           
-          // Check if the user exists in auth but not in organization_members
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          
-          if (authUser) {
-            console.log('👤 Auth user exists but no organization member record found');
-            toast({
-              title: "Profile Setup Required",
-              description: "Your account exists but you need to join an organization. Please contact your administrator or register with an organization.",
-              variant: "destructive",
-            });
-          } else {
-            toast({
-              title: "Authentication Error", 
-              description: "Your session has expired. Please log out and log back in.",
-              variant: "destructive",
-            });
+          // Try fallback lookup by email and attempt to repair the data
+          if (user.email) {
+            console.log('🔧 Attempting to repair member linkage by email:', user.email);
+            
+            const { data: emailMemberData, error: emailError } = await supabase
+              .from('organization_members')
+              .select(`
+                *,
+                organizations (
+                  name,
+                  logo_url,
+                  primary_color,
+                  secondary_color
+                )
+              `)
+              .eq('email', user.email)
+              .eq('approved', true)
+              .eq('active', true)
+              .maybeSingle();
+
+            if (emailMemberData && !emailError) {
+              console.log('✅ Found member by email, linking to auth user');
+              
+              // Update the member record to link it to the auth user
+              const { error: updateError } = await supabase
+                .from('organization_members')
+                .update({ user_id: user.id })
+                .eq('id', emailMemberData.id);
+
+              if (!updateError) {
+                // Use the repaired data
+                emailMemberData.user_id = user.id;
+                
+                // Continue with profile setup using the repaired data
+                setUserId(emailMemberData.id);
+                
+                const newProfileData: ProfileData = {
+                  name: emailMemberData.full_name || '',
+                  email: emailMemberData.email || '',
+                  memberNumber: emailMemberData.member_number || '',
+                  joinDate: emailMemberData.created_at ? new Date(emailMemberData.created_at).toLocaleDateString('nb-NO') : '',
+                  birthDate: emailMemberData.birth_date ? new Date(emailMemberData.birth_date).toLocaleDateString('nb-NO') : '',
+                  avatarUrl: emailMemberData.avatar_url || undefined,
+                  startkortUrl: emailMemberData.startkort_url || undefined,
+                  startkortFileName: emailMemberData.startkort_file_name || undefined,
+                  diplomaUrl: emailMemberData.diploma_url || undefined,
+                  diplomaFileName: emailMemberData.diploma_file_name || undefined,
+                  organizationName: emailMemberData.organizations?.name || 'Unknown Organization',
+                  organizationLogo: emailMemberData.organizations?.logo_url || undefined,
+                  role: emailMemberData.role || 'member',
+                };
+                
+                setProfileData(newProfileData);
+                setEditData(newProfileData);
+                setProfileRole(emailMemberData.role as 'super_user' | 'member' | 'admin' | 'range_officer' || 'member');
+                
+                if (emailMemberData.other_files && Array.isArray(emailMemberData.other_files)) {
+                  setOtherFiles(emailMemberData.other_files as { url: string; name: string; }[]);
+                } else {
+                  setOtherFiles([]);
+                }
+
+                toast({
+                  title: "Profile Repaired",
+                  description: "Your profile data has been successfully linked to your account.",
+                });
+
+                console.log('✅ Profile data repaired and loaded successfully');
+                return; // Exit early, we successfully loaded the profile
+              }
+            }
           }
+          
+          // If we get here, we couldn't find or repair the profile
+          console.log('❌ Could not find or repair member profile');
+          toast({
+            title: "Profile Setup Required",
+            description: "Your account exists but you need to join an organization or wait for admin approval. Please contact your administrator.",
+            variant: "destructive",
+          });
           return;
         }
 

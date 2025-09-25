@@ -28,7 +28,8 @@ import { sendMemberWelcomeEmail } from './emailService';
  */
 export async function setUserContext(email: string): Promise<void> {
   try {
-    await supabase.rpc('set_user_context', { user_email: email });
+    // This function is no longer needed with the new auth-based RLS policies
+    console.log('User context set via auth.uid():', email);
   } catch (error) {
     console.error('Error setting user context:', error);
   }
@@ -723,7 +724,17 @@ export async function getOrganizationMembers(organizationId: string): Promise<Ap
 export async function getOrganizationAdmins(organizationId: string): Promise<ApiResponse<OrganizationAdmin[]>> {
   try {
     const { data, error } = await supabase
-      .rpc('get_organization_admins', { org_id: organizationId });
+      .from('organization_admins')
+      .select(`
+        *,
+        organization_members (
+          id,
+          full_name,
+          email,
+          role
+        )
+      `)
+      .eq('organization_id', organizationId);
 
     if (error) {
       return { error: error.message };
@@ -737,13 +748,41 @@ export async function getOrganizationAdmins(organizationId: string): Promise<Api
 }
 
 /**
- * Approve organization member
+ * Approve organization member with automatic user linking
  */
 export async function approveMember(memberId: string): Promise<ApiResponse<OrganizationMember>> {
   try {
+    // First get the member's email
+    const { data: memberData, error: memberError } = await supabase
+      .from('organization_members')
+      .select('email')
+      .eq('id', memberId)
+      .single();
+
+    if (memberError || !memberData) {
+      return { error: 'Could not find member to approve' };
+    }
+
+    // Try to link member to auth user by email using our database function
+    const { data: authUserId, error: linkError } = await supabase
+      .rpc('link_member_to_auth_user', { member_email: memberData.email });
+
+    if (linkError) {
+      console.warn('Could not auto-link member to auth user:', linkError);
+      // Continue with approval even if linking fails
+    }
+
+    // Approve the member
+    const updateData: any = { approved: true };
+    
+    // If we successfully found the auth user, also set the user_id
+    if (authUserId) {
+      updateData.user_id = authUserId;
+    }
+
     const { data, error } = await supabase
       .from('organization_members')
-      .update({ approved: true })
+      .update(updateData)
       .eq('id', memberId)
       .select()
       .single();
@@ -751,6 +790,12 @@ export async function approveMember(memberId: string): Promise<ApiResponse<Organ
     if (error) {
       return { error: error.message };
     }
+
+    console.log('Member approved successfully:', { 
+      memberId, 
+      email: memberData.email, 
+      linkedToAuth: !!authUserId 
+    });
 
     return { data: data as any };
   } catch (error) {

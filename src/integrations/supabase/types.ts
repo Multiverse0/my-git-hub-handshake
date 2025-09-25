@@ -827,6 +827,19 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      link_member_to_auth_user: {
+        Args: { member_email: string }
+        Returns: string
+      }
+      repair_unlinked_members: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          auth_user_id: string
+          linked: boolean
+          member_email: string
+          member_id: string
+        }[]
+      }
       set_config: {
         Args: {
           is_local?: boolean

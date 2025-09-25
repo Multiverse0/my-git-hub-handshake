@@ -155,7 +155,7 @@ export class DatabaseService {
   }
 
   // Utility functions
-  static async executeRPC(functionName: 'get_current_user_email' | 'set_config' | 'set_user_context' | 'uid', params: any = {}): Promise<any> {
+  static async executeRPC(functionName: 'get_current_user_member_id' | 'get_current_user_organization_id' | 'is_current_user_organization_admin' | 'is_current_user_super_user' | 'link_member_to_auth_user' | 'repair_unlinked_members' | 'set_config' | 'uid', params: any = {}): Promise<any> {
     try {
       const { data, error } = await supabase.rpc(functionName, params);
       if (error) throw error;
