@@ -143,49 +143,54 @@ async function sendWithResend(
   throw new Error('Resend service disabled - use Mailgun instead');
 }
 
-// Send email using configured service
+// Validate Mailgun configuration
+function validateMailgunConfig(): void {
+  const mailgunApiKey = Deno.env.get('MAILGUN_API_KEY');
+  const mailgunDomain = Deno.env.get('MAILGUN_DOMAIN');
+  
+  console.log('Validating Mailgun configuration...');
+  console.log('MAILGUN_DOMAIN configured:', mailgunDomain ? 'Yes' : 'No');
+  console.log('MAILGUN_API_KEY configured:', mailgunApiKey ? 'Yes' : 'No');
+  
+  if (!mailgunApiKey) {
+    throw new Error('MAILGUN_API_KEY environment variable is required');
+  }
+  
+  if (!mailgunDomain) {
+    throw new Error('MAILGUN_DOMAIN environment variable is required');
+  }
+  
+  // Log the domain being used (for debugging)
+  console.log('Using Mailgun domain:', mailgunDomain);
+}
+
+// Send email using Mailgun (primary and only service)
 async function sendEmail(
   to: string,
   subject: string,
   html: string,
   text: string
 ): Promise<EmailServiceResponse> {
-  const emailService = Deno.env.get('EMAIL_SERVICE') || 'resend';
+  // Validate configuration before attempting to send
+  validateMailgunConfig();
+  
   const fromAddress = Deno.env.get('EMAIL_FROM_ADDRESS') || 'Aktivlogg <noreply@aktivlogg.no>';
   const fromName = Deno.env.get('EMAIL_FROM_NAME') || 'Aktivlogg';
   
   const fromEmail = fromAddress.includes('<') ? fromAddress : `${fromName} <${fromAddress}>`;
   
-  console.log(`Sending email via ${emailService}:`, {
+  console.log('Sending email via Mailgun:', {
     to,
     from: fromEmail,
     subject,
-    service: emailService
+    domain: Deno.env.get('MAILGUN_DOMAIN')
   });
 
   try {
-    if (emailService === 'mailgun') {
-      return await sendWithMailgun(to, fromEmail, subject, html, text);
-    } else {
-      return await sendWithResend(to, fromEmail, subject, html, text);
-    }
+    return await sendWithMailgun(to, fromEmail, subject, html, text);
   } catch (error: any) {
-    console.error(`${emailService} failed, error:`, error?.message || error);
-    
-    // Try fallback service if primary fails
-    const fallbackService = emailService === 'mailgun' ? 'resend' : 'mailgun';
-    console.log(`Attempting fallback to ${fallbackService}`);
-    
-    try {
-      if (fallbackService === 'mailgun') {
-        return await sendWithMailgun(to, fromEmail, subject, html, text);
-      } else {
-        return await sendWithResend(to, fromEmail, subject, html, text);
-      }
-    } catch (fallbackError: any) {
-      console.error(`Fallback ${fallbackService} also failed:`, fallbackError?.message || fallbackError);
-      throw new Error(`Both ${emailService} and ${fallbackService} failed to send email`);
-    }
+    console.error('Mailgun email failed:', error?.message || error);
+    throw new Error(`Email delivery failed: ${error?.message || 'Unknown error'}`);
   }
 }
 
@@ -630,29 +635,9 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    // Check if at least one email service is configured
-    const emailService = Deno.env.get('EMAIL_SERVICE') || 'resend';
-    const resendApiKey = Deno.env.get('RESEND_API_KEY');
-    const mailgunApiKey = Deno.env.get('MAILGUN_API_KEY');
-    const mailgunDomain = Deno.env.get('MAILGUN_DOMAIN');
-    
-    const resendConfigured = !!resendApiKey;
-    const mailgunConfigured = !!(mailgunApiKey && mailgunDomain);
-    
-    if (!resendConfigured && !mailgunConfigured) {
-      console.error('No email service configured');
-      return new Response(
-        JSON.stringify({ 
-          error: 'Email service not configured. Please configure either Resend (RESEND_API_KEY) or Mailgun (MAILGUN_API_KEY + MAILGUN_DOMAIN).' 
-        }),
-        {
-          status: 500,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        }
-      );
-    }
-
-    console.log(`Email service configured: ${emailService} (Resend: ${resendConfigured}, Mailgun: ${mailgunConfigured})`);
+    // Validate Mailgun configuration at startup
+    validateMailgunConfig();
+    console.log('Email service configured: Mailgun only');
 
     const emailData: EmailRequest = await req.json();
     console.log('Email request received:', {
