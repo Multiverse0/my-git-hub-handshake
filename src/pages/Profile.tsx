@@ -82,8 +82,7 @@ export function Profile() {
           return;
         }
         
-        // Load profile data with organization information
-        // Note: Authentication/approval checks are handled by AuthContext
+        // Load profile data with organization information (must match getCurrentUser() filters)
         let { data: memberData, error } = await supabase
           .from('organization_members')
           .select(`
@@ -96,23 +95,136 @@ export function Profile() {
             )
           `)
           .eq('user_id', user.id)
+          .eq('approved', true)
+          .eq('active', true)
           .maybeSingle();
+
+        console.log('🔍 Profile Debug - Member query result:', { memberData, error, userAuthId: user.id });
 
         if (error) {
           console.error('❌ Database error loading member profile:', error);
           toast({
             title: "Database Error",
-            description: `Could not load profile data: ${error.message}. Please try again or contact support.`,
+            description: `Could not load profile data: ${error.message}. Please contact support if this persists.`,
             variant: "destructive",
           });
           return;
         }
 
         if (!memberData) {
-          console.warn('⚠️ No member record found for authenticated user:', user.id);
+          console.warn('⚠️ No approved and active organization member record found for user ID:', user.id);
+          
+          // Check if user exists but is not approved or not active
+          const { data: memberCheck, error: checkError } = await supabase
+            .from('organization_members')
+            .select('id, approved, active, full_name, email')
+            .eq('user_id', user.id)
+            .maybeSingle();
+            
+          if (!checkError && memberCheck) {
+            console.log('📋 Member status check:', { 
+              memberId: memberCheck.id, 
+              approved: memberCheck.approved, 
+              active: memberCheck.active 
+            });
+            
+            if (!memberCheck.approved) {
+              toast({
+                title: "Account Pending Approval",
+                description: "Your account is pending administrator approval. Please wait or contact your administrator.",
+                variant: "destructive",
+              });
+              return;
+            }
+            
+            if (!memberCheck.active) {
+              toast({
+                title: "Account Inactive",
+                description: "Your account has been deactivated. Please contact your administrator.",
+                variant: "destructive",
+              });
+              return;
+            }
+          }
+          
+          // Try fallback lookup by email and attempt to repair the data
+          if (user.email) {
+            console.log('🔧 Attempting to repair member linkage using case-insensitive matching:', user.email);
+            
+            // Use the new database function for case-insensitive email matching
+            const { data: repairResult, error: repairError } = await supabase
+              .rpc('link_member_to_auth_user', { member_email: user.email });
+
+            if (!repairError && repairResult) {
+              console.log('✅ Successfully repaired profile link using case-insensitive matching');
+              
+              // Retry loading the profile after repair with proper filters
+              const { data: repairedMemberData, error: repairedError } = await supabase
+                .from('organization_members')
+                .select(`
+                  *,
+                  organizations (
+                    name,
+                    logo_url,
+                    primary_color,
+                    secondary_color
+                  )
+                `)
+                .eq('user_id', user.id)
+                .eq('approved', true)
+                .eq('active', true)
+                .maybeSingle();
+
+              if (repairedMemberData && !repairedError) {
+                console.log('✅ Profile successfully loaded after repair');
+                memberData = repairedMemberData; // Use the repaired data
+              } else if (repairedError) {
+                console.error('❌ Error loading repaired profile:', repairedError);
+              }
+            } else if (repairError) {
+              console.error('❌ Error during profile repair:', repairError);
+            }
+          }
+
+          // If we still don't have memberData after repair attempts
+          if (!memberData) {
+            console.log('❌ Could not find or repair approved and active member profile');
+            toast({
+              title: "Profile Setup Required",
+              description: "Your account exists but you need to join an organization or wait for admin approval. Please contact your administrator.",
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+
+        // Validate that this organization_members record properly links to auth and has correct status
+        if (!memberData.user_id) {
+          console.error('❌ Organization member record found but user_id is null:', memberData);
           toast({
-            title: "Profile Not Found",
-            description: "Your member profile could not be found. Please contact your administrator.",
+            title: "Data Integrity Error",
+            description: "Your profile has a data issue. Please contact your administrator to fix your account linking.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        // Double-check that member is approved and active (safety validation)
+        if (!memberData.approved) {
+          console.error('❌ Member found but not approved:', memberData.id);
+          toast({
+            title: "Account Not Approved",
+            description: "Your account is not yet approved. Please wait for administrator approval.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        if (!memberData.active) {
+          console.error('❌ Member found but not active:', memberData.id);
+          toast({
+            title: "Account Inactive",
+            description: "Your account has been deactivated. Please contact your administrator.",
             variant: "destructive",
           });
           return;
