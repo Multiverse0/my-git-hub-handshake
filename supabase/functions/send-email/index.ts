@@ -89,7 +89,7 @@ interface EmailServiceResponse {
   error?: string;
 }
 
-// Send email with Mailgun
+// Send email with Mailgun (primary and only service)
 async function sendWithMailgun(
   to: string,
   from: string,
@@ -103,6 +103,8 @@ async function sendWithMailgun(
   if (!mailgunApiKey || !mailgunDomain) {
     throw new Error('Mailgun not configured: MAILGUN_API_KEY or MAILGUN_DOMAIN missing');
   }
+
+  console.log('Sending via Mailgun to:', to, 'using domain:', mailgunDomain);
 
   const formData = new FormData();
   formData.append('from', from);
@@ -121,27 +123,24 @@ async function sendWithMailgun(
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('Mailgun error:', errorText);
+    console.error('Mailgun API error:', {
+      status: response.status,
+      statusText: response.statusText,
+      error: errorText,
+      domain: mailgunDomain
+    });
     throw new Error(`Mailgun API error: ${response.status} - ${errorText}`);
   }
 
   const result: MailgunResponse = await response.json();
+  console.log('Mailgun success:', result.id);
   return {
     success: true,
     messageId: result.id
   };
 }
 
-// Send email with Resend (commented out due to missing dependency)
-async function sendWithResend(
-  to: string,
-  from: string,
-  subject: string,
-  html: string,
-  text: string
-): Promise<EmailServiceResponse> {
-  throw new Error('Resend service disabled - use Mailgun instead');
-}
+// Removed Resend service - using Mailgun only
 
 // Validate Mailgun configuration
 function validateMailgunConfig(): void {
