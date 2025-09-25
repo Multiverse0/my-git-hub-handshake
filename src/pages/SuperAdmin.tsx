@@ -1423,14 +1423,14 @@ export function SuperAdmin() {
                           </div>
                           <div className="text-center">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              (org.subscription_type || 'starter') === 'enterprise'
+                              (org.subscription_type || 'start') === 'enterprise'
                                 ? 'bg-purple-900/50 text-purple-300 border border-purple-700'
-                                : (org.subscription_type || 'starter') === 'professional'
+                                : (org.subscription_type || 'start') === 'professional'
                                 ? 'bg-blue-900/50 text-blue-300 border border-blue-700'
                                 : 'bg-gray-900/50 text-gray-300 border border-gray-700'
                             }`}>
-                              {(org.subscription_type || 'starter') === 'enterprise' ? 'Enterprise' : 
-                               (org.subscription_type || 'starter') === 'professional' ? 'Professional' : 'Starter'}
+                              {(org.subscription_type || 'start') === 'enterprise' ? 'Enterprise' : 
+                               (org.subscription_type || 'start') === 'professional' ? 'Professional' : 'Start'}
                             </span>
                             <div className="text-xs text-gray-400 mt-1">Abonnement</div>
                           </div>

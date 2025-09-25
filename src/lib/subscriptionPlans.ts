@@ -8,17 +8,6 @@ export interface SubscriptionPlan {
 }
 
 export const SUBSCRIPTION_PLANS: Record<string, SubscriptionPlan> = {
-  starter: {
-    id: 'starter',
-    name: 'Starter (Opp til 100 medlemmer)',
-    memberLimit: 100,
-    features: [
-      'Opptil 100 medlemmer',
-      'Treningslogg',
-      'QR-kode skanning',
-      'Medlemshåndtering'
-    ]
-  },
   start: {
     id: 'start',
     name: 'Start (Opp til 100 medlemmer)',

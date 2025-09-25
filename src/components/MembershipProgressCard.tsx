@@ -24,7 +24,7 @@ export function MembershipProgressCard({ organizationId, onLimitReached }: Membe
         const orgResult = await getOrganizationById(organizationId);
         
         if (orgResult.data) {
-          const planId = orgResult.data.subscription_type || 'starter';
+          const planId = orgResult.data.subscription_type || 'start';
           const limitInfo = getMemberLimitInfo(memberCount, planId);
           setMemberLimitInfo(limitInfo);
           
