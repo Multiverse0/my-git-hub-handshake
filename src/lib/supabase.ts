@@ -448,25 +448,51 @@ export async function updateOrganizationLogo(
   logoFile: File
 ): Promise<ApiResponse<string>> {
   try {
+    console.log('Starting logo upload for organization:', organizationId);
+    
+    // Validate file
+    if (!logoFile) {
+      return { error: 'Ingen fil valgt' };
+    }
+
+    // Check file size (max 2MB)
+    if (logoFile.size > 2 * 1024 * 1024) {
+      return { error: 'Filen er for stor. Maksimal størrelse er 2MB.' };
+    }
+
+    // Check file type
+    const allowedTypes = ['image/svg+xml', 'image/png', 'image/jpeg', 'image/jpg'];
+    if (!allowedTypes.includes(logoFile.type)) {
+      return { error: 'Ugyldig filtype. Kun SVG, PNG og JPG er tillatt.' };
+    }
+
     // Upload logo to storage
     const fileExt = logoFile.name.split('.').pop();
-    const fileName = `${organizationId}-logo.${fileExt}`;
+    const fileName = `${organizationId}-logo-${Date.now()}.${fileExt}`;
     const filePath = `logos/${fileName}`;
+
+    console.log('Uploading file:', filePath);
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('logos')
       .upload(filePath, logoFile, {
-        upsert: true
+        upsert: true,
+        contentType: logoFile.type
       });
 
     if (uploadError) {
-      return { error: uploadError.message };
+      console.error('Storage upload error:', uploadError);
+      return { error: `Upload feilet: ${uploadError.message}` };
     }
+
+    console.log('Upload successful:', uploadData);
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
       .from('logos')
       .getPublicUrl(uploadData.path);
+
+    console.log('Public URL generated:', publicUrl);
 
     // Update organization record
     const { error: updateError } = await supabase
@@ -475,13 +501,15 @@ export async function updateOrganizationLogo(
       .eq('id', organizationId);
 
     if (updateError) {
-      return { error: updateError.message };
+      console.error('Database update error:', updateError);
+      return { error: `Database oppdatering feilet: ${updateError.message}` };
     }
 
+    console.log('Logo update completed successfully');
     return { data: publicUrl };
   } catch (error) {
     console.error('Error updating organization logo:', error);
-    return { error: 'Kunne ikke oppdatere logo' };
+    return { error: `Uventet feil: ${error instanceof Error ? error.message : 'Ukjent feil'}` };
   }
 }
 

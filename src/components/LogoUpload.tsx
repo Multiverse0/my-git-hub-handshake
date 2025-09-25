@@ -15,9 +15,21 @@ export function LogoUpload({ onLogoUpdated }: LogoUploadProps) {
   const [success, setSuccess] = useState(false);
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    if (acceptedFiles.length === 0 || !organization) return;
+    console.log('Logo drop initiated:', { acceptedFiles: acceptedFiles.length, organization: organization?.id });
+    
+    if (acceptedFiles.length === 0) {
+      setError('Ingen filer valgt');
+      return;
+    }
+    
+    if (!organization) {
+      setError('Ingen organisasjon valgt');
+      return;
+    }
 
     const file = acceptedFiles[0];
+    console.log('Processing file:', { name: file.name, size: file.size, type: file.type });
+    
     setUploading(true);
     setError(null);
     setSuccess(false);
@@ -26,9 +38,11 @@ export function LogoUpload({ onLogoUpdated }: LogoUploadProps) {
       const result = await updateOrganizationLogo(organization.id, file);
       
       if (result.error) {
+        console.error('Upload result error:', result.error);
         throw new Error(result.error);
       }
 
+      console.log('Upload successful:', result.data);
       setSuccess(true);
       if (onLogoUpdated && result.data) {
         onLogoUpdated(result.data);
@@ -39,7 +53,8 @@ export function LogoUpload({ onLogoUpdated }: LogoUploadProps) {
 
     } catch (error) {
       console.error('Error uploading logo:', error);
-      setError(error instanceof Error ? error.message : 'Kunne ikke laste opp logo');
+      const errorMessage = error instanceof Error ? error.message : 'Kunne ikke laste opp logo';
+      setError(errorMessage);
     } finally {
       setUploading(false);
     }
