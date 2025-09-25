@@ -107,35 +107,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [user?.email, isAuthenticated]);
 
-  // Initialize auth state with timeout and better error handling
+  // Initialize auth state with exponential backoff and performance monitoring
   useEffect(() => {
     const initializeAuth = async () => {
-      const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Auth initialization timeout')), 15000)
-      );
+      const startTime = Date.now();
+      const maxRetries = 3;
+      
+      const retry = async (operation: () => Promise<any>, name: string): Promise<any> => {
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            const opStart = Date.now();
+            const result = await Promise.race([
+              operation(),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error(`${name} timeout after ${20000 + (attempt * 10000)}ms`)), 20000 + (attempt * 10000))
+              )
+            ]);
+            console.log(`[AuthProvider] ${name} completed in ${Date.now() - opStart}ms (attempt ${attempt + 1})`);
+            return result;
+          } catch (error) {
+            console.warn(`[AuthProvider] ${name} failed (attempt ${attempt + 1}/${maxRetries + 1}):`, error);
+            if (attempt === maxRetries) throw error;
+            
+            // Exponential backoff: 1s, 2s, 4s
+            const delay = Math.pow(2, attempt) * 1000;
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+        }
+      };
 
       try {
         console.log('[AuthProvider] Starting initialization...');
         setInitError(null);
         
-        // Test basic connectivity first
-        const { error: connectError } = await supabase.from('organizations').select('count').limit(1);
-        if (connectError) {
-          console.error('[AuthProvider] Database connectivity issue:', connectError);
-          setInitError(`Database connection failed: ${connectError.message}`);
-          setLoading(false);
-          return;
-        }
+        // Test basic connectivity with retry
+        await retry(async () => {
+          const { error } = await supabase.from('organizations').select('count').limit(1);
+          if (error) throw error;
+        }, 'Database connectivity test');
 
-        // Run setup check with timeout
-        await Promise.race([checkSetupStatus(), timeout]);
+        // Run setup check with retry
+        await retry(() => checkSetupStatus(), 'Setup status check');
         
-        // Check if user is already authenticated with Supabase
-        const sessionPromise = supabase.auth.getSession();
-        const { data: { session }, error: sessionError } = await Promise.race([
-          sessionPromise,
-          timeout
-        ]) as any;
+        // Check if user is already authenticated with retry
+        const { data: { session }, error: sessionError } = await retry(
+          () => supabase.auth.getSession(),
+          'Session check'
+        ) as any;
         
         // Handle invalid refresh token errors
         if (sessionError && sessionError.message?.includes('refresh_token_not_found')) {
@@ -155,24 +173,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         if (session?.user) {
           try {
-            // Add timeout for getCurrentUser to prevent hanging
-            const getUserPromise = getCurrentUser();
-            const currentUser = await Promise.race([getUserPromise, timeout]) as any;
+            // Get user data with retry and performance monitoring
+            const currentUser = await retry(() => getCurrentUser(), 'User data loading');
             
             if (currentUser) {
               setUser(currentUser);
               setIsAuthenticated(true);
               
-              // No need to set user context - RLS now uses auth.uid()
-              
-              // Load organization if user is organization member (with timeout)
+              // Load organization data if user is organization member
               if (currentUser.user_type === 'organization_member' && currentUser.organization) {
                 setOrganization(currentUser.organization);
                 
                 try {
-                  // Load branding with timeout
-                  const brandingPromise = getOrganizationBranding(currentUser.organization.id);
-                  const brandingData = await Promise.race([brandingPromise, timeout]) as any;
+                  // Load branding with retry
+                  const brandingData = await retry(
+                    () => getOrganizationBranding(currentUser.organization.id),
+                    'Branding data loading'
+                  );
                   setBranding(brandingData);
                 } catch (brandingError) {
                   console.warn('Could not load branding, using defaults:', brandingError);
@@ -186,11 +203,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setIsAuthenticated(false);
             }
           } catch (userError) {
-            console.warn('Error loading user data:', userError);
-            // If user data loading fails, still try to use the session
+            console.warn('Error loading user data after retries:', userError);
             setUser(null);
             setOrganization(null);
             setIsAuthenticated(false);
+            setInitError(`Failed to load user data: ${userError instanceof Error ? userError.message : 'Unknown error'}`);
           }
         } else {
           console.log('No active session found');
@@ -199,14 +216,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setIsAuthenticated(false);
         }
       } catch (error) {
-        console.error('Error initializing auth:', error);
-        setInitError(`Initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        const totalTime = Date.now() - startTime;
+        console.error(`[AuthProvider] Initialization failed after ${totalTime}ms:`, error);
+        
+        // Provide more specific error messages
+        let errorMessage = 'Initialization failed';
+        if (error instanceof Error) {
+          if (error.message.includes('timeout')) {
+            errorMessage = `Connection timeout (${totalTime}ms). Please check your internet connection and try refreshing the page.`;
+          } else if (error.message.includes('connectivity')) {
+            errorMessage = 'Unable to connect to the database. Please try again later.';
+          } else {
+            errorMessage = `Authentication error: ${error.message}`;
+          }
+        }
+        
+        setInitError(errorMessage);
+        
         // Clear potentially corrupted auth state
         try {
           await supabase.auth.signOut();
         } catch (signOutError) {
           console.warn('Error signing out during cleanup:', signOutError);
         }
+        
         setUser(null);
         setOrganization(null);
         setIsAuthenticated(false);
@@ -216,56 +249,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           secondary_color: '#1F2937'
         });
       } finally {
+        const totalTime = Date.now() - startTime;
+        console.log(`[AuthProvider] Initialization completed in ${totalTime}ms`);
         setLoading(false);
       }
     };
     
     initializeAuth();
     
-    // Listen for auth state changes with timeout protection
+    // Listen for auth state changes with optimized handling
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('🔄 Auth state change:', event, session?.user?.id);
       
-      // Use setTimeout to prevent blocking the auth state change callback
+      // Process auth state changes without blocking
       setTimeout(async () => {
-        const timeout = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Auth state change timeout')), 8000)
-        );
-
+        const startTime = Date.now();
+        
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           if (session?.user) {
             try {
               console.log('👤 Processing user session for event:', event);
               
-              // Get current user with timeout
-              const getUserPromise = getCurrentUser();
-              const currentUser = await Promise.race([getUserPromise, timeout]) as any;
+              // Get current user with shorter timeout for auth state changes
+              const timeoutMs = 10000; // 10 seconds
+              const currentUser = await Promise.race([
+                getCurrentUser(),
+                new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Auth state change timeout')), timeoutMs)
+                )
+              ]) as any;
               
               if (currentUser) {
-                console.log('✅ User data loaded:', currentUser.user_type, currentUser.email);
+                console.log(`✅ User data loaded in ${Date.now() - startTime}ms:`, currentUser.user_type, currentUser.email);
                 setUser(currentUser);
                 setIsAuthenticated(true);
                 
-                // Set user context with timeout
-                try {
-                  const setContextPromise = setUserContext(currentUser.email);
-                  await Promise.race([setContextPromise, timeout]);
-                } catch (contextError) {
-                  console.warn('Could not set user context:', contextError);
-                }
-                
-                // Load organization data with timeout
+                // Load organization data if needed
                 if (currentUser.user_type === 'organization_member' && currentUser.organization) {
                   setOrganization(currentUser.organization);
                   
-                  try {
-                    const brandingPromise = getOrganizationBranding(currentUser.organization.id);
-                    const brandingData = await Promise.race([brandingPromise, timeout]) as any;
-                    setBranding(brandingData);
-                  } catch (brandingError) {
-                    console.warn('Could not load branding:', brandingError);
-                    // Keep existing branding
-                  }
+                  // Load branding in background - don't block on this
+                  getOrganizationBranding(currentUser.organization.id)
+                    .then(setBranding)
+                    .catch(error => {
+                      console.warn('Could not load branding in background:', error);
+                      // Keep existing branding
+                    });
                 } else {
                   console.log('🏢 No organization data for user type:', currentUser.user_type);
                 }
@@ -276,8 +305,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 setIsAuthenticated(false);
               }
             } catch (error) {
-              console.error('Error handling auth state change:', error);
-              // Clear auth state on error to prevent infinite loops
+              console.error(`Error handling auth state change after ${Date.now() - startTime}ms:`, error);
+              
+              // Don't clear auth state immediately on timeout - give user another chance
+              if (error instanceof Error && error.message.includes('timeout')) {
+                console.warn('Auth state change timed out, keeping existing state for now');
+                return;
+              }
+              
+              // Clear auth state on other errors
               setUser(null);
               setOrganization(null);
               setIsAuthenticated(false);
@@ -302,7 +338,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
         }
         
-        // Always clear loading after handling auth state change
+        console.log(`[AuthProvider] Auth state change processed in ${Date.now() - startTime}ms`);
         setLoading(false);
       }, 0);
     });
