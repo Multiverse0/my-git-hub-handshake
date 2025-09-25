@@ -8,17 +8,6 @@ export interface SubscriptionPlan {
 }
 
 export const SUBSCRIPTION_PLANS: Record<string, SubscriptionPlan> = {
-  starter: {
-    id: 'starter',
-    name: 'Starter (Opp til 100 medlemmer)',
-    memberLimit: 100,
-    features: [
-      'Opptil 100 medlemmer',
-      'Treningslogg',
-      'QR-kode skanning',
-      'Medlemshåndtering'
-    ]
-  },
   start: {
     id: 'start',
     name: 'Start (Opp til 100 medlemmer)',
@@ -30,12 +19,12 @@ export const SUBSCRIPTION_PLANS: Record<string, SubscriptionPlan> = {
       'Medlemshåndtering'
     ]
   },
-  professional: {
-    id: 'professional',
-    name: 'Professional (Opp til 500 medlemmer)',
-    memberLimit: 500,
+  ubegrenset: {
+    id: 'ubegrenset',
+    name: 'Ubegrenset (Ubegr. antall medlemmer)',
+    memberLimit: -1,
     features: [
-      'Opptil 500 medlemmer',
+      'Ubegrenset antall medlemmer',
       'Alle grunnfunksjoner',
       'Avansert rapportering',
       'E-post notifikasjoner',
