@@ -811,6 +811,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      fix_all_member_links: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          action_taken: string
+          auth_user_id: string
+          linked: boolean
+          member_email: string
+          member_id: string
+        }[]
+      }
       get_current_user_member_id: {
         Args: Record<PropertyKey, never>
         Returns: string
