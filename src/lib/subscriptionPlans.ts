@@ -19,30 +19,6 @@ export const SUBSCRIPTION_PLANS: Record<string, SubscriptionPlan> = {
       'Medlemshåndtering'
     ]
   },
-  professional: {
-    id: 'professional',
-    name: 'Professional (Opp til 500 medlemmer)',
-    memberLimit: 500,
-    features: [
-      'Opptil 500 medlemmer',
-      'Alle grunnfunksjoner',
-      'Avansert rapportering',
-      'E-post notifikasjoner',
-      'Prioritert støtte'
-    ]
-  },
-  enterprise: {
-    id: 'enterprise',
-    name: 'Enterprise (Ubegrenset medlemmer)',
-    memberLimit: -1,
-    features: [
-      'Ubegrenset antall medlemmer',
-      'Alle funksjoner',
-      'API tilgang',
-      'Tilpassede integrasjoner',
-      'Dedikert support'
-    ]
-  },
   ubegrenset: {
     id: 'ubegrenset',
     name: 'Ubegrenset (Ubegr. antall medlemmer)',
