@@ -22,15 +22,13 @@ export const SUBSCRIPTION_PLANS: Record<string, SubscriptionPlan> = {
   ubegrenset: {
     id: 'ubegrenset',
     name: 'Ubegrenset (Ubegr. antall medlemmer)',
-    memberLimit: -1,
+    memberLimit: -1, // Unlimited
     features: [
       'Ubegrenset antall medlemmer',
-      'Alle grunnfunksjoner',
-      'Avansert rapportering',
-      'E-post notifikasjoner',
+      'Alle funksjoner',
       'Prioritert støtte'
     ]
-  },
+  }
 };
 
 export function getSubscriptionPlan(planId: string): SubscriptionPlan | null {
