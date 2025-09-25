@@ -83,7 +83,7 @@ export function Profile() {
         }
         
         // Load profile data with organization information
-        const { data: memberData, error } = await supabase
+        let { data: memberData, error } = await supabase
           .from('organization_members')
           .select(`
             *,
@@ -114,85 +114,49 @@ export function Profile() {
           
           // Try fallback lookup by email and attempt to repair the data
           if (user.email) {
-            console.log('🔧 Attempting to repair member linkage by email:', user.email);
+            console.log('🔧 Attempting to repair member linkage using case-insensitive matching:', user.email);
             
-            const { data: emailMemberData, error: emailError } = await supabase
-              .from('organization_members')
-              .select(`
-                *,
-                organizations (
-                  name,
-                  logo_url,
-                  primary_color,
-                  secondary_color
-                )
-              `)
-              .eq('email', user.email)
-              .eq('approved', true)
-              .eq('active', true)
-              .maybeSingle();
+            // Use the new database function for case-insensitive email matching
+            const { data: repairResult, error: repairError } = await supabase
+              .rpc('link_member_to_auth_user', { member_email: user.email });
 
-            if (emailMemberData && !emailError) {
-              console.log('✅ Found member by email, linking to auth user');
+            if (!repairError && repairResult) {
+              console.log('✅ Successfully repaired profile link using case-insensitive matching');
               
-              // Update the member record to link it to the auth user
-              const { error: updateError } = await supabase
+              // Retry loading the profile after repair
+              const { data: repairedMemberData, error: repairedError } = await supabase
                 .from('organization_members')
-                .update({ user_id: user.id })
-                .eq('id', emailMemberData.id);
+                .select(`
+                  *,
+                  organizations (
+                    name,
+                    logo_url,
+                    primary_color,
+                    secondary_color
+                  )
+                `)
+                .eq('user_id', user.id)
+                .eq('approved', true)
+                .eq('active', true)
+                .maybeSingle();
 
-              if (!updateError) {
-                // Use the repaired data
-                emailMemberData.user_id = user.id;
-                
-                // Continue with profile setup using the repaired data
-                setUserId(emailMemberData.id);
-                
-                const newProfileData: ProfileData = {
-                  name: emailMemberData.full_name || '',
-                  email: emailMemberData.email || '',
-                  memberNumber: emailMemberData.member_number || '',
-                  joinDate: emailMemberData.created_at ? new Date(emailMemberData.created_at).toLocaleDateString('nb-NO') : '',
-                  birthDate: emailMemberData.birth_date ? new Date(emailMemberData.birth_date).toLocaleDateString('nb-NO') : '',
-                  avatarUrl: emailMemberData.avatar_url || undefined,
-                  startkortUrl: emailMemberData.startkort_url || undefined,
-                  startkortFileName: emailMemberData.startkort_file_name || undefined,
-                  diplomaUrl: emailMemberData.diploma_url || undefined,
-                  diplomaFileName: emailMemberData.diploma_file_name || undefined,
-                  organizationName: emailMemberData.organizations?.name || 'Unknown Organization',
-                  organizationLogo: emailMemberData.organizations?.logo_url || undefined,
-                  role: emailMemberData.role || 'member',
-                };
-                
-                setProfileData(newProfileData);
-                setEditData(newProfileData);
-                setProfileRole(emailMemberData.role as 'super_user' | 'member' | 'admin' | 'range_officer' || 'member');
-                
-                if (emailMemberData.other_files && Array.isArray(emailMemberData.other_files)) {
-                  setOtherFiles(emailMemberData.other_files as { url: string; name: string; }[]);
-                } else {
-                  setOtherFiles([]);
-                }
-
-                toast({
-                  title: "Profile Repaired",
-                  description: "Your profile data has been successfully linked to your account.",
-                });
-
-                console.log('✅ Profile data repaired and loaded successfully');
-                return; // Exit early, we successfully loaded the profile
+              if (repairedMemberData && !repairedError) {
+                console.log('✅ Profile successfully loaded after repair');
+                memberData = repairedMemberData; // Use the repaired data
               }
             }
           }
-          
-          // If we get here, we couldn't find or repair the profile
-          console.log('❌ Could not find or repair member profile');
-          toast({
-            title: "Profile Setup Required",
-            description: "Your account exists but you need to join an organization or wait for admin approval. Please contact your administrator.",
-            variant: "destructive",
-          });
-          return;
+
+          // If we still don't have memberData after repair attempts
+          if (!memberData) {
+            console.log('❌ Could not find or repair member profile');
+            toast({
+              title: "Profile Setup Required",
+              description: "Your account exists but you need to join an organization or wait for admin approval. Please contact your administrator.",
+              variant: "destructive",
+            });
+            return;
+          }
         }
 
         // Validate that this organization_members record properly links to auth

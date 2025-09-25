@@ -545,12 +545,14 @@ export async function addExistingUserToOrganization(
   memberNumber: string,
   role: 'member' | 'admin' | 'range_officer' = 'member'
 ): Promise<ApiResponse<OrganizationMember>> {
+  // Normalize email to lowercase to prevent case-sensitivity issues
+  const normalizedEmail = email.toLowerCase();
   try {
-    // Check if user already exists in this organization
+    // Check if user already exists in this organization (case-insensitive)
     const { data: existingMember } = await supabase
       .from('organization_members')
       .select('id')
-      .eq('email', email)
+      .eq('email', normalizedEmail)
       .eq('organization_id', organizationId)
       .maybeSingle();
 
@@ -617,6 +619,9 @@ export async function registerOrganizationMember(
   organizationCode?: string,
   role: 'member' | 'admin' | 'range_officer' = 'member'
 ): Promise<ApiResponse<OrganizationMember>> {
+  // Normalize email to lowercase to prevent case-sensitivity issues
+  const normalizedEmail = email.toLowerCase();
+  
   try {
     // First, get the organization
     const orgResult = await getOrganizationBySlug(organizationSlug);
@@ -637,7 +642,7 @@ export async function registerOrganizationMember(
 
     // Create auth user first
     const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
@@ -661,7 +666,7 @@ export async function registerOrganizationMember(
       .insert({
         organization_id: organization.id,
         user_id: authData.user.id, // Add user_id to link to auth user
-        email,
+        email: normalizedEmail,
         full_name: fullName,
         member_number: memberNumber,
         role,
@@ -677,7 +682,7 @@ export async function registerOrganizationMember(
     // Send welcome email to new member
     try {
       await sendMemberWelcomeEmail(
-        email,
+        normalizedEmail,
         fullName,
         organization.name,
         organization.id,
