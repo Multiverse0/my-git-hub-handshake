@@ -770,6 +770,30 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_current_user_member_profile: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          active: boolean | null
+          approved: boolean | null
+          avatar_url: string | null
+          birth_date: string | null
+          created_at: string | null
+          diploma_file_name: string | null
+          diploma_url: string | null
+          email: string
+          full_name: string
+          id: string
+          member_number: string | null
+          organization_id: string
+          other_files: Json | null
+          password_hash: string | null
+          role: string | null
+          startkort_file_name: string | null
+          startkort_url: string | null
+          updated_at: string | null
+          user_id: string | null
+        }[]
+      }
       get_current_user_organization_id: {
         Args: Record<PropertyKey, never>
         Returns: string

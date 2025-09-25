@@ -443,72 +443,182 @@ export async function createOrganization(orgData: Partial<Organization>): Promis
 /**
  * Update organization logo
  */
+// Enhanced logo upload function with comprehensive error handling and validation
 export async function updateOrganizationLogo(
-  organizationId: string, 
+  organizationId: string,
   logoFile: File
 ): Promise<ApiResponse<string>> {
   try {
     console.log('Starting logo upload for organization:', organizationId);
     
-    // Validate file
+    // Validate inputs
+    if (!organizationId) {
+      return { error: 'Organisasjons-ID mangler' };
+    }
+    
     if (!logoFile) {
       return { error: 'Ingen fil valgt' };
     }
 
-    // Check file size (max 2MB)
-    if (logoFile.size > 2 * 1024 * 1024) {
-      return { error: 'Filen er for stor. Maksimal størrelse er 2MB.' };
+    // Enhanced file validation
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    if (logoFile.size > maxSize) {
+      return { error: `Filen er for stor (${(logoFile.size / 1024 / 1024).toFixed(1)}MB). Maksimal størrelse er 2MB.` };
     }
 
-    // Check file type
+    if (logoFile.size === 0) {
+      return { error: 'Filen er tom eller korrupt' };
+    }
+
+    // Comprehensive file type validation
     const allowedTypes = ['image/svg+xml', 'image/png', 'image/jpeg', 'image/jpg'];
-    if (!allowedTypes.includes(logoFile.type)) {
-      return { error: 'Ugyldig filtype. Kun SVG, PNG og JPG er tillatt.' };
+    const fileType = logoFile.type.toLowerCase();
+    
+    if (!allowedTypes.includes(fileType)) {
+      return { error: `Ugyldig filtype: ${fileType}. Kun SVG, PNG og JPG er tillatt.` };
     }
 
-    // Upload logo to storage
-    const fileExt = logoFile.name.split('.').pop();
-    const fileName = `${organizationId}-logo-${Date.now()}.${fileExt}`;
+    // Validate file extension matches MIME type
+    const fileExt = logoFile.name.split('.').pop()?.toLowerCase();
+    if (!fileExt) {
+      return { error: 'Kunne ikke bestemme filtype fra filnavn' };
+    }
+    
+    const expectedExts: Record<string, string[]> = {
+      'image/svg+xml': ['svg'],
+      'image/png': ['png'],
+      'image/jpeg': ['jpg', 'jpeg'],
+      'image/jpg': ['jpg', 'jpeg']
+    };
+
+    if (!expectedExts[fileType]?.includes(fileExt)) {
+      return { error: 'Filtype og filendelse stemmer ikke overens' };
+    }
+
+    // Check authentication and permissions
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { error: 'Du må være innlogget for å laste opp logo' };
+    }
+
+    // Verify user has permission to upload logo for this organization
+    const { data: memberData, error: memberError } = await supabase
+      .from('organization_members')
+      .select('role, organization_id')
+      .eq('user_id', user.id)
+      .eq('organization_id', organizationId)
+      .eq('approved', true)
+      .eq('active', true)
+      .single();
+
+    if (memberError || !memberData) {
+      return { error: 'Du har ikke tilgang til denne organisasjonen' };
+    }
+
+    if (memberData.role !== 'admin') {
+      // Check if user is super user
+      const { data: superUserData } = await supabase
+        .from('super_users')
+        .select('active')  
+        .eq('email', user.email || '')
+        .eq('active', true)
+        .single();
+
+      if (!superUserData) {
+        return { error: 'Kun administratorer kan laste opp organisasjonslogo' };
+      }
+    }
+
+    // Generate unique filename with timestamp  
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileName = `${organizationId}-logo-${timestamp}.${fileExt!}`; // fileExt is guaranteed to exist due to check above
     const filePath = `logos/${fileName}`;
 
-    console.log('Uploading file:', filePath);
+    console.log('Uploading file:', { filePath, size: logoFile.size, type: logoFile.type });
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('logos')
-      .upload(filePath, logoFile, {
-        upsert: true,
-        contentType: logoFile.type
-      });
+    // Upload to storage with retry logic
+    let uploadAttempt = 0;
+    const maxRetries = 3;
+    let uploadData;
+    let uploadError;
 
-    if (uploadError) {
-      console.error('Storage upload error:', uploadError);
-      return { error: `Upload feilet: ${uploadError.message}` };
+    while (uploadAttempt < maxRetries) {
+      uploadAttempt++;
+      
+      const result = await supabase.storage
+        .from('logos')
+        .upload(filePath, logoFile, {
+          upsert: true,
+          contentType: logoFile.type,
+          duplex: 'half'
+        });
+
+      uploadData = result.data;
+      uploadError = result.error;
+
+      if (!uploadError) break;
+
+      console.warn(`Upload attempt ${uploadAttempt} failed:`, uploadError);
+      
+      if (uploadAttempt === maxRetries) {
+        console.error('All upload attempts failed:', uploadError);
+        return { 
+          error: `Upload feilet etter ${maxRetries} forsøk: ${uploadError.message}` 
+        };
+      }
+
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, 1000 * uploadAttempt));
     }
 
     console.log('Upload successful:', uploadData);
 
-    // Get public URL
+    // Get public URL with validation
     const { data: { publicUrl } } = supabase.storage
       .from('logos')
-      .getPublicUrl(uploadData.path);
+      .getPublicUrl(uploadData!.path);
+
+    if (!publicUrl || !publicUrl.includes(uploadData!.path)) {
+      return { error: 'Kunne ikke generere offentlig URL for logoen' };
+    }
 
     console.log('Public URL generated:', publicUrl);
 
-    // Update organization record
+    // Update organization record with optimistic concurrency
     const { error: updateError } = await supabase
       .from('organizations')
-      .update({ logo_url: publicUrl })
+      .update({ 
+        logo_url: publicUrl,
+        updated_at: new Date().toISOString()
+      })
       .eq('id', organizationId);
 
     if (updateError) {
       console.error('Database update error:', updateError);
+      // Try to clean up uploaded file if database update fails
+      try {
+        await supabase.storage.from('logos').remove([uploadData!.path]);
+      } catch (cleanupError) {
+        console.warn('Failed to cleanup uploaded file:', cleanupError);
+      }
       return { error: `Database oppdatering feilet: ${updateError.message}` };
     }
 
     console.log('Logo update completed successfully');
     return { data: publicUrl };
+
   } catch (error) {
-    console.error('Error updating organization logo:', error);
+    console.error('Unexpected error in updateOrganizationLogo:', error);
+    
+    // Provide more specific error messages based on error type
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      return { error: 'Nettverksfeil. Sjekk internettforbindelsen og prøv igjen.' };
+    }
+    
+    if (error instanceof Error && error.message.includes('timeout')) {
+      return { error: 'Forespørselen tok for lang tid. Prøv igjen med en mindre fil.' };
+    }
+
     return { error: `Uventet feil: ${error instanceof Error ? error.message : 'Ukjent feil'}` };
   }
 }
