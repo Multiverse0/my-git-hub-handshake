@@ -469,54 +469,6 @@ export type Database = {
         }
         Relationships: []
       }
-      profiles: {
-        Row: {
-          avatar_url: string | null
-          created_at: string | null
-          diploma_file_name: string | null
-          diploma_url: string | null
-          email: string
-          full_name: string
-          id: string
-          member_number: string | null
-          other_files: Json | null
-          role: string | null
-          startkort_file_name: string | null
-          startkort_url: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          avatar_url?: string | null
-          created_at?: string | null
-          diploma_file_name?: string | null
-          diploma_url?: string | null
-          email: string
-          full_name: string
-          id: string
-          member_number?: string | null
-          other_files?: Json | null
-          role?: string | null
-          startkort_file_name?: string | null
-          startkort_url?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          avatar_url?: string | null
-          created_at?: string | null
-          diploma_file_name?: string | null
-          diploma_url?: string | null
-          email?: string
-          full_name?: string
-          id?: string
-          member_number?: string | null
-          other_files?: Json | null
-          role?: string | null
-          startkort_file_name?: string | null
-          startkort_url?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       range_locations: {
         Row: {
           created_at: string | null
@@ -795,13 +747,6 @@ export type Database = {
             columns: ["range_location_id"]
             isOneToOne: false
             referencedRelation: "range_locations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "training_sessions_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
