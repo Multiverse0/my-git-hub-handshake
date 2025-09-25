@@ -811,7 +811,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_current_user_email: {
+      get_current_user_member_id: {
         Args: Record<PropertyKey, never>
         Returns: string
       }
@@ -819,32 +819,11 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
-      get_organization_admins: {
-        Args: { org_id: string }
-        Returns: {
-          active: boolean
-          created_at: string
-          email: string
-          full_name: string
-          id: string
-          member_id: string
-          permissions: Json
-        }[]
-      }
-      get_user_email_preferences: {
-        Args: { user_member_id: string }
-        Returns: {
-          organization_announcements: boolean
-          password_notifications: boolean
-          role_change_notifications: boolean
-          training_notifications: boolean
-        }[]
-      }
-      get_user_member_id: {
+      is_current_user_organization_admin: {
         Args: Record<PropertyKey, never>
-        Returns: string
+        Returns: boolean
       }
-      is_user_organization_admin: {
+      is_current_user_super_user: {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
@@ -855,10 +834,6 @@ export type Database = {
           setting_value: string
         }
         Returns: string
-      }
-      set_user_context: {
-        Args: { user_email: string }
-        Returns: undefined
       }
       uid: {
         Args: Record<PropertyKey, never>
