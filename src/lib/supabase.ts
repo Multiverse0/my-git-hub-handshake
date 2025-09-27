@@ -1650,26 +1650,83 @@ export async function updateTrainingLocation(
 // =============================================================================
 
 /**
- * Upload profile image
+ * Upload profile image with enhanced error handling and authentication
  */
 export async function uploadProfileImage(file: File, memberId: string): Promise<string> {
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${memberId}-${Math.random()}.${fileExt}`;
-  const filePath = `profiles/${memberId}/${fileName}`;
+  try {
+    // Validate file size (5MB limit)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new Error('File size must be less than 5MB');
+    }
 
-  const { error: uploadError } = await supabase.storage
-    .from('profiles')
-    .upload(filePath, file);
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error('Please upload a valid image file (JPEG, PNG, WebP, or GIF)');
+    }
 
-  if (uploadError) {
-    throw uploadError;
+    // Check authentication
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('You must be logged in to upload images');
+    }
+
+    // Clean up old images first (remove previous uploads for this member)
+    try {
+      const { data: existingFiles } = await supabase.storage
+        .from('profiles')
+        .list(`profiles/${memberId}/`);
+
+      if (existingFiles && existingFiles.length > 0) {
+        const filesToDelete = existingFiles.map(f => `profiles/${memberId}/${f.name}`);
+        await supabase.storage
+          .from('profiles')
+          .remove(filesToDelete);
+      }
+    } catch (cleanupError) {
+      // Continue with upload even if cleanup fails
+      console.warn('Could not clean up old images:', cleanupError);
+    }
+
+    // Create unique filename
+    const fileExt = file.name.split('.').pop() || 'jpg';
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2);
+    const fileName = `avatar-${timestamp}-${random}.${fileExt}`;
+    const filePath = `profiles/${memberId}/${fileName}`;
+
+    // Upload the file
+    const { error: uploadError } = await supabase.storage
+      .from('profiles')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (uploadError) {
+      console.error('Upload error details:', uploadError);
+      throw new Error(`Failed to upload image: ${uploadError.message}`);
+    }
+
+    // Get the public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('profiles')
+      .getPublicUrl(filePath);
+
+    if (!publicUrl) {
+      throw new Error('Failed to get image URL after upload');
+    }
+
+    return publicUrl;
+
+  } catch (error) {
+    console.error('Profile image upload error:', error);
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error('An unexpected error occurred while uploading the image');
   }
-
-  const { data: { publicUrl } } = supabase.storage
-    .from('profiles')
-    .getPublicUrl(filePath);
-
-  return publicUrl;
 }
 
 /**

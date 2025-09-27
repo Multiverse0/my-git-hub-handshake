@@ -145,6 +145,11 @@ export function Profile() {
     if (acceptedFiles.length === 0) return;
     if (!user?.id || !user.member_profile?.id) {
       console.error('❌ No user ID available for avatar upload');
+      toast({
+        title: "Authentication Error",
+        description: "Please log in again to upload images",
+        variant: "destructive"
+      });
       return;
     }
 
@@ -152,28 +157,50 @@ export function Profile() {
       setUploadingAvatar(true);
       const file = acceptedFiles[0];
       
+      // Validate file before upload
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "File Too Large",
+          description: "File size must be less than 5MB",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        toast({
+          title: "Invalid File Type",
+          description: "Please upload a valid image file (JPEG, PNG, WebP, or GIF)",
+          variant: "destructive"
+        });
+        return;
+      }
+      
       // Upload to temporary location in storage only, don't save to database yet
       const imageUrl = await uploadProfileImage(file, user.member_profile.id);
       
       // Store in temporary state - don't update database yet
       setTempAvatarUrl(imageUrl);
-
+      
       toast({
         title: "Image Uploaded",
-        description: "Profile picture uploaded. Click Save to confirm changes.",
+        description: "Click Save to apply your new profile picture",
+        variant: "default"
       });
-      
+
     } catch (error) {
-      console.error('❌ Error uploading avatar:', error);
+      console.error('❌ Profile picture upload error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Could not upload profile picture. Please try again.';
       toast({
-        title: "Error",
-        description: "Could not upload profile picture. Please try again.",
-        variant: "destructive",
+        title: "Upload Failed",
+        description: errorMessage,
+        variant: "destructive"
       });
     } finally {
       setUploadingAvatar(false);
     }
-  }, [user, toast]);
+  }, [user?.id, user?.member_profile?.id, toast]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

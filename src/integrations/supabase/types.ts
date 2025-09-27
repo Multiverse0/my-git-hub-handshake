@@ -770,6 +770,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_current_user_member_id_for_storage: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       get_current_user_member_profile: {
         Args: Record<PropertyKey, never>
         Returns: {
