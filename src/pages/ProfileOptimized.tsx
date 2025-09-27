@@ -33,6 +33,8 @@ export function Profile() {
   const [uploadingDiploma, setUploadingDiploma] = useState(false);
   const [startkortError, setStartkortError] = useState<string | null>(null);
   const [diplomaError, setDiplomaError] = useState<string | null>(null);
+  const [tempAvatarUrl, setTempAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [profileData, setProfileData] = useState<ProfileData>({
     name: '',
     email: '',
@@ -147,25 +149,18 @@ export function Profile() {
     }
 
     try {
-      setIsLoading(true);
+      setUploadingAvatar(true);
       const file = acceptedFiles[0];
+      
+      // Upload to temporary location in storage only, don't save to database yet
       const imageUrl = await uploadProfileImage(file, user.member_profile.id);
       
-      // Update profile with new avatar URL
-      const { error } = await supabase
-        .from('organization_members')
-        .update({ avatar_url: imageUrl })
-        .eq('id', user.member_profile.id);
-
-      if (error) throw error;
-
-      // Update local state
-      setProfileData(prev => ({ ...prev, avatarUrl: imageUrl }));
-      setEditData(prev => ({ ...prev, avatarUrl: imageUrl }));
+      // Store in temporary state - don't update database yet
+      setTempAvatarUrl(imageUrl);
 
       toast({
-        title: "Success",
-        description: "Profile picture updated successfully.",
+        title: "Image Uploaded",
+        description: "Profile picture uploaded. Click Save to confirm changes.",
       });
       
     } catch (error) {
@@ -176,7 +171,7 @@ export function Profile() {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setUploadingAvatar(false);
     }
   }, [user, toast]);
 
@@ -253,13 +248,18 @@ export function Profile() {
       }
 
       // Update profile
-      const updateData = {
+      const updateData: any = {
         full_name: editData.name.trim(),
         email: editData.email.trim(),
         member_number: editData.memberNumber?.trim() || null,
         birth_date: birthDateISO,
         updated_at: new Date().toISOString()
       };
+
+      // Include avatar URL if there's a temporary one
+      if (tempAvatarUrl) {
+        updateData.avatar_url = tempAvatarUrl;
+      }
 
       const { data, error } = await supabase
         .from('organization_members')
@@ -280,6 +280,12 @@ export function Profile() {
       if (birthDateISO) {
         const birthDate = new Date(birthDateISO);
         updatedProfile.birthDate = birthDate.toLocaleDateString('nb-NO');
+      }
+      
+      // Update avatar URL from temp if it exists
+      if (tempAvatarUrl) {
+        updatedProfile.avatarUrl = tempAvatarUrl;
+        setTempAvatarUrl(null); // Clear temporary state
       }
       
       setProfileData(updatedProfile);
@@ -307,6 +313,16 @@ export function Profile() {
   const handleCancel = () => {
     setEditData(profileData);
     setIsEditing(false);
+    
+    // Clear temporary avatar and clean up if needed
+    if (tempAvatarUrl) {
+      setTempAvatarUrl(null);
+      // Note: Could implement cleanup of temporary files here if needed
+      toast({
+        title: "Changes Discarded",
+        description: "Profile picture changes have been discarded.",
+      });
+    }
   };
 
   // Handle file uploads (simplified)
@@ -474,24 +490,31 @@ export function Profile() {
                   isDragActive ? 'border-primary bg-primary/5' : 'border-muted-foreground/25 hover:border-primary'
                 }`}
               >
-                <input {...getInputProps()} />
-                {profileData.avatarUrl ? (
-                  <img 
-                    src={profileData.avatarUrl} 
-                    alt="Profile" 
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full rounded-full bg-muted flex items-center justify-center">
-                    <Camera className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                )}
-              </div>
-              {isLoading && (
-                <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-white" />
-                </div>
-              )}
+                 <input {...getInputProps()} />
+                 {tempAvatarUrl || profileData.avatarUrl ? (
+                   <img 
+                     src={tempAvatarUrl || profileData.avatarUrl} 
+                     alt="Profile" 
+                     className={`w-full h-full rounded-full object-cover ${
+                       tempAvatarUrl ? 'ring-2 ring-orange-500 ring-offset-2' : ''
+                     }`}
+                   />
+                 ) : (
+                   <div className="w-full h-full rounded-full bg-muted flex items-center justify-center">
+                     <Camera className="h-8 w-8 text-muted-foreground" />
+                   </div>
+                 )}
+               </div>
+               {(uploadingAvatar || isLoading) && (
+                 <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
+                   <Loader2 className="h-6 w-6 animate-spin text-white" />
+                 </div>
+               )}
+               {tempAvatarUrl && (
+                 <div className="absolute -top-1 -right-1 bg-orange-500 text-white rounded-full p-1">
+                   <Pencil className="h-3 w-3" />
+                 </div>
+               )}
             </div>
             
             <div className="flex-1">
@@ -505,9 +528,15 @@ export function Profile() {
                 <span className="flex items-center">
                   <Calendar className="h-4 w-4 mr-1" />
                   Joined {profileData.joinDate}
-                </span>
-              </div>
-            </div>
+                 </span>
+               </div>
+               {tempAvatarUrl && (
+                 <div className="mt-2 text-sm text-orange-600 dark:text-orange-400 flex items-center">
+                   <Pencil className="h-3 w-3 mr-1" />
+                   Profile picture changed (click Save to confirm)
+                 </div>
+               )}
+             </div>
 
             <div className="flex space-x-2">
               {!isEditing ? (
