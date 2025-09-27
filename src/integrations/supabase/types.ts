@@ -115,6 +115,10 @@ export type Database = {
           organization_announcements: boolean
           password_notifications: boolean
           role_change_notifications: boolean
+          sms_notifications: boolean
+          sms_organization_announcements: boolean
+          sms_role_change_notifications: boolean
+          sms_training_notifications: boolean
           training_notifications: boolean
           updated_at: string
         }
@@ -125,6 +129,10 @@ export type Database = {
           organization_announcements?: boolean
           password_notifications?: boolean
           role_change_notifications?: boolean
+          sms_notifications?: boolean
+          sms_organization_announcements?: boolean
+          sms_role_change_notifications?: boolean
+          sms_training_notifications?: boolean
           training_notifications?: boolean
           updated_at?: string
         }
@@ -135,6 +143,10 @@ export type Database = {
           organization_announcements?: boolean
           password_notifications?: boolean
           role_change_notifications?: boolean
+          sms_notifications?: boolean
+          sms_organization_announcements?: boolean
+          sms_role_change_notifications?: boolean
+          sms_training_notifications?: boolean
           training_notifications?: boolean
           updated_at?: string
         }
@@ -298,6 +310,7 @@ export type Database = {
           organization_id: string
           other_files: Json | null
           password_hash: string | null
+          phone_number: string | null
           role: string | null
           startkort_file_name: string | null
           startkort_url: string | null
@@ -319,6 +332,7 @@ export type Database = {
           organization_id: string
           other_files?: Json | null
           password_hash?: string | null
+          phone_number?: string | null
           role?: string | null
           startkort_file_name?: string | null
           startkort_url?: string | null
@@ -340,6 +354,7 @@ export type Database = {
           organization_id?: string
           other_files?: Json | null
           password_hash?: string | null
+          phone_number?: string | null
           role?: string | null
           startkort_file_name?: string | null
           startkort_url?: string | null
@@ -791,6 +806,7 @@ export type Database = {
           organization_id: string
           other_files: Json | null
           password_hash: string | null
+          phone_number: string | null
           role: string | null
           startkort_file_name: string | null
           startkort_url: string | null
@@ -834,6 +850,10 @@ export type Database = {
       uid: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      validate_phone_number: {
+        Args: { phone: string }
+        Returns: boolean
       }
     }
     Enums: {
