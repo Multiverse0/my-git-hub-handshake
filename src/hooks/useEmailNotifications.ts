@@ -5,7 +5,6 @@ import {
   sendRoleUpdateEmail,
   sendAccountSuspensionEmail
 } from '../lib/emailService';
-import { sendSMSNotification } from '../lib/notificationApiService';
 
 export function useEmailNotifications() {
   useEffect(() => {
@@ -108,8 +107,8 @@ export function useEmailNotifications() {
 
       if (!org) return;
 
-      // Send email notification if enabled
-      if (preferences?.training_notifications) {
+      // Send combined email + SMS notification if either is enabled
+      if (preferences?.training_notifications || preferences?.sms_training_notifications) {
         await sendTrainingVerificationEmail(
           member.email,
           member.full_name,
@@ -121,21 +120,8 @@ export function useEmailNotifications() {
             discipline: session.discipline || 'Ukjent',
             verifiedBy: session.verified_by || 'Administrator',
             notes: session.notes
-          }
-        );
-      }
-
-      // Send SMS notification if enabled and phone number available
-      if (preferences?.sms_training_notifications && member.phone_number) {
-        const smsMessage = `${org.name}: Din treningsøkt er godkjent! Dato: ${new Date(session.start_time).toLocaleDateString('no-NO')}, Varighet: ${session.duration_minutes || 0} min, Disiplin: ${session.discipline || 'Ukjent'}`;
-        
-        await sendSMSNotification(
-          {
-            id: member.email,
-            email: member.email,
-            number: member.phone_number
           },
-          smsMessage
+          preferences?.sms_training_notifications && member.phone_number ? member.phone_number : undefined
         );
       }
     } catch (error) {
@@ -160,35 +146,16 @@ export function useEmailNotifications() {
 
       const loginUrl = `${window.location.origin}/login?org=${org.slug}`;
 
-      // Send email notification if enabled
-      if (preferences?.role_change_notifications) {
+      // Send combined email + SMS notification if either is enabled
+      if (preferences?.role_change_notifications || preferences?.sms_role_change_notifications) {
         await sendRoleUpdateEmail(
           member.email,
           member.full_name,
           org.name,
           member.organization_id,
           member.role,
-          loginUrl
-        );
-      }
-
-      // Send SMS notification if enabled and phone number available
-      if (preferences?.sms_role_change_notifications && member.phone_number) {
-        const roleLabels = {
-          'admin': 'Administrator',
-          'range_officer': 'Baneleder',
-          'member': 'Medlem'
-        };
-        const roleName = roleLabels[member.role as keyof typeof roleLabels] || member.role;
-        const smsMessage = `${org.name}: Din rolle har blitt oppdatert til ${roleName}. Logg inn på ${loginUrl}`;
-        
-        await sendSMSNotification(
-          {
-            id: member.email,
-            email: member.email,
-            number: member.phone_number
-          },
-          smsMessage
+          loginUrl,
+          preferences?.sms_role_change_notifications && member.phone_number ? member.phone_number : undefined
         );
       }
     } catch (error) {
@@ -209,11 +176,14 @@ export function useEmailNotifications() {
 
       if (!org) return;
 
+      // Always send combined notification for security (includes SMS if phone available)
       await sendAccountSuspensionEmail(
         member.email,
         member.full_name,
         org.name,
-        member.organization_id
+        member.organization_id,
+        undefined, // suspensionReason
+        member.phone_number || undefined
       );
     } catch (error) {
       console.error('Error sending account suspension email:', error);

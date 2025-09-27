@@ -1,7 +1,8 @@
-import { sendEmailNotification } from './notificationApiService';
+import { sendCombinedNotification } from './notificationApiService';
 
 export interface EmailData {
   to: string;
+  phoneNumber?: string;
   template: 'welcome_admin' | 'welcome_member' | 'member_approved' | 'password_reset' | 'training_verified' | 'training_rejected' | 'role_updated' | 'password_changed' | 'account_suspended' | 'organization_announcement';
   data: {
     organizationName: string;
@@ -39,27 +40,34 @@ export interface EmailResult {
 }
 
 /**
- * Send email using NotificationAPI
+ * Send email using NotificationAPI (supports combined email + SMS)
  */
 export async function sendEmail(emailData: EmailData): Promise<EmailResult> {
   try {
-    console.log('📧 Sending email via NotificationAPI:', {
+    console.log('📧 Sending notification via NotificationAPI:', {
       to: emailData.to,
       template: emailData.template,
-      organizationId: emailData.organizationId
+      organizationId: emailData.organizationId,
+      hasPhone: !!emailData.phoneNumber
     });
 
     const subject = getEmailSubject(emailData.template, emailData.data);
     const htmlContent = generateEmailContent(emailData.template, emailData.data);
+    const smsContent = emailData.phoneNumber ? generateSMSContent(emailData.template, emailData.data) : undefined;
     
-    const notificationResult = await sendEmailNotification(
-      { id: emailData.to, email: emailData.to },
+    const notificationResult = await sendCombinedNotification(
+      { 
+        id: emailData.to, 
+        email: emailData.to,
+        number: emailData.phoneNumber
+      },
       subject,
-      htmlContent
+      htmlContent,
+      smsContent
     );
 
     if (notificationResult.success) {
-      console.log('✅ Email sent successfully via NotificationAPI');
+      console.log('✅ Notification sent successfully via NotificationAPI');
       return {
         success: true,
         provider: 'notificationapi',
@@ -70,7 +78,7 @@ export async function sendEmail(emailData: EmailData): Promise<EmailResult> {
     console.error('❌ NotificationAPI failed:', notificationResult.error);
     return {
       success: false,
-      error: notificationResult.error || 'Failed to send email via NotificationAPI'
+      error: notificationResult.error || 'Failed to send notification via NotificationAPI'
     };
 
   } catch (error) {
@@ -91,10 +99,12 @@ export async function sendAdminWelcomeEmail(
   organizationName: string,
   organizationId: string,
   password: string,
-  loginUrl: string
+  loginUrl: string,
+  phoneNumber?: string
 ): Promise<EmailResult> {
   return sendEmail({
     to: adminEmail,
+    phoneNumber,
     template: 'welcome_admin',
     data: {
       organizationName,
@@ -115,10 +125,12 @@ export async function sendMemberWelcomeEmail(
   memberName: string,
   organizationName: string,
   organizationId: string,
-  memberNumber?: string
+  memberNumber?: string,
+  phoneNumber?: string
 ): Promise<EmailResult> {
   return sendEmail({
     to: memberEmail,
+    phoneNumber,
     template: 'welcome_member',
     data: {
       organizationName,
@@ -140,10 +152,12 @@ export async function sendMemberApprovalEmail(
   organizationId: string,
   password: string,
   loginUrl: string,
-  adminName: string
+  adminName: string,
+  phoneNumber?: string
 ): Promise<EmailResult> {
   return sendEmail({
     to: memberEmail,
+    phoneNumber,
     template: 'member_approved',
     data: {
       organizationName,
@@ -171,10 +185,12 @@ export async function sendTrainingVerificationEmail(
     discipline: string;
     verifiedBy: string;
     notes?: string;
-  }
+  },
+  phoneNumber?: string
 ): Promise<EmailResult> {
   return sendEmail({
     to: memberEmail,
+    phoneNumber,
     template: 'training_verified',
     data: {
       organizationName,
@@ -199,10 +215,12 @@ export async function sendTrainingRejectionEmail(
     discipline: string;
     verifiedBy: string;
     rejectionReason?: string;
-  }
+  },
+  phoneNumber?: string
 ): Promise<EmailResult> {
   return sendEmail({
     to: memberEmail,
+    phoneNumber,
     template: 'training_rejected',
     data: {
       organizationName,
@@ -222,7 +240,8 @@ export async function sendRoleUpdateEmail(
   organizationName: string,
   organizationId: string,
   newRole: string,
-  loginUrl: string
+  loginUrl: string,
+  phoneNumber?: string
 ): Promise<EmailResult> {
   const roleLabels = {
     'admin': 'Administrator',
@@ -232,6 +251,7 @@ export async function sendRoleUpdateEmail(
 
   return sendEmail({
     to: memberEmail,
+    phoneNumber,
     template: 'role_updated',
     data: {
       organizationName,
@@ -250,10 +270,12 @@ export async function sendPasswordChangeConfirmationEmail(
   memberEmail: string,
   memberName: string,
   organizationName: string,
-  organizationId: string
+  organizationId: string,
+  phoneNumber?: string
 ): Promise<EmailResult> {
   return sendEmail({
     to: memberEmail,
+    phoneNumber,
     template: 'password_changed',
     data: {
       organizationName,
@@ -272,10 +294,12 @@ export async function sendAccountSuspensionEmail(
   memberName: string,
   organizationName: string,
   organizationId: string,
-  suspensionReason?: string
+  suspensionReason?: string,
+  phoneNumber?: string
 ): Promise<EmailResult> {
   return sendEmail({
     to: memberEmail,
+    phoneNumber,
     template: 'account_suspended',
     data: {
       organizationName,
@@ -295,10 +319,12 @@ export async function sendOrganizationAnnouncementEmail(
   organizationName: string,
   organizationId: string,
   announcementTitle: string,
-  announcementContent: string
+  announcementContent: string,
+  phoneNumber?: string
 ): Promise<EmailResult> {
   return sendEmail({
     to: memberEmail,
+    phoneNumber,
     template: 'organization_announcement',
     data: {
       organizationName,
@@ -333,7 +359,7 @@ export async function testEmailConfiguration(): Promise<EmailResult> {
   try {
     console.log('🧪 Testing NotificationAPI configuration...');
     
-    const notificationResult = await sendEmailNotification(
+    const notificationResult = await sendCombinedNotification(
       { id: 'test@example.com', email: 'test@example.com' },
       'Test Email - AKTIVLOGG',
       '<h1>Test Email</h1><p>This is a test email from AKTIVLOGG using NotificationAPI.</p>'
@@ -403,6 +429,17 @@ function generateEmailContent(template: EmailData['template'], data: any): strin
     border-radius: 5px;
   `;
 
+  const buttonStyle = `
+    background-color: #FFD700;
+    color: #1F2937;
+    padding: 12px 24px;
+    text-decoration: none;
+    border-radius: 5px;
+    display: inline-block;
+    font-weight: bold;
+    margin: 10px 0;
+  `;
+
   const templates = {
     'welcome_admin': `
       <div style="${baseStyle}">
@@ -417,7 +454,39 @@ function generateEmailContent(template: EmailData['template'], data: any): strin
             <li>Email: ${data.email}</li>
             <li>Password: ${data.password}</li>
           </ul>
-          <p><a href="${data.loginUrl}" style="background-color: #FFD700; color: #1F2937; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Login to Dashboard</a></p>
+          <p><a href="${data.loginUrl}" style="${buttonStyle}">Login to Dashboard</a></p>
+        </div>
+      </div>
+    `,
+    'welcome_member': `
+      <div style="${baseStyle}">
+        <div style="${headerStyle}">
+          <h1>Welcome to ${data.organizationName}</h1>
+        </div>
+        <div style="${contentStyle}">
+          <p>Hello ${data.recipientName},</p>
+          <p>Thank you for registering with ${data.organizationName}. Your membership application has been received and is currently under review.</p>
+          ${data.memberNumber ? `<p><strong>Member Number:</strong> ${data.memberNumber}</p>` : ''}
+          <p>You will receive a confirmation email once your membership has been approved by an administrator.</p>
+          <p>Best regards,<br/>${data.organizationName}</p>
+        </div>
+      </div>
+    `,
+    'member_approved': `
+      <div style="${baseStyle}">
+        <div style="${headerStyle}">
+          <h1>Membership Approved!</h1>
+        </div>
+        <div style="${contentStyle}">
+          <p>Hello ${data.recipientName},</p>
+          <p>Great news! Your membership application for ${data.organizationName} has been approved by ${data.adminName}.</p>
+          <p><strong>Login Details:</strong></p>
+          <ul>
+            <li>Email: ${data.email}</li>
+            <li>Password: ${data.password}</li>
+          </ul>
+          <p><a href="${data.loginUrl}" style="${buttonStyle}">Login to Your Account</a></p>
+          <p>Welcome to ${data.organizationName}!</p>
         </div>
       </div>
     `,
@@ -430,16 +499,106 @@ function generateEmailContent(template: EmailData['template'], data: any): strin
           <p>Hello ${data.recipientName},</p>
           <p>Your training session has been verified:</p>
           <ul>
-            <li>Date: ${data.trainingDate}</li>
-            <li>Duration: ${data.duration} minutes</li>
-            <li>Discipline: ${data.discipline}</li>
-            <li>Verified by: ${data.verifiedBy}</li>
-            ${data.notes ? `<li>Notes: ${data.notes}</li>` : ''}
+            <li><strong>Date:</strong> ${data.trainingDate}</li>
+            <li><strong>Duration:</strong> ${data.duration} minutes</li>
+            <li><strong>Discipline:</strong> ${data.discipline}</li>
+            <li><strong>Verified by:</strong> ${data.verifiedBy}</li>
+            ${data.notes ? `<li><strong>Notes:</strong> ${data.notes}</li>` : ''}
           </ul>
+          <p>Keep up the great work!</p>
+          <p>Best regards,<br/>${data.organizationName}</p>
         </div>
       </div>
     `,
-    // Add more templates as needed
+    'training_rejected': `
+      <div style="${baseStyle}">
+        <div style="${headerStyle}" style="background-color: #FEE2E2; color: #DC2626;">
+          <h1>Training Session Rejected</h1>
+        </div>
+        <div style="${contentStyle}">
+          <p>Hello ${data.recipientName},</p>
+          <p>Unfortunately, your training session has been rejected:</p>
+          <ul>
+            <li><strong>Date:</strong> ${data.trainingDate}</li>
+            <li><strong>Duration:</strong> ${data.duration} minutes</li>
+            <li><strong>Discipline:</strong> ${data.discipline}</li>
+            <li><strong>Reviewed by:</strong> ${data.verifiedBy}</li>
+            ${data.rejectionReason ? `<li><strong>Reason:</strong> ${data.rejectionReason}</li>` : ''}
+          </ul>
+          <p>Please contact your administrator if you have questions about this decision.</p>
+          <p>Best regards,<br/>${data.organizationName}</p>
+        </div>
+      </div>
+    `,
+    'role_updated': `
+      <div style="${baseStyle}">
+        <div style="${headerStyle}">
+          <h1>Role Updated</h1>
+        </div>
+        <div style="${contentStyle}">
+          <p>Hello ${data.recipientName},</p>
+          <p>Your role in ${data.organizationName} has been updated to <strong>${data.newRole}</strong>.</p>
+          <p>Your new permissions are now active. Please log in to see your updated access.</p>
+          <p><a href="${data.loginUrl}" style="${buttonStyle}">Login to Your Account</a></p>
+          <p>Best regards,<br/>${data.organizationName}</p>
+        </div>
+      </div>
+    `,
+    'password_changed': `
+      <div style="${baseStyle}">
+        <div style="${headerStyle}">
+          <h1>Password Changed</h1>
+        </div>
+        <div style="${contentStyle}">
+          <p>Hello ${data.recipientName},</p>
+          <p>Your password for ${data.organizationName} was successfully changed on ${data.changeTime}.</p>
+          <p>If you did not make this change, please contact your administrator immediately.</p>
+          <p>Best regards,<br/>${data.organizationName}</p>
+        </div>
+      </div>
+    `,
+    'account_suspended': `
+      <div style="${baseStyle}">
+        <div style="${headerStyle}" style="background-color: #FEE2E2; color: #DC2626;">
+          <h1>Account Suspended</h1>
+        </div>
+        <div style="${contentStyle}">
+          <p>Hello ${data.recipientName},</p>
+          <p>Your account with ${data.organizationName} has been suspended.</p>
+          ${data.suspensionReason ? `<p><strong>Reason:</strong> ${data.suspensionReason}</p>` : ''}
+          <p>Please contact your administrator for more information.</p>
+          <p>Best regards,<br/>${data.organizationName}</p>
+        </div>
+      </div>
+    `,
+    'organization_announcement': `
+      <div style="${baseStyle}">
+        <div style="${headerStyle}">
+          <h1>${data.announcementTitle}</h1>
+        </div>
+        <div style="${contentStyle}">
+          <p>Hello ${data.recipientName},</p>
+          <div style="margin: 20px 0;">
+            ${data.announcementContent.replace(/\n/g, '<br/>')}
+          </div>
+          <p>Best regards,<br/>${data.organizationName}</p>
+        </div>
+      </div>
+    `,
+    'password_reset': `
+      <div style="${baseStyle}">
+        <div style="${headerStyle}">
+          <h1>Password Reset</h1>
+        </div>
+        <div style="${contentStyle}">
+          <p>Hello ${data.recipientName},</p>
+          <p>You have requested a password reset for your ${data.organizationName} account.</p>
+          <p><a href="${data.loginUrl}" style="${buttonStyle}">Reset Your Password</a></p>
+          <p>If you did not request this reset, please ignore this email.</p>
+          <p>Best regards,<br/>${data.organizationName}</p>
+        </div>
+      </div>
+    `
   };
 
   return templates[template as keyof typeof templates] || `
@@ -453,4 +612,22 @@ function generateEmailContent(template: EmailData['template'], data: any): strin
       </div>
     </div>
   `;
+}
+
+// Generate SMS content for notifications
+function generateSMSContent(template: EmailData['template'], data: any): string {
+  const smsTemplates = {
+    'welcome_admin': `${data.organizationName}: Du har fått administrator tilgang. Logg inn med ${data.email}`,
+    'welcome_member': `${data.organizationName}: Takk for registrering! Din medlemskap er under vurdering.`,
+    'member_approved': `${data.organizationName}: Medlemskap godkjent! Logg inn med ${data.email} på ${data.loginUrl}`,
+    'training_verified': `${data.organizationName}: Treningsøkt godkjent! ${data.trainingDate}, ${data.duration} min, ${data.discipline}`,
+    'training_rejected': `${data.organizationName}: Treningsøkt avvist. ${data.trainingDate}, ${data.discipline}. Kontakt administrator.`,
+    'role_updated': `${data.organizationName}: Din rolle er oppdatert til ${data.newRole}. Logg inn for å se nye tilganger.`,
+    'password_changed': `${data.organizationName}: Passordet ditt ble endret ${data.changeTime}. Kontakt administrator hvis dette ikke var deg.`,
+    'account_suspended': `${data.organizationName}: Din konto er suspendert. Kontakt administrator for mer informasjon.`,
+    'organization_announcement': `${data.organizationName}: ${data.announcementTitle}`,
+    'password_reset': `${data.organizationName}: Passord reset forespurt. Bruk lenken i eposten for å tilbakestille.`
+  };
+
+  return smsTemplates[template] || `${data.organizationName}: Du har mottatt en notifikasjon.`;
 }
