@@ -3,11 +3,5 @@ project_id = "lwhrtzlpxgpmozrcxtrw"
 [functions.manage-email-config]
 verify_jwt = false
 
-[functions.send-email]
-verify_jwt = false
-
-[functions.send-mailgun-email]
-verify_jwt = false
-
 [functions.send-notification-api]
 verify_jwt = false

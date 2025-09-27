@@ -1,4 +1,3 @@
-import { supabase } from './supabase';
 import { sendEmailNotification } from './notificationApiService';
 
 export interface EmailData {
@@ -40,17 +39,16 @@ export interface EmailResult {
 }
 
 /**
- * Send email using NotificationAPI (preferred) with Supabase Edge Function fallback
+ * Send email using NotificationAPI
  */
 export async function sendEmail(emailData: EmailData): Promise<EmailResult> {
   try {
-    console.log('📧 Sending email:', {
+    console.log('📧 Sending email via NotificationAPI:', {
       to: emailData.to,
       template: emailData.template,
       organizationId: emailData.organizationId
     });
 
-    // Try NotificationAPI first
     const subject = getEmailSubject(emailData.template, emailData.data);
     const htmlContent = generateEmailContent(emailData.template, emailData.data);
     
@@ -69,36 +67,10 @@ export async function sendEmail(emailData: EmailData): Promise<EmailResult> {
       };
     }
 
-    console.warn('⚠️ NotificationAPI failed, falling back to Supabase:', notificationResult.error);
-
-    // Fallback to original Supabase edge function
-    const { data, error } = await supabase.functions.invoke('send-email', {
-      body: emailData
-    });
-
-    if (error) {
-      console.error('❌ Email sending failed:', error);
-      return {
-        success: false,
-        error: error.message || 'Failed to send email'
-      };
-    }
-
-    // Handle response from Edge Function
-    if (data && typeof data === 'object') {
-      if (data.success === false) {
-        console.error('❌ Email service error:', data.error);
-        return {
-          success: false,
-          error: data.error || 'Email service error'
-        };
-      }
-    }
-
-    console.log('✅ Email sent successfully via fallback:', data);
+    console.error('❌ NotificationAPI failed:', notificationResult.error);
     return {
-      success: true,
-      provider: data?.provider || 'supabase'
+      success: false,
+      error: notificationResult.error || 'Failed to send email via NotificationAPI'
     };
 
   } catch (error) {
@@ -355,11 +327,12 @@ export function generateLoginUrl(organizationSlug: string): string {
 }
 
 /**
- * Test email configuration (NotificationAPI + Supabase fallback)
+ * Test email configuration (NotificationAPI only)
  */
 export async function testEmailConfiguration(): Promise<EmailResult> {
   try {
-    // Test NotificationAPI first
+    console.log('🧪 Testing NotificationAPI configuration...');
+    
     const notificationResult = await sendEmailNotification(
       { id: 'test@example.com', email: 'test@example.com' },
       'Test Email - AKTIVLOGG',
@@ -367,6 +340,7 @@ export async function testEmailConfiguration(): Promise<EmailResult> {
     );
 
     if (notificationResult.success) {
+      console.log('✅ NotificationAPI test successful');
       return {
         success: true,
         provider: 'notificationapi',
@@ -374,46 +348,13 @@ export async function testEmailConfiguration(): Promise<EmailResult> {
       };
     }
 
-    console.warn('NotificationAPI test failed, testing fallback:', notificationResult.error);
-
-    // Test Supabase fallback
-    const { data, error } = await supabase.functions.invoke('send-email', {
-      body: {
-        to: 'test@example.com',
-        template: 'welcome_admin',
-        data: {
-          organizationName: 'Test Organization',
-          recipientName: 'Test User',
-          email: 'test@example.com',
-          password: 'test123',
-          loginUrl: 'https://example.com/login'
-        },
-        organizationId: 'test-org',
-        test: true // Special flag for testing
-      }
-    });
-
-    if (error) {
-      return {
-        success: false,
-        error: error.message || 'Test failed'
-      };
-    }
-
-    // Handle response from Edge Function
-    if (data && typeof data === 'object') {
-      return {
-        success: data.success || false,
-        error: data.error,
-        provider: data.provider || 'supabase'
-      };
-    }
-
+    console.error('❌ NotificationAPI test failed:', notificationResult.error);
     return {
-      success: true,
-      provider: data?.provider || 'supabase'
+      success: false,
+      error: notificationResult.error || 'NotificationAPI test failed'
     };
   } catch (error) {
+    console.error('❌ Email configuration test error:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Test failed'
