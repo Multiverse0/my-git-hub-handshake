@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { sendEmailNotification } from './notificationApiService';
 
 export interface EmailData {
   to: string;
@@ -31,10 +32,15 @@ export interface EmailResult {
   success: boolean;
   error?: string;
   provider?: string;
+  messageId?: string;
+  smsResult?: {
+    success: boolean;
+    error?: string;
+  };
 }
 
 /**
- * Send email using Supabase Edge Function
+ * Send email using NotificationAPI (preferred) with Supabase Edge Function fallback
  */
 export async function sendEmail(emailData: EmailData): Promise<EmailResult> {
   try {
@@ -44,6 +50,28 @@ export async function sendEmail(emailData: EmailData): Promise<EmailResult> {
       organizationId: emailData.organizationId
     });
 
+    // Try NotificationAPI first
+    const subject = getEmailSubject(emailData.template, emailData.data);
+    const htmlContent = generateEmailContent(emailData.template, emailData.data);
+    
+    const notificationResult = await sendEmailNotification(
+      { id: emailData.to, email: emailData.to },
+      subject,
+      htmlContent
+    );
+
+    if (notificationResult.success) {
+      console.log('✅ Email sent successfully via NotificationAPI');
+      return {
+        success: true,
+        provider: 'notificationapi',
+        messageId: notificationResult.messageId
+      };
+    }
+
+    console.warn('⚠️ NotificationAPI failed, falling back to Supabase:', notificationResult.error);
+
+    // Fallback to original Supabase edge function
     const { data, error } = await supabase.functions.invoke('send-email', {
       body: emailData
     });
@@ -67,10 +95,10 @@ export async function sendEmail(emailData: EmailData): Promise<EmailResult> {
       }
     }
 
-    console.log('✅ Email sent successfully:', data);
+    console.log('✅ Email sent successfully via fallback:', data);
     return {
       success: true,
-      provider: data?.provider
+      provider: data?.provider || 'supabase'
     };
 
   } catch (error) {
@@ -327,10 +355,28 @@ export function generateLoginUrl(organizationSlug: string): string {
 }
 
 /**
- * Test email configuration
+ * Test email configuration (NotificationAPI + Supabase fallback)
  */
 export async function testEmailConfiguration(): Promise<EmailResult> {
   try {
+    // Test NotificationAPI first
+    const notificationResult = await sendEmailNotification(
+      { id: 'test@example.com', email: 'test@example.com' },
+      'Test Email - AKTIVLOGG',
+      '<h1>Test Email</h1><p>This is a test email from AKTIVLOGG using NotificationAPI.</p>'
+    );
+
+    if (notificationResult.success) {
+      return {
+        success: true,
+        provider: 'notificationapi',
+        messageId: notificationResult.messageId
+      };
+    }
+
+    console.warn('NotificationAPI test failed, testing fallback:', notificationResult.error);
+
+    // Test Supabase fallback
     const { data, error } = await supabase.functions.invoke('send-email', {
       body: {
         to: 'test@example.com',
@@ -359,13 +405,13 @@ export async function testEmailConfiguration(): Promise<EmailResult> {
       return {
         success: data.success || false,
         error: data.error,
-        provider: data.provider
+        provider: data.provider || 'supabase'
       };
     }
 
     return {
       success: true,
-      provider: data?.provider
+      provider: data?.provider || 'supabase'
     };
   } catch (error) {
     return {
@@ -373,4 +419,97 @@ export async function testEmailConfiguration(): Promise<EmailResult> {
       error: error instanceof Error ? error.message : 'Test failed'
     };
   }
+}
+
+// Helper functions for email content generation
+function getEmailSubject(template: EmailData['template'], data: any): string {
+  const subjects = {
+    'welcome_admin': `Welcome to ${data.organizationName} - Administrator Access`,
+    'welcome_member': `Welcome to ${data.organizationName}`,
+    'member_approved': `Your ${data.organizationName} membership has been approved`,
+    'password_reset': `Password Reset - ${data.organizationName}`,
+    'training_verified': `Training Session Verified - ${data.organizationName}`,
+    'training_rejected': `Training Session Rejected - ${data.organizationName}`,
+    'role_updated': `Your role has been updated - ${data.organizationName}`,
+    'password_changed': `Password Changed - ${data.organizationName}`,
+    'account_suspended': `Account Suspended - ${data.organizationName}`,
+    'organization_announcement': `${data.announcementTitle} - ${data.organizationName}`
+  };
+  return subjects[template] || `Notification from ${data.organizationName}`;
+}
+
+function generateEmailContent(template: EmailData['template'], data: any): string {
+  const baseStyle = `
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+  `;
+
+  const headerStyle = `
+    background-color: #FFD700;
+    color: #1F2937;
+    padding: 20px;
+    text-align: center;
+    margin-bottom: 20px;
+  `;
+
+  const contentStyle = `
+    background-color: #f9f9f9;
+    padding: 20px;
+    border-radius: 5px;
+  `;
+
+  const templates = {
+    'welcome_admin': `
+      <div style="${baseStyle}">
+        <div style="${headerStyle}">
+          <h1>Welcome Administrator</h1>
+        </div>
+        <div style="${contentStyle}">
+          <p>Hello ${data.recipientName},</p>
+          <p>You have been granted administrator access to ${data.organizationName}.</p>
+          <p><strong>Login Details:</strong></p>
+          <ul>
+            <li>Email: ${data.email}</li>
+            <li>Password: ${data.password}</li>
+          </ul>
+          <p><a href="${data.loginUrl}" style="background-color: #FFD700; color: #1F2937; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Login to Dashboard</a></p>
+        </div>
+      </div>
+    `,
+    'training_verified': `
+      <div style="${baseStyle}">
+        <div style="${headerStyle}">
+          <h1>Training Session Verified</h1>
+        </div>
+        <div style="${contentStyle}">
+          <p>Hello ${data.recipientName},</p>
+          <p>Your training session has been verified:</p>
+          <ul>
+            <li>Date: ${data.trainingDate}</li>
+            <li>Duration: ${data.duration} minutes</li>
+            <li>Discipline: ${data.discipline}</li>
+            <li>Verified by: ${data.verifiedBy}</li>
+            ${data.notes ? `<li>Notes: ${data.notes}</li>` : ''}
+          </ul>
+        </div>
+      </div>
+    `,
+    // Add more templates as needed
+  };
+
+  return templates[template as keyof typeof templates] || `
+    <div style="${baseStyle}">
+      <div style="${headerStyle}">
+        <h1>${data.organizationName}</h1>
+      </div>
+      <div style="${contentStyle}">
+        <p>Hello ${data.recipientName},</p>
+        <p>You have received a notification from ${data.organizationName}.</p>
+      </div>
+    </div>
+  `;
 }
