@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.send-notification-api]
 verify_jwt = false
+
+[functions.send-notification-direct]
+verify_jwt = false

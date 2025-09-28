@@ -35,7 +35,7 @@ export async function sendNotificationAPI(
       hasSMS: !!notificationData.sms
     });
 
-    const { data, error } = await supabase.functions.invoke('send-notification-api', {
+    const { data, error } = await supabase.functions.invoke('send-notification-direct', {
         body: notificationData
       });
 
