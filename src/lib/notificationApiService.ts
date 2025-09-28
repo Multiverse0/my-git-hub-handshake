@@ -14,6 +14,8 @@ export interface NotificationRequest {
   sms?: {
     message: string;
   };
+  templateId?: string;
+  parameters?: Record<string, any>;
 }
 
 export interface NotificationResult {
@@ -67,7 +69,21 @@ export async function sendNotificationAPI(
   }
 }
 
-// Helper function for sending simple email notifications
+// Helper function for sending template-based notifications
+export async function sendTemplateNotification(
+  to: { id: string; email: string; number?: string },
+  templateId: string,
+  parameters: Record<string, any>
+): Promise<NotificationResult> {
+  return sendNotificationAPI({
+    type: 'aktivlogg',
+    to,
+    templateId,
+    parameters
+  });
+}
+
+// Helper function for sending simple email notifications (deprecated - use template instead)
 export async function sendEmailNotification(
   to: { id: string; email: string },
   subject: string,

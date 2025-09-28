@@ -1,80 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-
-// NotificationAPI SDK implementation for Deno
-class NotificationAPI {
-  private clientId: string;
-  private clientSecret: string;
-  private baseURL: string;
-
-  constructor(clientId: string, clientSecret: string) {
-    this.clientId = clientId;
-    this.clientSecret = clientSecret;
-    this.baseURL = 'https://api.eu.notificationapi.com';
-  }
-
-  init(clientId: string, clientSecret: string, options: { baseURL?: string } = {}) {
-    this.clientId = clientId;
-    this.clientSecret = clientSecret;
-    this.baseURL = options.baseURL || 'https://api.eu.notificationapi.com';
-  }
-
-  async send(payload: {
-    type: string;
-    to: {
-      id: string;
-      email: string;
-      number?: string;
-    };
-    email?: {
-      subject: string;
-      html: string;
-    };
-    sms?: {
-      message: string;
-    };
-  }): Promise<{ success: boolean; data?: any; error?: string }> {
-    try {
-      console.log('🔔 Sending notification via NotificationAPI:', {
-        type: payload.type,
-        to: payload.to.email,
-        hasEmail: !!payload.email,
-        hasSMS: !!payload.sms
-      });
-
-      const response = await fetch(`${this.baseURL}/v1/send`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Basic ${btoa(`${this.clientId}:${this.clientSecret}`)}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ NotificationAPI error response:', errorText);
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
-      }
-
-      const data = await response.json();
-      console.log('✅ NotificationAPI success:', data);
-      return { 
-        success: true, 
-        data 
-      };
-
-    } catch (error: any) {
-      console.error('❌ NotificationAPI network error:', error);
-      return {
-        success: false,
-        error: error.message || 'Network error'
-      };
-    }
-  }
-}
-
-// Create a single instance to mimic the official SDK pattern
-const notificationapi = new NotificationAPI('', '');
+import notificationapi from "npm:notificationapi-node-server-sdk@2.5.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -95,6 +20,8 @@ interface NotificationRequest {
   sms?: {
     message: string;
   };
+  templateId?: string;
+  parameters?: Record<string, any>;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -132,15 +59,17 @@ const handler = async (req: Request): Promise<Response> => {
       type: payload.type,
       to: payload.to?.email,
       hasEmail: !!payload.email,
-      hasSMS: !!payload.sms
+      hasSMS: !!payload.sms,
+      templateId: payload.templateId,
+      parametersCount: payload.parameters ? Object.keys(payload.parameters).length : 0
     });
 
-    // Initialize NotificationAPI SDK-style
+    // Initialize NotificationAPI SDK with proper credentials
     notificationapi.init(clientId, clientSecret, {
       baseURL: 'https://api.eu.notificationapi.com'
     });
     
-    // Send notification - handles ALL channels in ONE call
+    // Send notification using template if templateId is provided
     const result = await notificationapi.send(payload);
 
     console.log('✅ Notification sent successfully via NotificationAPI:', result.data);
@@ -167,34 +96,44 @@ const handler = async (req: Request): Promise<Response> => {
 
 serve(handler);
 
-// Test call example (commented out - uncomment to test)
+// Test call example (uncomment to test)
 /*
-// This is how you would test the notification (run this separately):
 const testNotification = async () => {
-  const response = await fetch('https://lwhrtzlpxgpmozrcxtrw.supabase.co/functions/v1/send-notification-api', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer YOUR_SUPABASE_ANON_KEY'
-    },
-    body: JSON.stringify({
-      type: 'aktivlogg',
-      to: {
-        id: 'yngve@promonorge.no',
-        email: 'yngve@promonorge.no',
-        number: '+15005550006'
-      },
-      email: {
-        subject: 'Test Notification - AKTIVLOGG',
-        html: '<h1>Hello from NotificationAPI!</h1><p>This is a test email with beautiful styling.</p>'
-      },
-      sms: {
-        message: 'Hello from AKTIVLOGG! This is a test SMS.'
-      }
-    })
-  });
+  console.log('🧪 Testing NotificationAPI integration...');
   
-  const result = await response.json();
-  console.log('Test result:', result);
+  try {
+    const result = await fetch('https://lwhrtzlpxgpmozrcxtrw.supabase.co/functions/v1/send-notification-api', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`
+      },
+      body: JSON.stringify({
+        type: 'aktivlogg',
+        to: {
+          id: 'yngve@promonorge.no',
+          email: 'yngve@promonorge.no',
+          number: '+2348145075300'
+        },
+        templateId: 'welcome_aktiv',
+        parameters: {
+          organizationName: 'Test Organization',
+          recipientName: 'Test User',
+          email: 'yngve@promonorge.no',
+          loginUrl: 'https://your-app.com/login',
+          adminName: 'Admin',
+          memberNumber: '12345',
+          password: 'test-password'
+        }
+      })
+    });
+    
+    const data = await response.json();
+    console.log('✅ Test result:', data);
+  } catch (error) {
+    console.error('❌ Test failed:', error);
+  }
 };
+
+// To test: testNotification();
 */

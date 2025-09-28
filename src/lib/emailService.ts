@@ -1,4 +1,4 @@
-import { sendCombinedNotification } from './notificationApiService';
+import { sendCombinedNotification, sendTemplateNotification } from './notificationApiService';
 
 export interface EmailData {
   to: string;
@@ -118,28 +118,60 @@ export async function sendAdminWelcomeEmail(
 }
 
 /**
- * Send welcome email to new member (pending approval)
+ * Send welcome email to new member using NotificationAPI template
  */
 export async function sendMemberWelcomeEmail(
   memberEmail: string,
   memberName: string,
   organizationName: string,
-  organizationId: string,
+  _organizationId: string, // Keep for API compatibility but prefix with _ to indicate unused
   memberNumber?: string,
   phoneNumber?: string
 ): Promise<EmailResult> {
-  return sendEmail({
-    to: memberEmail,
-    phoneNumber,
-    template: 'welcome_member',
-    data: {
-      organizationName,
-      recipientName: memberName,
+  try {
+    console.log('📧 Sending welcome email to new member via template:', { 
+      email: memberEmail, 
+      memberName, 
+      organizationName, 
+      hasPhoneNumber: !!phoneNumber 
+    });
+    
+    // Use NotificationAPI template with proper parameters
+    const templateParameters = {
+      organizationName: organizationName || 'AKTIVLOGG',
+      recipientName: memberName || 'New Member',
       email: memberEmail,
-      memberNumber
-    },
-    organizationId
-  });
+      loginUrl: `${window.location.origin}/login`,
+      adminName: 'Admin',
+      memberNumber: memberNumber || 'AUTO-ASSIGNED',
+      password: 'Your login credentials will be provided separately'
+    };
+
+    const result = await sendTemplateNotification(
+      {
+        id: memberEmail,
+        email: memberEmail,
+        number: phoneNumber
+      },
+      'welcome_aktiv',
+      templateParameters
+    );
+
+    return {
+      success: result.success,
+      error: result.error,
+      provider: 'NotificationAPI',
+      messageId: result.messageId
+    };
+
+  } catch (error: any) {
+    console.error('❌ Error sending member welcome email:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to send welcome email',
+      provider: 'NotificationAPI'
+    };
+  }
 }
 
 /**
