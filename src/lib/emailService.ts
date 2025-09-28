@@ -438,6 +438,29 @@ function getEmailSubject(template: EmailData['template'], data: any): string {
 }
 
 function generateEmailContent(template: EmailData['template'], data: any): string {
+  // Add safety checks for data properties
+  const safeData = {
+    recipientName: data?.recipientName || 'User',
+    organizationName: data?.organizationName || 'AKTIVLOGG',
+    email: data?.email || '',
+    password: data?.password || '',
+    loginUrl: data?.loginUrl || '#',
+    memberNumber: data?.memberNumber || '',
+    adminName: data?.adminName || 'Administrator',
+    trainingDate: data?.trainingDate || '',
+    duration: data?.duration || 0,
+    discipline: data?.discipline || '',
+    verifiedBy: data?.verifiedBy || '',
+    notes: data?.notes || '',
+    rejectionReason: data?.rejectionReason || '',
+    newRole: data?.newRole || '',
+    changeTime: data?.changeTime || new Date().toLocaleString('no-NO'),
+    suspensionReason: data?.suspensionReason || '',
+    announcementTitle: data?.announcementTitle || 'Announcement',
+    announcementContent: data?.announcementContent || 'No content provided',
+    ...data
+  };
+
   const baseStyle = `
     font-family: Arial, sans-serif;
     line-height: 1.6;
@@ -479,28 +502,28 @@ function generateEmailContent(template: EmailData['template'], data: any): strin
           <h1>Welcome Administrator</h1>
         </div>
         <div style="${contentStyle}">
-          <p>Hello ${data.recipientName},</p>
-          <p>You have been granted administrator access to ${data.organizationName}.</p>
+          <p>Hello ${safeData.recipientName},</p>
+          <p>You have been granted administrator access to ${safeData.organizationName}.</p>
           <p><strong>Login Details:</strong></p>
           <ul>
-            <li>Email: ${data.email}</li>
-            <li>Password: ${data.password}</li>
+            <li>Email: ${safeData.email}</li>
+            <li>Password: ${safeData.password}</li>
           </ul>
-          <p><a href="${data.loginUrl}" style="${buttonStyle}">Login to Dashboard</a></p>
+          <p><a href="${safeData.loginUrl}" style="${buttonStyle}">Login to Dashboard</a></p>
         </div>
       </div>
     `,
     'welcome_member': `
       <div style="${baseStyle}">
         <div style="${headerStyle}">
-          <h1>Welcome to ${data.organizationName}</h1>
+          <h1>Welcome to ${safeData.organizationName}</h1>
         </div>
         <div style="${contentStyle}">
-          <p>Hello ${data.recipientName},</p>
-          <p>Thank you for registering with ${data.organizationName}. Your membership application has been received and is currently under review.</p>
-          ${data.memberNumber ? `<p><strong>Member Number:</strong> ${data.memberNumber}</p>` : ''}
+          <p>Hello ${safeData.recipientName},</p>
+          <p>Thank you for registering with ${safeData.organizationName}. Your membership application has been received and is currently under review.</p>
+          ${safeData.memberNumber ? `<p><strong>Member Number:</strong> ${safeData.memberNumber}</p>` : ''}
           <p>You will receive a confirmation email once your membership has been approved by an administrator.</p>
-          <p>Best regards,<br/>${data.organizationName}</p>
+          <p>Best regards,<br/>${safeData.organizationName}</p>
         </div>
       </div>
     `,
@@ -510,15 +533,15 @@ function generateEmailContent(template: EmailData['template'], data: any): strin
           <h1>Membership Approved!</h1>
         </div>
         <div style="${contentStyle}">
-          <p>Hello ${data.recipientName},</p>
-          <p>Great news! Your membership application for ${data.organizationName} has been approved by ${data.adminName}.</p>
+          <p>Hello ${safeData.recipientName},</p>
+          <p>Great news! Your membership application for ${safeData.organizationName} has been approved by ${safeData.adminName}.</p>
           <p><strong>Login Details:</strong></p>
           <ul>
-            <li>Email: ${data.email}</li>
-            <li>Password: ${data.password}</li>
+            <li>Email: ${safeData.email}</li>
+            <li>Password: ${safeData.password}</li>
           </ul>
-          <p><a href="${data.loginUrl}" style="${buttonStyle}">Login to Your Account</a></p>
-          <p>Welcome to ${data.organizationName}!</p>
+          <p><a href="${safeData.loginUrl}" style="${buttonStyle}">Login to Your Account</a></p>
+          <p>Welcome to ${safeData.organizationName}!</p>
         </div>
       </div>
     `,
@@ -528,17 +551,17 @@ function generateEmailContent(template: EmailData['template'], data: any): strin
           <h1>Training Session Verified</h1>
         </div>
         <div style="${contentStyle}">
-          <p>Hello ${data.recipientName},</p>
+          <p>Hello ${safeData.recipientName},</p>
           <p>Your training session has been verified:</p>
           <ul>
-            <li><strong>Date:</strong> ${data.trainingDate}</li>
-            <li><strong>Duration:</strong> ${data.duration} minutes</li>
-            <li><strong>Discipline:</strong> ${data.discipline}</li>
-            <li><strong>Verified by:</strong> ${data.verifiedBy}</li>
-            ${data.notes ? `<li><strong>Notes:</strong> ${data.notes}</li>` : ''}
+            <li><strong>Date:</strong> ${safeData.trainingDate}</li>
+            <li><strong>Duration:</strong> ${safeData.duration} minutes</li>
+            <li><strong>Discipline:</strong> ${safeData.discipline}</li>
+            <li><strong>Verified by:</strong> ${safeData.verifiedBy}</li>
+            ${safeData.notes ? `<li><strong>Notes:</strong> ${safeData.notes}</li>` : ''}
           </ul>
           <p>Keep up the great work!</p>
-          <p>Best regards,<br/>${data.organizationName}</p>
+          <p>Best regards,<br/>${safeData.organizationName}</p>
         </div>
       </div>
     `,
@@ -548,17 +571,17 @@ function generateEmailContent(template: EmailData['template'], data: any): strin
           <h1>Training Session Rejected</h1>
         </div>
         <div style="${contentStyle}">
-          <p>Hello ${data.recipientName},</p>
+          <p>Hello ${safeData.recipientName},</p>
           <p>Unfortunately, your training session has been rejected:</p>
           <ul>
-            <li><strong>Date:</strong> ${data.trainingDate}</li>
-            <li><strong>Duration:</strong> ${data.duration} minutes</li>
-            <li><strong>Discipline:</strong> ${data.discipline}</li>
-            <li><strong>Reviewed by:</strong> ${data.verifiedBy}</li>
-            ${data.rejectionReason ? `<li><strong>Reason:</strong> ${data.rejectionReason}</li>` : ''}
+            <li><strong>Date:</strong> ${safeData.trainingDate}</li>
+            <li><strong>Duration:</strong> ${safeData.duration} minutes</li>
+            <li><strong>Discipline:</strong> ${safeData.discipline}</li>
+            <li><strong>Reviewed by:</strong> ${safeData.verifiedBy}</li>
+            ${safeData.rejectionReason ? `<li><strong>Reason:</strong> ${safeData.rejectionReason}</li>` : ''}
           </ul>
           <p>Please contact your administrator if you have questions about this decision.</p>
-          <p>Best regards,<br/>${data.organizationName}</p>
+          <p>Best regards,<br/>${safeData.organizationName}</p>
         </div>
       </div>
     `,
@@ -568,11 +591,11 @@ function generateEmailContent(template: EmailData['template'], data: any): strin
           <h1>Role Updated</h1>
         </div>
         <div style="${contentStyle}">
-          <p>Hello ${data.recipientName},</p>
-          <p>Your role in ${data.organizationName} has been updated to <strong>${data.newRole}</strong>.</p>
+          <p>Hello ${safeData.recipientName},</p>
+          <p>Your role in ${safeData.organizationName} has been updated to <strong>${safeData.newRole}</strong>.</p>
           <p>Your new permissions are now active. Please log in to see your updated access.</p>
-          <p><a href="${data.loginUrl}" style="${buttonStyle}">Login to Your Account</a></p>
-          <p>Best regards,<br/>${data.organizationName}</p>
+          <p><a href="${safeData.loginUrl}" style="${buttonStyle}">Login to Your Account</a></p>
+          <p>Best regards,<br/>${safeData.organizationName}</p>
         </div>
       </div>
     `,
@@ -582,10 +605,10 @@ function generateEmailContent(template: EmailData['template'], data: any): strin
           <h1>Password Changed</h1>
         </div>
         <div style="${contentStyle}">
-          <p>Hello ${data.recipientName},</p>
-          <p>Your password for ${data.organizationName} was successfully changed on ${data.changeTime}.</p>
+          <p>Hello ${safeData.recipientName},</p>
+          <p>Your password for ${safeData.organizationName} was successfully changed on ${safeData.changeTime}.</p>
           <p>If you did not make this change, please contact your administrator immediately.</p>
-          <p>Best regards,<br/>${data.organizationName}</p>
+          <p>Best regards,<br/>${safeData.organizationName}</p>
         </div>
       </div>
     `,
@@ -595,25 +618,25 @@ function generateEmailContent(template: EmailData['template'], data: any): strin
           <h1>Account Suspended</h1>
         </div>
         <div style="${contentStyle}">
-          <p>Hello ${data.recipientName},</p>
-          <p>Your account with ${data.organizationName} has been suspended.</p>
-          ${data.suspensionReason ? `<p><strong>Reason:</strong> ${data.suspensionReason}</p>` : ''}
+          <p>Hello ${safeData.recipientName},</p>
+          <p>Your account with ${safeData.organizationName} has been suspended.</p>
+          ${safeData.suspensionReason ? `<p><strong>Reason:</strong> ${safeData.suspensionReason}</p>` : ''}
           <p>Please contact your administrator for more information.</p>
-          <p>Best regards,<br/>${data.organizationName}</p>
+          <p>Best regards,<br/>${safeData.organizationName}</p>
         </div>
       </div>
     `,
     'organization_announcement': `
       <div style="${baseStyle}">
         <div style="${headerStyle}">
-          <h1>${data.announcementTitle}</h1>
+          <h1>${safeData.announcementTitle}</h1>
         </div>
         <div style="${contentStyle}">
-          <p>Hello ${data.recipientName},</p>
+          <p>Hello ${safeData.recipientName},</p>
           <div style="margin: 20px 0;">
-            ${data.announcementContent.replace(/\n/g, '<br/>')}
+            ${(safeData.announcementContent || '').replace(/\n/g, '<br/>')}
           </div>
-          <p>Best regards,<br/>${data.organizationName}</p>
+          <p>Best regards,<br/>${safeData.organizationName}</p>
         </div>
       </div>
     `,
@@ -623,11 +646,11 @@ function generateEmailContent(template: EmailData['template'], data: any): strin
           <h1>Password Reset</h1>
         </div>
         <div style="${contentStyle}">
-          <p>Hello ${data.recipientName},</p>
-          <p>You have requested a password reset for your ${data.organizationName} account.</p>
-          <p><a href="${data.loginUrl}" style="${buttonStyle}">Reset Your Password</a></p>
+          <p>Hello ${safeData.recipientName},</p>
+          <p>You have requested a password reset for your ${safeData.organizationName} account.</p>
+          <p><a href="${safeData.loginUrl}" style="${buttonStyle}">Reset Your Password</a></p>
           <p>If you did not request this reset, please ignore this email.</p>
-          <p>Best regards,<br/>${data.organizationName}</p>
+          <p>Best regards,<br/>${safeData.organizationName}</p>
         </div>
       </div>
     `
@@ -636,11 +659,11 @@ function generateEmailContent(template: EmailData['template'], data: any): strin
   return templates[template as keyof typeof templates] || `
     <div style="${baseStyle}">
       <div style="${headerStyle}">
-        <h1>${data.organizationName}</h1>
+        <h1>${safeData.organizationName}</h1>
       </div>
       <div style="${contentStyle}">
-        <p>Hello ${data.recipientName},</p>
-        <p>You have received a notification from ${data.organizationName}.</p>
+        <p>Hello ${safeData.recipientName},</p>
+        <p>You have received a notification from ${safeData.organizationName}.</p>
       </div>
     </div>
   `;
@@ -648,18 +671,33 @@ function generateEmailContent(template: EmailData['template'], data: any): strin
 
 // Generate SMS content for notifications
 function generateSMSContent(template: EmailData['template'], data: any): string {
-  const smsTemplates = {
-    'welcome_admin': `${data.organizationName}: Du har fått administrator tilgang. Logg inn med ${data.email}`,
-    'welcome_member': `${data.organizationName}: Takk for registrering! Din medlemskap er under vurdering.`,
-    'member_approved': `${data.organizationName}: Medlemskap godkjent! Logg inn med ${data.email} på ${data.loginUrl}`,
-    'training_verified': `${data.organizationName}: Treningsøkt godkjent! ${data.trainingDate}, ${data.duration} min, ${data.discipline}`,
-    'training_rejected': `${data.organizationName}: Treningsøkt avvist. ${data.trainingDate}, ${data.discipline}. Kontakt administrator.`,
-    'role_updated': `${data.organizationName}: Din rolle er oppdatert til ${data.newRole}. Logg inn for å se nye tilganger.`,
-    'password_changed': `${data.organizationName}: Passordet ditt ble endret ${data.changeTime}. Kontakt administrator hvis dette ikke var deg.`,
-    'account_suspended': `${data.organizationName}: Din konto er suspendert. Kontakt administrator for mer informasjon.`,
-    'organization_announcement': `${data.organizationName}: ${data.announcementTitle}`,
-    'password_reset': `${data.organizationName}: Passord reset forespurt. Bruk lenken i eposten for å tilbakestille.`
+  // Add safety checks for data properties
+  const safeData = {
+    recipientName: data?.recipientName || 'User',
+    organizationName: data?.organizationName || 'AKTIVLOGG',
+    email: data?.email || '',
+    loginUrl: data?.loginUrl || '',
+    trainingDate: data?.trainingDate || '',
+    duration: data?.duration || 0,
+    discipline: data?.discipline || '',
+    newRole: data?.newRole || '',
+    changeTime: data?.changeTime || new Date().toLocaleString('no-NO'),
+    announcementTitle: data?.announcementTitle || 'Announcement',
+    ...data
   };
 
-  return smsTemplates[template] || `${data.organizationName}: Du har mottatt en notifikasjon.`;
+  const smsTemplates = {
+    'welcome_admin': `${safeData.organizationName}: Du har fått administrator tilgang. Logg inn med ${safeData.email}`,
+    'welcome_member': `${safeData.organizationName}: Takk for registrering! Din medlemskap er under vurdering.`,
+    'member_approved': `${safeData.organizationName}: Medlemskap godkjent! Logg inn med ${safeData.email} på ${safeData.loginUrl}`,
+    'training_verified': `${safeData.organizationName}: Treningsøkt godkjent! ${safeData.trainingDate}, ${safeData.duration} min, ${safeData.discipline}`,
+    'training_rejected': `${safeData.organizationName}: Treningsøkt avvist. ${safeData.trainingDate}, ${safeData.discipline}. Kontakt administrator.`,
+    'role_updated': `${safeData.organizationName}: Din rolle er oppdatert til ${safeData.newRole}. Logg inn for å se nye tilganger.`,
+    'password_changed': `${safeData.organizationName}: Passordet ditt ble endret ${safeData.changeTime}. Kontakt administrator hvis dette ikke var deg.`,
+    'account_suspended': `${safeData.organizationName}: Din konto er suspendert. Kontakt administrator for mer informasjon.`,
+    'organization_announcement': `${safeData.organizationName}: ${safeData.announcementTitle}`,
+    'password_reset': `${safeData.organizationName}: Passord reset forespurt. Bruk lenken i eposten for å tilbakestille.`
+  };
+
+  return smsTemplates[template] || `${safeData.organizationName}: Du har mottatt en notifikasjon.`;
 }
