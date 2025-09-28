@@ -34,23 +34,25 @@ export async function sendNotificationAPI(
     });
 
     const { data, error } = await supabase.functions.invoke('send-notification-api', {
-      body: notificationData
-    });
+        body: notificationData
+      });
 
-    if (error) {
-      console.error('NotificationAPI function error:', error);
-      throw new Error(error.message || 'Failed to invoke notification function');
-    }
+      console.log('📡 NotificationAPI response:', { data, error });
 
-    if (!data?.success) {
-      console.error('NotificationAPI send failed:', data?.error);
-      return {
-        success: false,
-        error: data?.error || 'Failed to send notification'
-      };
-    }
+      if (error) {
+        console.error('❌ NotificationAPI function error:', error);
+        throw new Error(error.message || 'Failed to invoke notification function');
+      }
 
-    console.log('NotificationAPI send successful:', data);
+      if (!data?.success) {
+        console.error('❌ NotificationAPI send failed:', data);
+        return {
+          success: false,
+          error: data?.error || 'Failed to send notification'
+        };
+      }
+
+      console.log('✅ NotificationAPI send successful:', data);
     return {
       success: true,
       messageId: data.messageId

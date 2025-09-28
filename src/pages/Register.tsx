@@ -19,6 +19,7 @@ export function Register() {
     password: '',
     confirmPassword: '',
     memberNumber: '',
+    phoneNumber: '',
     organizationCode: ''
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -160,6 +161,7 @@ export function Register() {
           formData.password,
           formData.fullName,
           formData.memberNumber,
+          formData.phoneNumber,
           formData.organizationCode || undefined
         );
 
@@ -336,6 +338,25 @@ export function Register() {
                     onChange={(e) => setFormData(prev => ({ ...prev, memberNumber: e.target.value }))}
                     className="w-full bg-gray-700 rounded-lg pl-10 pr-4 py-2"
                     placeholder="12345"
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Telefonnummer (valgfritt)
+                </label>
+                <div className="text-xs text-gray-400 mb-1">
+                  For SMS-varsler og nødkommunikasjon
+                </div>
+                <div className="relative">
+                  <input
+                    type="tel"
+                    value={formData.phoneNumber}
+                    onChange={(e) => setFormData(prev => ({ ...prev, phoneNumber: e.target.value }))}
+                    className="w-full bg-gray-700 rounded-lg px-4 py-2"
+                    placeholder="+47 123 45 678"
                     disabled={isLoading}
                   />
                 </div>

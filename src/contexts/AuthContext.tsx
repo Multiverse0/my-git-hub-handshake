@@ -21,7 +21,7 @@ interface AuthContextType {
   needsSetup: boolean;
   initError: string | null;
   login: (email: string, password: string, rememberMe: boolean, organizationSlug?: string) => Promise<void>;
-  register: (organizationSlug: string, email: string, password: string, fullName: string, memberNumber?: string, organizationCode?: string) => Promise<void>;
+  register: (organizationSlug: string, email: string, password: string, fullName: string, memberNumber?: string, phoneNumber?: string, organizationCode?: string) => Promise<void>;
   logout: () => void;
   switchOrganization: (organizationSlug: string) => Promise<void>;
   setOrganizationContext: (organizationSlug: string) => Promise<void>;
@@ -406,6 +406,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string,
     fullName: string,
     memberNumber?: string,
+    phoneNumber?: string,
     organizationCode?: string
   ) => {
     try {
@@ -418,6 +419,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
         fullName,
         memberNumber,
+        phoneNumber,
         organizationCode,
         'member' // Always register as member, role can be changed by admin later
       );

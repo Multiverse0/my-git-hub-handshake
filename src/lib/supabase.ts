@@ -754,8 +754,9 @@ export async function registerOrganizationMember(
   password: string,
   fullName: string,
   memberNumber?: string,
+  phoneNumber?: string,
   organizationCode?: string,
-  role: 'member' | 'admin' | 'range_officer' = 'member'
+  role: string = 'member'
 ): Promise<ApiResponse<OrganizationMember>> {
   // Normalize email to lowercase to prevent case-sensitivity issues
   const normalizedEmail = email.toLowerCase();
@@ -807,6 +808,7 @@ export async function registerOrganizationMember(
         email: normalizedEmail,
         full_name: fullName,
         member_number: memberNumber,
+        phone_number: phoneNumber,
         role,
         approved: autoApprove // Auto-approve if valid organization code provided
       })
@@ -819,16 +821,45 @@ export async function registerOrganizationMember(
 
     // Send welcome email to new member
     try {
-      await sendMemberWelcomeEmail(
+      console.log('🔄 Sending welcome email via NotificationAPI...');
+      const emailResult = await sendMemberWelcomeEmail(
         normalizedEmail,
         fullName,
         organization.name,
         organization.id,
-        memberNumber
+        memberNumber,
+        phoneNumber
       );
-      console.log('✅ Welcome email sent successfully');
+      
+      if (emailResult.success) {
+        console.log('✅ Welcome email sent successfully via NotificationAPI');
+      } else {
+        console.error('❌ Welcome email failed:', emailResult.error);
+        // Log to database for tracking
+        await supabase.from('email_delivery_logs').insert({
+          organization_id: organization.id,
+          member_id: memberData.id,
+          recipient_email: normalizedEmail,
+          email_type: 'welcome_member',
+          status: 'failed',
+          error_message: emailResult.error || 'Unknown error'
+        });
+      }
     } catch (emailError) {
-      console.warn('⚠️ Could not send welcome email:', emailError);
+      console.error('❌ Critical error sending welcome email:', emailError);
+      // Log to database for tracking
+      try {
+        await supabase.from('email_delivery_logs').insert({
+          organization_id: organization.id,
+          member_id: memberData.id,
+          recipient_email: normalizedEmail,
+          email_type: 'welcome_member',
+          status: 'failed',
+          error_message: emailError instanceof Error ? emailError.message : 'Unknown error'
+        });
+      } catch (logError) {
+        console.error('❌ Failed to log email error:', logError);
+      }
       // Don't fail registration if email fails
     }
 
