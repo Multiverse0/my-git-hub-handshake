@@ -16,11 +16,10 @@ const corsHeaders = {
 interface ConfigRequest {
   action: 'save' | 'load';
   config?: {
-    emailService: 'resend' | 'mailgun';
     emailFromAddress: string;
     emailFromName: string;
-    apiKey: string;
-    domain?: string; // For Mailgun
+    clientId: string;
+    clientSecret: string;
   };
 }
 
@@ -47,20 +46,18 @@ const handler = async (req: Request): Promise<Response> => {
       // In a real production environment, you would use the Supabase Management API
       // to update the edge function environment variables/secrets
       
-      console.log('Saving email configuration:', {
-        service: config.emailService,
+      console.log('Saving NotificationAPI configuration:', {
         fromAddress: config.emailFromAddress,
         fromName: config.emailFromName,
-        hasApiKey: !!config.apiKey,
-        hasDomain: !!config.domain
+        hasClientId: !!config.clientId,
+        hasClientSecret: !!config.clientSecret
       });
 
       // Here you would typically:
-      // 1. Update EMAIL_SERVICE secret
-      // 2. Update EMAIL_FROM_ADDRESS secret  
-      // 3. Update EMAIL_FROM_NAME secret
-      // 4. Update RESEND_API_KEY or MAILGUN_API_KEY secret
-      // 5. Update MAILGUN_DOMAIN secret (if Mailgun)
+      // 1. Update EMAIL_FROM_ADDRESS secret  
+      // 2. Update EMAIL_FROM_NAME secret
+      // 3. Update NOTIFICATIONAPI_CLIENT_ID secret
+      // 4. Update NOTIFICATIONAPI_CLIENT_SECRET secret
 
       // For now, we'll just return success
       // The actual secret management would be done through Supabase Management API
@@ -68,7 +65,7 @@ const handler = async (req: Request): Promise<Response> => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'Email configuration saved successfully' 
+          message: 'NotificationAPI configuration saved successfully' 
         }),
         {
           status: 200,
@@ -77,17 +74,15 @@ const handler = async (req: Request): Promise<Response> => {
       );
 
     } else if (requestData.action === 'load') {
-      // Load current configuration from environment variables
+      // Load current NotificationAPI configuration from environment variables
       const currentConfig = {
-        emailService: Deno.env.get('EMAIL_SERVICE') || 'resend',
         emailFromAddress: Deno.env.get('EMAIL_FROM_ADDRESS') || '',
         emailFromName: Deno.env.get('EMAIL_FROM_NAME') || '',
-        hasResendKey: !!Deno.env.get('RESEND_API_KEY'),
-        hasMailgunKey: !!Deno.env.get('MAILGUN_API_KEY'),
-        mailgunDomain: Deno.env.get('MAILGUN_DOMAIN') || ''
+        hasClientId: !!Deno.env.get('NOTIFICATIONAPI_CLIENT_ID'),
+        hasClientSecret: !!Deno.env.get('NOTIFICATIONAPI_CLIENT_SECRET')
       };
 
-      console.log('Current email configuration:', currentConfig);
+      console.log('Current NotificationAPI configuration:', currentConfig);
 
       return new Response(
         JSON.stringify({ 

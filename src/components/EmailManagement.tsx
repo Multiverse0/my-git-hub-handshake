@@ -12,11 +12,10 @@ interface EmailTemplate {
 }
 
 interface EmailConfig {
-  apiKey: string;
-  service: 'resend' | 'mailgun';
+  clientId: string;
+  clientSecret: string;
   fromAddress: string;
   fromName: string;
-  domain?: string; // For Mailgun
 }
 
 const defaultTemplates: EmailTemplate[] = [
@@ -109,14 +108,14 @@ Med vennlig hilsen,
 export function EmailManagement() {
   const [activeTab, setActiveTab] = useState<'config' | 'templates' | 'test'>('config');
   const [emailConfig, setEmailConfig] = useState<EmailConfig>({
-    apiKey: '',
-    service: 'resend',
+    clientId: '',
+    clientSecret: '',
     fromAddress: '',
     fromName: ''
   });
   const [templates, setTemplates] = useState<EmailTemplate[]>(defaultTemplates);
   const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [showClientSecret, setShowClientSecret] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; error?: string } | null>(null);
@@ -153,11 +152,10 @@ export function EmailManagement() {
         body: {
           action: 'save',
           config: {
-            emailService: emailConfig.service,
             emailFromAddress: emailConfig.fromAddress,
             emailFromName: emailConfig.fromName,
-            apiKey: emailConfig.apiKey,
-            domain: emailConfig.domain // For Mailgun
+            clientId: emailConfig.clientId,
+            clientSecret: emailConfig.clientSecret
           }
         }
       });
@@ -169,12 +167,11 @@ export function EmailManagement() {
       // Also save to localStorage as backup
       localStorage.setItem('emailConfig', JSON.stringify(emailConfig));
       
-      console.log('📧 Email config saved to Supabase secrets:', {
-        service: emailConfig.service,
+      console.log('📧 NotificationAPI config saved to Supabase secrets:', {
         fromAddress: emailConfig.fromAddress,
         fromName: emailConfig.fromName,
-        hasApiKey: !!emailConfig.apiKey,
-        hasDomain: !!emailConfig.domain
+        hasClientId: !!emailConfig.clientId,
+        hasClientSecret: !!emailConfig.clientSecret
       });
 
       setTestResult({ success: true });
@@ -262,8 +259,8 @@ export function EmailManagement() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold theme-primary-text mb-2">E-post Administrasjon</h2>
-        <p className="text-gray-400">Konfigurer e-post-tjeneste og rediger meldingsmaler</p>
+        <h2 className="text-2xl font-bold theme-primary-text mb-2">NotificationAPI Administrasjon</h2>
+        <p className="text-gray-400">Konfigurer NotificationAPI og rediger meldingsmaler</p>
       </div>
 
       {/* Tabs */}
@@ -306,41 +303,40 @@ export function EmailManagement() {
       {/* Configuration Tab */}
       {activeTab === 'config' && (
         <div className="card space-y-6">
-          <h3 className="text-lg font-semibold">E-post Tjeneste Konfigurasjon</h3>
+          <h3 className="text-lg font-semibold">NotificationAPI Konfigurasjon</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                E-post Tjeneste *
+                Client ID *
               </label>
-              <select
-                value={emailConfig.service}
-                onChange={(e) => setEmailConfig(prev => ({ ...prev, service: e.target.value as 'resend' | 'mailgun' }))}
+              <input
+                type="text"
+                value={emailConfig.clientId}
+                onChange={(e) => setEmailConfig(prev => ({ ...prev, clientId: e.target.value }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
-              >
-                <option value="resend">Resend</option>
-                <option value="mailgun">Mailgun</option>
-              </select>
+                placeholder="NotificationAPI Client ID"
+              />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                API Nøkkel *
+                Client Secret *
               </label>
               <div className="relative">
                 <input
-                  type={showApiKey ? 'text' : 'password'}
-                  value={emailConfig.apiKey}
-                  onChange={(e) => setEmailConfig(prev => ({ ...prev, apiKey: e.target.value }))}
+                  type={showClientSecret ? 'text' : 'password'}
+                  value={emailConfig.clientSecret}
+                  onChange={(e) => setEmailConfig(prev => ({ ...prev, clientSecret: e.target.value }))}
                   className="w-full bg-gray-700 rounded-md px-3 py-2 pr-10"
-                  placeholder="Skriv inn API nøkkel"
+                  placeholder="NotificationAPI Client Secret"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
+                  onClick={() => setShowClientSecret(!showClientSecret)}
                   className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
                 >
-                  {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showClientSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
@@ -370,39 +366,22 @@ export function EmailManagement() {
                 placeholder="Klubbnavn"
               />
             </div>
-
-            {/* Mailgun Domain field - only show for Mailgun */}
-            {emailConfig.service === 'mailgun' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Mailgun Domene *
-                </label>
-                <input
-                  type="text"
-                  value={emailConfig.domain || ''}
-                  onChange={(e) => setEmailConfig(prev => ({ ...prev, domain: e.target.value }))}
-                  className="w-full bg-gray-700 rounded-md px-3 py-2"
-                  placeholder="mg.klubbnavn.no"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Mailgun sender domenet ditt (f.eks. mg.klubbnavn.no)
-                </p>
-              </div>
-            )}
           </div>
 
           {/* Current Service Status */}
           <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-4">
-            <h4 className="font-medium text-gray-300 mb-3">📊 Gjeldende Konfigurasjon</h4>
+            <h4 className="font-medium text-gray-300 mb-3">📊 Gjeldende NotificationAPI Konfigurasjon</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-400">E-post Tjeneste:</span>
-                <span className="font-medium text-white capitalize">{emailConfig.service}</span>
+                <span className="text-gray-400">Client ID:</span>
+                <span className={`font-medium ${emailConfig.clientId ? 'text-green-400' : 'text-red-400'}`}>
+                  {emailConfig.clientId ? '✓ Konfigurert' : '✗ Mangler'}
+                </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400">API Nøkkel:</span>
-                <span className={`font-medium ${emailConfig.apiKey ? 'text-green-400' : 'text-red-400'}`}>
-                  {emailConfig.apiKey ? '✓ Konfigurert' : '✗ Mangler'}
+                <span className="text-gray-400">Client Secret:</span>
+                <span className={`font-medium ${emailConfig.clientSecret ? 'text-green-400' : 'text-red-400'}`}>
+                  {emailConfig.clientSecret ? '✓ Konfigurert' : '✗ Mangler'}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -413,22 +392,14 @@ export function EmailManagement() {
                 <span className="text-gray-400">Avsender Navn:</span>
                 <span className="font-medium text-white">{emailConfig.fromName || 'Ikke satt'}</span>
               </div>
-              {emailConfig.service === 'mailgun' && (
-                <div className="flex justify-between md:col-span-2">
-                  <span className="text-gray-400">Mailgun Domene:</span>
-                  <span className={`font-medium ${emailConfig.domain ? 'text-green-400' : 'text-red-400'}`}>
-                    {emailConfig.domain || '✗ Ikke satt'}
-                  </span>
-                </div>
-              )}
             </div>
           </div>
 
           <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4">
-            <h4 className="font-medium text-blue-400 mb-2">📋 Setup Instruksjoner</h4>
+            <h4 className="font-medium text-blue-400 mb-2">📋 NotificationAPI Setup Instruksjoner</h4>
             <ol className="text-sm text-blue-200 space-y-1 list-decimal list-inside">
-              <li>Opprett konto hos {emailConfig.service === 'resend' ? 'Resend' : 'Mailgun'}</li>
-              <li>Generer API-nøkkel fra leverandørens dashboard</li>
+              <li>Logg inn på NotificationAPI dashboard</li>
+              <li>Kopier Client ID og Client Secret fra prosjektinnstillingene</li>
               <li>Fyll inn konfigurasjon over</li>
               <li>Klikk "Lagre Konfigurasjon"</li>
               <li>Test at alt fungerer i "Test E-post" fanen</li>
