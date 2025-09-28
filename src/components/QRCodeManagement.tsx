@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { QrCode, Plus, Edit2, Trash2, Eye, EyeOff, X, Loader2, AlertCircle, Copy } from 'lucide-react';
+import { QrCode, Plus, Edit2, Trash2, Eye, EyeOff, X, Loader2, AlertCircle, Copy, ExternalLink } from 'lucide-react';
 import { getOrganizationTrainingLocations, createTrainingLocation, updateTrainingLocation, supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import type { TrainingLocation } from '../lib/types';
@@ -272,6 +272,46 @@ export function QRCodeManagement() {
   const [, setError] = useState<string | null>(null);
 
 
+  const generateQRCodeURL = (location: TrainingLocation) => {
+    const params = new URLSearchParams({
+      qr_code: location.qr_code_id,
+      name: location.name,
+      org: organization?.name || 'SVPK',
+      disciplines: [
+        location.nsf_enabled && 'NSF',
+        location.dfs_enabled && 'DFS', 
+        location.dssn_enabled && 'DSSN'
+      ].filter(Boolean).join(', '),
+      description: location.description || ''
+    });
+    
+    return `https://qr-code-generator-aktivlogg.lovable.app/?${params.toString()}`;
+  };
+
+  const generateAllQRCodesURL = () => {
+    const activeLocations = locations.filter(loc => loc.active);
+    if (activeLocations.length === 0) return '';
+    
+    const params = new URLSearchParams({
+      org: organization?.name || 'SVPK',
+      bulk: 'true',
+      locations: JSON.stringify(
+        activeLocations.map(loc => ({
+          qr_code: loc.qr_code_id,
+          name: loc.name,
+          disciplines: [
+            loc.nsf_enabled && 'NSF',
+            loc.dfs_enabled && 'DFS',
+            loc.dssn_enabled && 'DSSN'
+          ].filter(Boolean).join(', '),
+          description: loc.description || ''
+        }))
+      )
+    });
+    
+    return `https://qr-code-generator-aktivlogg.lovable.app/?${params.toString()}`;
+  };
+
   useEffect(() => {
     if (!organization?.id) return;
     
@@ -404,13 +444,27 @@ export function QRCodeManagement() {
             Administrer QR-koder for skytebaner og treningslokasjoner
           </p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="btn-primary"
-        >
-          <Plus className="w-5 h-5" />
-          Legg til skytebane
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="btn-primary"
+          >
+            <Plus className="w-5 h-5" />
+            Legg til skytebane
+          </button>
+          {locations.filter(loc => loc.active).length > 0 && (
+            <a
+              href={generateAllQRCodesURL()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-secondary flex items-center gap-2"
+            >
+              <QrCode className="w-5 h-5" />
+              Generer alle QR-koder
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          )}
+        </div>
       </div>
 
       <div className="card">
@@ -486,6 +540,15 @@ export function QRCodeManagement() {
                   </div>
                   
                   <div className="flex items-center gap-2 ml-4">
+                    <a
+                      href={generateQRCodeURL(location)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 text-svpk-yellow hover:text-yellow-300 hover:bg-svpk-yellow/10 rounded-full transition-colors"
+                      title="Generer QR-kode"
+                    >
+                      <QrCode className="w-5 h-5" />
+                    </a>
                     <button
                       onClick={() => handleToggleActive(location.id)}
                       className={`p-2 rounded-full transition-colors ${
@@ -525,16 +588,16 @@ export function QRCodeManagement() {
           <span className="text-2xl">💡</span>
           <div className="flex-1">
             <p className="text-yellow-200 text-sm leading-relaxed">
-              <strong>Tips:</strong> Disse kodene kan brukes til å generere QR-koder for hver bane. Bruk QR-kode teksten over i en QR-kodegenerator som f.eks.{' '}
+              <strong>Tips:</strong> Bruk "Generer QR-kode" knappen for hver skytebane for å lage profesjonelle, utskriftsvennlige QR-koder med{' '}
               <a 
-                href="https://qrgenerator.org/#text" 
+                href="https://qr-code-generator-aktivlogg.lovable.app/" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-yellow-300 hover:text-yellow-100 underline font-medium"
               >
-                QR Code Generator
+                Aktivlogg QR Generator
               </a>
-              . Skriv inn QR-kode teksten (f.eks. "svpk-innendors-25m") i generatoren og skriv ut QR-koden.
+              . Generatoren er spesialtilpasset for SVPK og gir pene PDF-filer som kan skrives ut og henges på veggen.
             </p>
           </div>
         </div>
