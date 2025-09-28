@@ -24,7 +24,7 @@ interface ConfigRequest {
 }
 
 const handler = async (req: Request): Promise<Response> => {
-  console.log('Manage email config function called with method:', req.method);
+  console.log('📧 Manage email config function called with method:', req.method);
   
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -33,7 +33,7 @@ const handler = async (req: Request): Promise<Response> => {
 
   try {
     const requestData: ConfigRequest = await req.json();
-    console.log('Config request:', { action: requestData.action });
+    console.log('📋 Config request:', { action: requestData.action });
 
     if (requestData.action === 'save') {
       if (!requestData.config) {
@@ -42,30 +42,63 @@ const handler = async (req: Request): Promise<Response> => {
 
       const config = requestData.config;
       
-      // For this implementation, we'll simulate updating secrets
-      // In a real production environment, you would use the Supabase Management API
-      // to update the edge function environment variables/secrets
-      
-      console.log('Saving NotificationAPI configuration:', {
+      console.log('💾 Received NotificationAPI configuration to save:', {
         fromAddress: config.emailFromAddress,
         fromName: config.emailFromName,
         hasClientId: !!config.clientId,
-        hasClientSecret: !!config.clientSecret
+        hasClientSecret: !!config.clientSecret,
+        clientIdLength: config.clientId?.length || 0,
+        clientSecretLength: config.clientSecret?.length || 0
       });
 
-      // Here you would typically:
-      // 1. Update EMAIL_FROM_ADDRESS secret  
-      // 2. Update EMAIL_FROM_NAME secret
-      // 3. Update NOTIFICATIONAPI_CLIENT_ID secret
-      // 4. Update NOTIFICATIONAPI_CLIENT_SECRET secret
+      // Check current environment variables to see if they're already configured
+      const currentClientId = Deno.env.get('NOTIFICATIONAPI_CLIENT_ID');
+      const currentClientSecret = Deno.env.get('NOTIFICATIONAPI_CLIENT_SECRET');
+      const currentFromAddress = Deno.env.get('EMAIL_FROM_ADDRESS');
+      const currentFromName = Deno.env.get('EMAIL_FROM_NAME');
 
-      // For now, we'll just return success
-      // The actual secret management would be done through Supabase Management API
-      
+      console.log('🔍 Current Supabase secrets status:', {
+        hasClientId: !!currentClientId,
+        hasClientSecret: !!currentClientSecret,
+        hasFromAddress: !!currentFromAddress,
+        hasFromName: !!currentFromName
+      });
+
+      // Since we can't programmatically update Supabase secrets from edge functions,
+      // we need to guide the user to do it manually through the dashboard
+      const needsManualSetup = !currentClientId || !currentClientSecret || 
+                               currentClientId !== config.clientId || 
+                               currentClientSecret !== config.clientSecret ||
+                               currentFromAddress !== config.emailFromAddress ||
+                               currentFromName !== config.emailFromName;
+
+      if (needsManualSetup) {
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            error: 'Manual Supabase secrets configuration required',
+            instructions: {
+              message: 'Please update the following secrets in your Supabase project dashboard:',
+              secrets: [
+                { name: 'NOTIFICATIONAPI_CLIENT_ID', value: config.clientId },
+                { name: 'NOTIFICATIONAPI_CLIENT_SECRET', value: '••••••••' },
+                { name: 'EMAIL_FROM_ADDRESS', value: config.emailFromAddress },
+                { name: 'EMAIL_FROM_NAME', value: config.emailFromName }
+              ],
+              dashboardUrl: `https://supabase.com/dashboard/project/${Deno.env.get('SUPABASE_PROJECT_ID') || 'YOUR_PROJECT_ID'}/settings/functions`
+            }
+          }),
+          {
+            status: 200, // Success status but with manual action required
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          }
+        );
+      }
+
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'NotificationAPI configuration saved successfully' 
+          message: 'NotificationAPI configuration is already correctly set in Supabase secrets' 
         }),
         {
           status: 200,
@@ -79,10 +112,17 @@ const handler = async (req: Request): Promise<Response> => {
         emailFromAddress: Deno.env.get('EMAIL_FROM_ADDRESS') || '',
         emailFromName: Deno.env.get('EMAIL_FROM_NAME') || '',
         hasClientId: !!Deno.env.get('NOTIFICATIONAPI_CLIENT_ID'),
-        hasClientSecret: !!Deno.env.get('NOTIFICATIONAPI_CLIENT_SECRET')
+        hasClientSecret: !!Deno.env.get('NOTIFICATIONAPI_CLIENT_SECRET'),
+        clientId: Deno.env.get('NOTIFICATIONAPI_CLIENT_ID') || '',
+        // Don't return the actual secret for security
+        clientSecretMask: Deno.env.get('NOTIFICATIONAPI_CLIENT_SECRET') ? 
+          '••••••••' + Deno.env.get('NOTIFICATIONAPI_CLIENT_SECRET')!.slice(-4) : ''
       };
 
-      console.log('Current NotificationAPI configuration:', currentConfig);
+      console.log('📋 Current NotificationAPI configuration:', {
+        ...currentConfig,
+        clientSecretMask: currentConfig.clientSecretMask
+      });
 
       return new Response(
         JSON.stringify({ 
@@ -100,7 +140,7 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
   } catch (error: any) {
-    console.error('Error in manage-email-config function:', error);
+    console.error('❌ Error in manage-email-config function:', error);
     
     return new Response(
       JSON.stringify({ 

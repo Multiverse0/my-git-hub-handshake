@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Mail, Save, TestTube, Settings, Edit3, Eye, EyeOff, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
-import { testEmailConfiguration, sendEmail } from '../lib/emailService';
+import { testEmailConfiguration } from '../lib/emailService';
 import { supabase } from '../integrations/supabase/client';
 
 interface EmailTemplate {
@@ -147,8 +147,16 @@ export function EmailManagement() {
   const saveEmailConfig = async () => {
     setSaving(true);
     try {
+      console.log('💾 Saving NotificationAPI configuration...');
+
+      // Validate required fields
+      if (!emailConfig.clientId || !emailConfig.clientSecret || !emailConfig.fromAddress || !emailConfig.fromName) {
+        throw new Error('Alle felter er påkrevd');
+      }
+
       // Save to Supabase edge function to update secrets
-      const { error } = await supabase.functions.invoke('manage-email-config', {
+      console.log('🔄 Calling manage-email-config edge function...');
+      const { data, error } = await supabase.functions.invoke('manage-email-config', {
         body: {
           action: 'save',
           config: {
@@ -160,14 +168,43 @@ export function EmailManagement() {
         }
       });
 
+      console.log('📡 Edge function response:', { data, error });
+
       if (error) {
         throw new Error(error.message);
       }
 
+          // Handle response that requires manual setup
+          if (data && !data.success && data.instructions) {
+            console.log('📋 Manual setup required:', data.instructions);
+            
+            // Show setup guide with detailed instructions
+            const instructionMessage = `Manual Supabase secrets configuration required.
+
+Go to: https://supabase.com/dashboard/project/lwhrtzlpxgpmozrcxtrw/settings/functions
+
+Add these environment variables:
+• NOTIFICATIONAPI_CLIENT_ID: ${emailConfig.clientId}
+• NOTIFICATIONAPI_CLIENT_SECRET: ${emailConfig.clientSecret}
+• EMAIL_FROM_ADDRESS: ${emailConfig.fromAddress}  
+• EMAIL_FROM_NAME: ${emailConfig.fromName}
+
+After saving, test the configuration again.`;
+            
+            setTestResult({ 
+              success: false, 
+              error: instructionMessage
+            });
+            
+            // Save to localStorage for when secrets are configured
+            localStorage.setItem('emailConfig', JSON.stringify(emailConfig));
+            return;
+          }
+
       // Also save to localStorage as backup
       localStorage.setItem('emailConfig', JSON.stringify(emailConfig));
       
-      console.log('📧 NotificationAPI config saved to Supabase secrets:', {
+      console.log('✅ NotificationAPI config saved successfully:', {
         fromAddress: emailConfig.fromAddress,
         fromName: emailConfig.fromName,
         hasClientId: !!emailConfig.clientId,
@@ -175,9 +212,9 @@ export function EmailManagement() {
       });
 
       setTestResult({ success: true });
-      setTimeout(() => setTestResult(null), 3000);
+      setTimeout(() => setTestResult(null), 5000);
     } catch (error: any) {
-      console.error('Failed to save email config:', error);
+      console.error('❌ Failed to save email config:', error);
       setTestResult({ success: false, error: error.message || 'Kunne ikke lagre konfigurasjon' });
     } finally {
       setSaving(false);
@@ -232,21 +269,32 @@ export function EmailManagement() {
     setTestResult(null);
 
     try {
-      const result = await sendEmail({
-        to: testEmail,
-        template: 'welcome_admin',
-        data: {
+      console.log('🧪 Sending test email to:', testEmail);
+      
+      // Use NotificationAPI template directly for testing
+      const { sendTemplateNotification } = await import('../lib/notificationApiService');
+      
+      const result = await sendTemplateNotification(
+        {
+          id: testEmail,
+          email: testEmail
+        },
+        'welcome_aktiv', // Use the actual template ID
+        {
           organizationName: 'Test Organisasjon',
           recipientName: 'Test Bruker',
           email: testEmail,
-          password: 'test123456',
-          loginUrl: `${window.location.origin}/login?org=test`
-        },
-        organizationId: 'test-org'
-      });
+          loginUrl: `${window.location.origin}/login?org=test`,
+          adminName: 'Test Administrator',
+          memberNumber: '12345',
+          password: 'Dine innloggingsopplysninger vil bli sendt separat'
+        }
+      );
 
+      console.log('🧪 Test email result:', result);
       setTestResult(result);
     } catch (error) {
+      console.error('❌ Test email error:', error);
       setTestResult({
         success: false,
         error: error instanceof Error ? error.message : 'Test feilet'
