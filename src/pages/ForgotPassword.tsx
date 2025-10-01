@@ -48,22 +48,19 @@ export function ForgotPassword() {
       setIsLoading(true);
       setError(null);
 
-      // Use Supabase Auth password reset via edge function
+      // Use custom reset-password edge function with NotificationAPI
       const resetUrl = `${window.location.origin}/reset-password?org=${orgSlug}`;
       
-      const { data, error } = await supabase.functions.invoke('send-email', {
+      console.log('Sending password reset email to:', email);
+      console.log('Reset URL:', resetUrl);
+      console.log('Organization:', organization);
+
+      const { data, error } = await supabase.functions.invoke('reset-password', {
         body: {
-          to: email,
-          template: 'password_reset',
-          data: {
-            organizationName: organization?.name || 'Aktivlogg',
-            recipientName: 'Bruker', // Will be updated by edge function
-            email: email,
-            resetUrl: resetUrl,
-            loginUrl: `${window.location.origin}/login?org=${orgSlug}`
-          },
-          organizationId: organization?.id || 'default',
-          resetPassword: true // Special flag to indicate password reset
+          email: email,
+          organizationName: organization?.name,
+          organizationLogo: organization?.logo_url,
+          resetUrl: resetUrl
         }
       });
 
