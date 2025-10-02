@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import notificationapi from "npm:notificationapi-node-server-sdk@2.5.1";
+import { Resend } from "npm:resend@2.0.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,7 +8,7 @@ const corsHeaders = {
 };
 
 interface NotificationRequest {
-  type: string;
+  type?: string;
   to: {
     id: string;
     email: string;
@@ -40,40 +41,73 @@ async function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function sendWithRetry(payload: NotificationRequest, maxAttempts = 3): Promise<any> {
+async function sendWithNotificationAPI(payload: NotificationRequest, maxAttempts = 2): Promise<any> {
   let baseURL = EU_BASE;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       initSdk(baseURL);
-      console.log(`📤 Attempt ${attempt}/${maxAttempts} - sending notification...`);
+      console.log(`📤 NotificationAPI attempt ${attempt}/${maxAttempts}...`);
       const result = await notificationapi.send(payload as any);
       console.log('✅ NotificationAPI success:', result.data);
-      return result;
+      return { success: true, provider: 'notificationapi', data: result.data };
     } catch (error: any) {
       const status = error?.response?.status;
       const statusText = error?.response?.statusText;
       const msg = error?.message || error?.toString();
-      console.error(`❌ Attempt ${attempt} failed:`, { status, statusText, msg, data: error?.response?.data });
+      console.error(`❌ NotificationAPI attempt ${attempt} failed:`, { status, statusText, msg, data: error?.response?.data });
 
-      const retriable = status ? status >= 500 : true; // network/unknown treated as retriable
-
-      // On first server failure, try fallback to GLOBAL base URL
-      if (attempt === 1 && retriable && baseURL === EU_BASE) {
-        console.warn('🌍 Switching baseURL to GLOBAL for retry...');
+      // Switch to global endpoint on first failure
+      if (attempt === 1 && baseURL === EU_BASE) {
+        console.warn('🌍 Switching to GLOBAL endpoint...');
         baseURL = GLOBAL_BASE;
-      }
-
-      if (attempt < maxAttempts && retriable) {
-        const backoff = 300 * attempt;
-        console.log(`⏳ Retrying in ${backoff}ms...`);
-        await delay(backoff);
+        await delay(300);
         continue;
       }
 
-      throw error;
+      // Return error info for fallback decision
+      return { 
+        success: false, 
+        provider: 'notificationapi', 
+        error: msg,
+        status,
+        shouldFallback: status === 401 || status === 403 || status >= 500
+      };
     }
   }
-  throw new Error('NotificationAPI send failed after retries');
+  return { success: false, provider: 'notificationapi', error: 'Failed after retries', shouldFallback: true };
+}
+
+async function sendWithResend(payload: NotificationRequest): Promise<any> {
+  try {
+    const resendApiKey = Deno.env.get('RESEND_API_KEY');
+    if (!resendApiKey) {
+      console.error('❌ RESEND_API_KEY not configured');
+      return { success: false, provider: 'resend', error: 'Resend not configured' };
+    }
+
+    const resend = new Resend(resendApiKey);
+    const fromName = Deno.env.get('EMAIL_FROM_NAME') || 'AKTIVLOGG';
+    const fromAddress = Deno.env.get('EMAIL_FROM_ADDRESS') || 'noreply@aktivlogg.no';
+    const from = `${fromName} <${fromAddress}>`;
+
+    if (!payload.email?.subject || !payload.email?.html) {
+      return { success: false, provider: 'resend', error: 'Email content missing' };
+    }
+
+    console.log('📤 Sending via Resend...');
+    const result = await resend.emails.send({
+      from,
+      to: [payload.to.email],
+      subject: payload.email.subject,
+      html: payload.email.html
+    });
+
+    console.log('✅ Resend success:', result);
+    return { success: true, provider: 'resend', data: result };
+  } catch (error: any) {
+    console.error('❌ Resend error:', error);
+    return { success: false, provider: 'resend', error: error.message || 'Resend failed' };
+  }
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -94,42 +128,68 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     const payload: NotificationRequest = await req.json();
     console.log('📦 Payload received:', {
-      type: payload.type,
       to: payload.to?.email,
-      templateId: payload.templateId,
-      params: payload.parameters ? Object.keys(payload.parameters) : []
+      hasEmail: !!payload.email,
+      templateId: payload.templateId
     });
 
-    const result: any = await sendWithRetry(payload);
+    const providerErrors: string[] = [];
 
+    // Try NotificationAPI first
+    const notifResult = await sendWithNotificationAPI(payload);
+    
+    if (notifResult.success) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          messageId: notifResult.data?.messageId || notifResult.data?.id || 'sent',
+          provider: 'notificationapi'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
+    }
+
+    providerErrors.push(`NotificationAPI: ${notifResult.error}`);
+    console.warn('⚠️ NotificationAPI failed, trying Resend fallback...');
+
+    // Fallback to Resend if NotificationAPI failed with auth/server errors
+    if (notifResult.shouldFallback && payload.email) {
+      const resendResult = await sendWithResend(payload);
+      
+      if (resendResult.success) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            messageId: resendResult.data?.id || 'sent',
+            provider: 'resend',
+            note: 'Sent via fallback provider'
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+      
+      providerErrors.push(`Resend: ${resendResult.error}`);
+    }
+
+    // Both providers failed - return structured error with HTTP 200
+    console.error('💥 All providers failed:', providerErrors);
     return new Response(
       JSON.stringify({
-        success: true,
-        messageId: result.data?.messageId || result.data?.id || 'sent',
-        data: result.data
+        success: false,
+        error: 'Failed to send notification via all providers',
+        provider_errors: providerErrors
       }),
       { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     );
   } catch (error: any) {
-    console.error('💥 send-notification-direct error:', {
-      message: error?.message,
-      name: error?.name,
-      stack: error?.stack,
-      response: error?.response ? {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data
-      } : 'No response data'
-    });
-
-    const status = error?.response?.status || 500;
+    console.error('💥 Unexpected error in send-notification-direct:', error);
     return new Response(
       JSON.stringify({
         success: false,
-        error: error?.message || 'Failed to send notification',
-        details: error?.response?.data || error?.toString()
+        error: error?.message || 'Unexpected error occurred',
+        details: error?.toString()
       }),
-      { status, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     );
   }
 };

@@ -131,23 +131,45 @@ serve(async (req) => {
       }
     );
 
+    // Handle invoke-level errors (network, timeout, etc.)
     if (notificationError) {
-      console.error('Error calling send-notification-direct:', notificationError);
-      throw new Error(`Failed to send email: ${notificationError.message}`);
+      console.error('Error invoking send-notification-direct:', notificationError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Could not send email. Please try again in a few minutes.'
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
     }
 
+    // Handle provider-level errors (both NotificationAPI and Resend failed)
     if (!notificationResult?.success) {
-      console.error('send-notification-direct returned error:', notificationResult);
-      throw new Error(`Failed to send email: ${notificationResult?.error || 'Unknown error'}`);
+      console.error('send-notification-direct failed:', notificationResult);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Could not send email. Please try again in a few minutes.',
+          details: notificationResult?.error
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
     }
 
-    console.log('Email sent successfully via send-notification-direct:', notificationResult);
+    console.log('✅ Email sent successfully via', notificationResult.provider);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: 'Password reset email sent successfully',
-        messageId: notificationResult.messageId 
+        messageId: notificationResult.messageId,
+        provider: notificationResult.provider
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -160,11 +182,11 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message || 'Failed to process password reset' 
+        error: 'Could not process password reset. Please try again in a few minutes.'
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
+        status: 200,
       }
     );
   }

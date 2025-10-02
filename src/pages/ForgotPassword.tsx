@@ -65,13 +65,14 @@ export function ForgotPassword() {
       });
 
       if (error) {
-        throw error;
+        console.error('Function invoke error:', error);
+        throw new Error('Kunne ikke sende e-post. Vennligst prøv igjen om noen minutter.');
       }
 
       // Handle response from Edge Function
       if (data && typeof data === 'object') {
         if (data.success === false) {
-          throw new Error(data.error || 'Password reset failed');
+          throw new Error(data.error || 'Kunne ikke sende tilbakestillingslenke. Vennligst prøv igjen.');
         }
       }
 
@@ -81,7 +82,7 @@ export function ForgotPassword() {
       if (error instanceof Error) {
         setError(error.message);
       } else {
-        setError('Det oppstod en feil. Prøv igjen senere.');
+        setError('Det oppstod en feil. Vennligst prøv igjen senere.');
       }
     } finally {
       setIsLoading(false);
