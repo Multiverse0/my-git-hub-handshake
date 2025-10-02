@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { format } from 'date-fns';
 import { safeDate } from '../lib/typeUtils';
 import type { MemberTrainingSession } from '../lib/types';
+import { useRealtimeSubscription } from '../hooks/useRealtime';
 
 interface TrainingApprovalQueueProps {
   onCountChange?: (count: number) => void;
@@ -19,50 +20,52 @@ export function TrainingApprovalQueue({ onCountChange }: TrainingApprovalQueuePr
   const [, setError] = useState<string | null>(null);
 
   // Load pending training sessions from database
-  useEffect(() => {
+  const loadPendingTrainings = async () => {
     if (!organization?.id) return;
     
-    const loadPendingTrainings = () => {
-      try {
-        const loadSessions = async () => {
-          const result = await getOrganizationTrainingSessions(organization.id);
-          if (result.data) {
-            const unverifiedSessions = result.data.filter(session => !session.verified);
-            setPendingTrainings(unverifiedSessions);
-            
-            // Notify parent component of count change
-            if (onCountChange) {
-              onCountChange(unverifiedSessions.length);
-            }
-          }
-        };
+    try {
+      const result = await getOrganizationTrainingSessions(organization.id);
+      if (result.data) {
+        const unverifiedSessions = result.data.filter(session => !session.verified);
+        setPendingTrainings(unverifiedSessions);
         
-        loadSessions().catch(error => {
-          console.error('Error loading pending trainings:', error);
-          setPendingTrainings([]);
-          if (onCountChange) {
-            onCountChange(0);
-          }
-        }).finally(() => {
-          setLoading(false);
-        });
-      } catch (error) {
-        console.error('Error in loadPendingTrainings:', error);
-        setPendingTrainings([]);
+        // Notify parent component of count change
         if (onCountChange) {
-          onCountChange(0);
+          onCountChange(unverifiedSessions.length);
         }
-        setLoading(false);
       }
-    };
+    } catch (error) {
+      console.error('Error loading pending trainings:', error);
+      setPendingTrainings([]);
+      if (onCountChange) {
+        onCountChange(0);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!organization?.id) return;
 
     loadPendingTrainings();
-
-    // Refresh every 30 seconds
+    
+    // Refresh every 30 seconds as fallback
     const interval = setInterval(loadPendingTrainings, 30000);
     
     return () => clearInterval(interval);
-  }, [organization?.id, onCountChange]);
+  }, [organization?.id]);
+
+  // Real-time subscription for immediate updates
+  useRealtimeSubscription(
+    'member_training_sessions',
+    organization?.id ? `organization_id=eq.${organization.id}` : undefined,
+    (payload: any) => {
+      console.log('Real-time training session event:', payload);
+      // Reload data when training sessions are added or updated
+      loadPendingTrainings();
+    }
+  );
 
   const handleApprove = async (sessionId: string) => {
     setProcessingId(sessionId);

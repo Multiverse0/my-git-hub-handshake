@@ -28,58 +28,60 @@ export function Admin() {
   const [totalTrainingSessions, setTotalTrainingSessions] = useState(0);
 
   // Load training sessions and member data from database
-  useEffect(() => {
+  const loadData = async () => {
     if (!organization?.id) return;
     
-    const loadData = async () => {
-      try {
-        // Load training sessions
-        const sessionsResult = await getOrganizationTrainingSessions(organization.id);
-        if (sessionsResult.data) {
-          const unverifiedSessions = sessionsResult.data.filter(session => !session.verified);
-          
-          // Today's count
-          const today = new Date().toDateString();
-          const todayCount = unverifiedSessions.filter(session => 
-            session.start_time && new Date(session.start_time).toDateString() === today
-          ).length;
-          setTodaysUnapprovedCount(todayCount);
-          
-          // Selected date count
-          const selected = new Date(selectedDate).toDateString();
-          const selectedCount = unverifiedSessions.filter(session => 
-            session.start_time && new Date(session.start_time).toDateString() === selected
-          ).length;
-          setSelectedDateUnapprovedCount(selectedCount);
-          
-          // Update total pending count
-          setPendingApprovalsCount(unverifiedSessions.length);
-          
-          // Total training sessions this month
-          const currentMonth = new Date();
-          const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-          const thisMonthSessions = sessionsResult.data.filter(session => 
-            session.verified && session.start_time && new Date(session.start_time) >= firstDayOfMonth
-          ).length;
-          setTotalTrainingSessions(thisMonthSessions);
-        }
-
-        // Load members
-        const membersResult = await getOrganizationMembers(organization.id);
-        if (membersResult.data) {
-          setTotalMembers(membersResult.data.length);
-          const pendingCount = membersResult.data.filter(member => !member.approved).length;
-          setPendingMembersCount(pendingCount);
-        }
-      } catch (error) {
-        console.error('Error loading data:', error);
-        setTodaysUnapprovedCount(0);
-        setSelectedDateUnapprovedCount(0);
-        setPendingApprovalsCount(0);
-        setTotalMembers(0);
-        setTotalTrainingSessions(0);
+    try {
+      // Load training sessions
+      const sessionsResult = await getOrganizationTrainingSessions(organization.id);
+      if (sessionsResult.data) {
+        const unverifiedSessions = sessionsResult.data.filter(session => !session.verified);
+        
+        // Today's count
+        const today = new Date().toDateString();
+        const todayCount = unverifiedSessions.filter(session => 
+          session.start_time && new Date(session.start_time).toDateString() === today
+        ).length;
+        setTodaysUnapprovedCount(todayCount);
+        
+        // Selected date count
+        const selected = new Date(selectedDate).toDateString();
+        const selectedCount = unverifiedSessions.filter(session => 
+          session.start_time && new Date(session.start_time).toDateString() === selected
+        ).length;
+        setSelectedDateUnapprovedCount(selectedCount);
+        
+        // Update total pending count
+        setPendingApprovalsCount(unverifiedSessions.length);
+        
+        // Total training sessions this month
+        const currentMonth = new Date();
+        const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+        const thisMonthSessions = sessionsResult.data.filter(session => 
+          session.verified && session.start_time && new Date(session.start_time) >= firstDayOfMonth
+        ).length;
+        setTotalTrainingSessions(thisMonthSessions);
       }
-    };
+
+      // Load members
+      const membersResult = await getOrganizationMembers(organization.id);
+      if (membersResult.data) {
+        setTotalMembers(membersResult.data.length);
+        const pendingCount = membersResult.data.filter(member => !member.approved).length;
+        setPendingMembersCount(pendingCount);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      setTodaysUnapprovedCount(0);
+      setSelectedDateUnapprovedCount(0);
+      setPendingApprovalsCount(0);
+      setTotalMembers(0);
+      setTotalTrainingSessions(0);
+    }
+  };
+
+  useEffect(() => {
+    if (!organization?.id) return;
 
     loadData();
     
@@ -388,7 +390,7 @@ export function Admin() {
           onClose={() => setShowManualModal(false)}
           onSuccess={() => {
             setShowManualModal(false);
-            // Refresh data if needed
+            loadData(); // Immediately refresh data after adding manual training
           }}
         />
       )}
