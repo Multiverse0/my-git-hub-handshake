@@ -327,33 +327,37 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Passord *
-              </label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                className="w-full bg-gray-700 rounded-md px-3 py-2"
-                placeholder="Skriv inn passord (min 6 tegn)"
-                autoComplete="new-password"
-              />
-            </div>
+            {mode === 'new' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Passord *
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    className="w-full bg-gray-700 rounded-md px-3 py-2"
+                    placeholder="Skriv inn passord (min 6 tegn)"
+                    autoComplete="new-password"
+                  />
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Bekreft passord *
-              </label>
-              <input
-                type="password"
-                value={formData.confirmPassword}
-                onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                className="w-full bg-gray-700 rounded-md px-3 py-2"
-                placeholder="Skriv inn passordet på nytt"
-                autoComplete="new-password"
-              />
-            </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Bekreft passord *
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                    className="w-full bg-gray-700 rounded-md px-3 py-2"
+                    placeholder="Skriv inn passordet på nytt"
+                    autoComplete="new-password"
+                  />
+                </div>
+              </>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
