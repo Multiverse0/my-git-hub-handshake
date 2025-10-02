@@ -6,7 +6,7 @@ import { getMemberLimitInfo } from '../lib/subscriptionPlans';
 
 interface AddMemberModalProps {
   onClose: () => void;
-  onSave: (member: Partial<OrganizationMember> & { sendWelcomeEmail?: boolean }) => void;
+  onSave: (member: Partial<OrganizationMember> & { sendWelcomeEmail?: boolean; password?: string }) => void;
   organizationId: string;
 }
 
@@ -17,12 +17,16 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
     email: string;
     member_number: string;
     role: 'member' | 'admin' | 'range_officer';
+    password: string;
+    confirmPassword: string;
     sendWelcomeEmail: boolean;
   }>({
     full_name: '',
     email: '',
     member_number: '',
     role: 'member',
+    password: '',
+    confirmPassword: '',
     sendWelcomeEmail: true,
   });
   const [searchTerm, setSearchTerm] = useState('');
@@ -91,11 +95,28 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
           return;
         }
         
+        // Validate password
+        if (!formData.password.trim()) {
+          setError('Passord må fylles ut');
+          return;
+        }
+        
+        if (formData.password.length < 6) {
+          setError('Passordet må være minst 6 tegn');
+          return;
+        }
+        
+        if (formData.password !== formData.confirmPassword) {
+          setError('Passordene er ikke like');
+          return;
+        }
+        
         onSave({
           full_name: formData.full_name.trim(),
           email: formData.email.toLowerCase().trim(),
           member_number: formData.member_number.trim() || undefined,
           role: formData.role,
+          password: formData.password.trim(),
           approved: true, // Auto-approve members added by admin
           active: true,
           sendWelcomeEmail: formData.sendWelcomeEmail,
@@ -183,7 +204,7 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
                 setMode('new');
                 setSelectedUser(null);
                 setSearchTerm('');
-                setFormData({ full_name: '', email: '', member_number: '', role: 'member', sendWelcomeEmail: true });
+                setFormData({ full_name: '', email: '', member_number: '', role: 'member', password: '', confirmPassword: '', sendWelcomeEmail: true });
               }}
               className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
                 mode === 'new'
@@ -200,7 +221,7 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
                 setMode('existing');
                 setSelectedUser(null);
                 setSearchTerm('');
-                setFormData({ full_name: '', email: '', member_number: '', role: 'member', sendWelcomeEmail: true });
+                setFormData({ full_name: '', email: '', member_number: '', role: 'member', password: '', confirmPassword: '', sendWelcomeEmail: true });
               }}
               className={`flex-1 py-2 px-3 rounded text-sm font-medium transition-colors ${
                 mode === 'existing'
@@ -308,17 +329,45 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
+                Passord *
+              </label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                className="w-full bg-gray-700 rounded-md px-3 py-2"
+                placeholder="Skriv inn passord (min 6 tegn)"
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Bekreft passord *
+              </label>
+              <input
+                type="password"
+                value={formData.confirmPassword}
+                onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                className="w-full bg-gray-700 rounded-md px-3 py-2"
+                placeholder="Skriv inn passordet på nytt"
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 Rolle
               </label>
               <select
                 value={formData.role}
                 onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value as 'member' | 'admin' | 'range_officer' }))}
                 className="w-full bg-gray-700 rounded-md px-3 py-2"
+                disabled
               >
                 <option value="member">Medlem</option>
-                <option value="admin">Admin</option>
-                <option value="range_officer">Standplassleder</option>
               </select>
+              <p className="mt-1 text-xs text-gray-400">Alle nye brukere starter som medlemmer</p>
             </div>
 
             {mode === 'new' && (
@@ -331,7 +380,7 @@ export function AddMemberModal({ onClose, onSave, organizationId }: AddMemberMod
                   className="rounded border-gray-600 bg-gray-700 text-primary focus:ring-primary focus:ring-offset-gray-800"
                 />
                 <label htmlFor="sendWelcomeEmail" className="text-sm text-gray-300">
-                  Send velkomst-e-post med innloggingsinfo
+                  Send velkomst-e-post med innloggingsdetaljer
                 </label>
               </div>
             )}
