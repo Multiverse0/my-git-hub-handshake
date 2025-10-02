@@ -61,92 +61,87 @@ serve(async (req) => {
     const resetLink = resetData.properties.action_link;
     console.log('Reset link generated successfully');
 
-    // Send email via NotificationAPI
-    const NOTIFICATIONAPI_CLIENT_ID = Deno.env.get('NOTIFICATIONAPI_CLIENT_ID');
-    const NOTIFICATIONAPI_CLIENT_SECRET = Deno.env.get('NOTIFICATIONAPI_CLIENT_SECRET');
-
-    if (!NOTIFICATIONAPI_CLIENT_ID || !NOTIFICATIONAPI_CLIENT_SECRET) {
-      throw new Error('NotificationAPI credentials not configured');
-    }
+    // Send email via send-notification-direct edge function
+    const emailHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          ${organizationLogo ? `
+            <div style="text-align: center; margin-bottom: 30px;">
+              <img src="${organizationLogo}" alt="${organizationName}" style="max-width: 200px; height: auto;">
+            </div>
+          ` : ''}
+          
+          <h1 style="color: #2563eb; margin-bottom: 20px;">Tilbakestill passord</h1>
+          
+          <p>Hei,</p>
+          
+          <p>Du har bedt om å tilbakestille passordet ditt for ${organizationName || 'AKTIVLOGG'}.</p>
+          
+          <p>Klikk på knappen nedenfor for å opprette et nytt passord:</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${resetLink}" 
+               style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+              Tilbakestill passord
+            </a>
+          </div>
+          
+          <p>Eller kopier og lim inn denne lenken i nettleseren din:</p>
+          <p style="word-break: break-all; background-color: #f3f4f6; padding: 10px; border-radius: 5px; font-size: 12px;">
+            ${resetLink}
+          </p>
+          
+          <p style="color: #dc2626; margin-top: 20px;">
+            <strong>Viktig:</strong> Denne lenken utløper om 60 minutter av sikkerhetshensyn.
+          </p>
+          
+          <p>Hvis du ikke ba om å tilbakestille passordet, kan du ignorere denne e-posten.</p>
+          
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+          
+          <p style="font-size: 12px; color: #6b7280;">
+            Med vennlig hilsen,<br>
+            ${organizationName || 'AKTIVLOGG'} Team
+          </p>
+        </body>
+      </html>
+    `;
 
     const notificationPayload = {
-      type: 'aktivlogg',
       to: {
         id: email,
         email: email
       },
       email: {
         subject: `${organizationName || 'AKTIVLOGG'} - Tilbakestill passord`,
-        html: `
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            </head>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-              ${organizationLogo ? `
-                <div style="text-align: center; margin-bottom: 30px;">
-                  <img src="${organizationLogo}" alt="${organizationName}" style="max-width: 200px; height: auto;">
-                </div>
-              ` : ''}
-              
-              <h1 style="color: #2563eb; margin-bottom: 20px;">Tilbakestill passord</h1>
-              
-              <p>Hei,</p>
-              
-              <p>Du har bedt om å tilbakestille passordet ditt for ${organizationName || 'AKTIVLOGG'}.</p>
-              
-              <p>Klikk på knappen nedenfor for å opprette et nytt passord:</p>
-              
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="${resetLink}" 
-                   style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
-                  Tilbakestill passord
-                </a>
-              </div>
-              
-              <p>Eller kopier og lim inn denne lenken i nettleseren din:</p>
-              <p style="word-break: break-all; background-color: #f3f4f6; padding: 10px; border-radius: 5px; font-size: 12px;">
-                ${resetLink}
-              </p>
-              
-              <p style="color: #dc2626; margin-top: 20px;">
-                <strong>Viktig:</strong> Denne lenken utløper om 60 minutter av sikkerhetshensyn.
-              </p>
-              
-              <p>Hvis du ikke ba om å tilbakestille passordet, kan du ignorere denne e-posten.</p>
-              
-              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
-              
-              <p style="font-size: 12px; color: #6b7280;">
-                Med vennlig hilsen,<br>
-                ${organizationName || 'AKTIVLOGG'} Team
-              </p>
-            </body>
-          </html>
-        `
+        html: emailHtml
       }
     };
 
-    // Send notification via NotificationAPI
-    const notificationResponse = await fetch('https://api.notificationapi.com/aktivlogg/sender', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${btoa(`${NOTIFICATIONAPI_CLIENT_ID}:${NOTIFICATIONAPI_CLIENT_SECRET}`)}`
-      },
-      body: JSON.stringify(notificationPayload)
-    });
+    // Call send-notification-direct function internally
+    const { data: notificationResult, error: notificationError } = await supabaseAdmin.functions.invoke(
+      'send-notification-direct',
+      {
+        body: notificationPayload
+      }
+    );
 
-    if (!notificationResponse.ok) {
-      const errorText = await notificationResponse.text();
-      console.error('NotificationAPI error:', errorText);
-      throw new Error(`Failed to send email: ${notificationResponse.status} ${errorText}`);
+    if (notificationError) {
+      console.error('Error calling send-notification-direct:', notificationError);
+      throw new Error(`Failed to send email: ${notificationError.message}`);
     }
 
-    const notificationResult = await notificationResponse.json();
-    console.log('Email sent successfully via NotificationAPI:', notificationResult);
+    if (!notificationResult?.success) {
+      console.error('send-notification-direct returned error:', notificationResult);
+      throw new Error(`Failed to send email: ${notificationResult?.error || 'Unknown error'}`);
+    }
+
+    console.log('Email sent successfully via send-notification-direct:', notificationResult);
 
     return new Response(
       JSON.stringify({ 
