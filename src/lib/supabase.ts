@@ -1707,10 +1707,10 @@ export async function uploadProfileImage(file: File, memberId: string): Promise<
     try {
       const { data: existingFiles } = await supabase.storage
         .from('profiles')
-        .list(`profiles/${memberId}/`);
+        .list(`${memberId}/`);
 
       if (existingFiles && existingFiles.length > 0) {
-        const filesToDelete = existingFiles.map(f => `profiles/${memberId}/${f.name}`);
+        const filesToDelete = existingFiles.map(f => `${memberId}/${f.name}`);
         await supabase.storage
           .from('profiles')
           .remove(filesToDelete);
@@ -1725,7 +1725,7 @@ export async function uploadProfileImage(file: File, memberId: string): Promise<
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2);
     const fileName = `avatar-${timestamp}-${random}.${fileExt}`;
-    const filePath = `profiles/${memberId}/${fileName}`;
+    const filePath = `${memberId}/${fileName}`;
 
     // Upload the file
     const { error: uploadError } = await supabase.storage
@@ -1737,6 +1737,10 @@ export async function uploadProfileImage(file: File, memberId: string): Promise<
 
     if (uploadError) {
       console.error('Upload error details:', uploadError);
+      // Provide detailed RLS error information
+      if (uploadError.message?.includes('row-level security') || uploadError.message?.includes('policy')) {
+        throw new Error(`RLS policy error: Unable to upload. Please ensure you are logged in and approved. Details: ${uploadError.message}`);
+      }
       throw new Error(`Failed to upload image: ${uploadError.message}`);
     }
 
@@ -1766,13 +1770,17 @@ export async function uploadProfileImage(file: File, memberId: string): Promise<
 export async function uploadStartkortPDF(file: File, memberId: string): Promise<string> {
   const fileExt = file.name.split('.').pop();
   const fileName = `${memberId}-startkort-${Date.now()}.${fileExt}`;
-  const filePath = `documents/${memberId}/${fileName}`;
+  const filePath = `${memberId}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('documents')
     .upload(filePath, file);
 
   if (uploadError) {
+    // Provide detailed RLS error information
+    if (uploadError.message?.includes('row-level security') || uploadError.message?.includes('policy')) {
+      throw new Error(`RLS policy error: Unable to upload startkort. Please ensure you are logged in and have the necessary permissions. Details: ${uploadError.message}`);
+    }
     throw uploadError;
   }
 
@@ -1789,13 +1797,17 @@ export async function uploadStartkortPDF(file: File, memberId: string): Promise<
 export async function uploadDiplomaPDF(file: File, memberId: string): Promise<string> {
   const fileExt = file.name.split('.').pop();
   const fileName = `${memberId}-diploma-${Date.now()}.${fileExt}`;
-  const filePath = `documents/${memberId}/${fileName}`;
+  const filePath = `${memberId}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('documents')
     .upload(filePath, file);
 
   if (uploadError) {
+    // Provide detailed RLS error information
+    if (uploadError.message?.includes('row-level security') || uploadError.message?.includes('policy')) {
+      throw new Error(`RLS policy error: Unable to upload diploma. Please ensure you are logged in and have the necessary permissions. Details: ${uploadError.message}`);
+    }
     throw uploadError;
   }
 
@@ -1812,13 +1824,17 @@ export async function uploadDiplomaPDF(file: File, memberId: string): Promise<st
 export async function uploadTargetImage(file: File, sessionId: string): Promise<string> {
   const fileExt = file.name.split('.').pop();
   const fileName = `${sessionId}-target-${Date.now()}.${fileExt}`;
-  const filePath = `target-images/${sessionId}/${fileName}`;
+  const filePath = `${sessionId}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from('target-images')
     .upload(filePath, file);
 
   if (uploadError) {
+    // Provide detailed RLS error information
+    if (uploadError.message?.includes('row-level security') || uploadError.message?.includes('policy')) {
+      throw new Error(`RLS policy error: Unable to upload target image. Please ensure you are logged in and have the necessary permissions. Details: ${uploadError.message}`);
+    }
     throw uploadError;
   }
 

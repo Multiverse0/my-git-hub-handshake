@@ -110,7 +110,7 @@ export function Profile() {
           email: memberData.email || '',
           memberNumber: memberData.member_number || '',
           joinDate: memberData.created_at ? new Date(memberData.created_at).toLocaleDateString('nb-NO') : '',
-          birthDate: (memberData as any).birth_date ? new Date((memberData as any).birth_date).toLocaleDateString('nb-NO') : '',
+          birthDate: (memberData as any).birth_date || '', // Store raw YYYY-MM-DD format
           avatarUrl: memberData.avatar_url || undefined,
           startkortUrl: memberData.startkort_url || undefined,
           startkortFileName: memberData.startkort_file_name || undefined,
@@ -233,46 +233,8 @@ export function Profile() {
         throw new Error('Email is required');
       }
       
-      // Parse birth date if provided
-      let birthDateISO = null;
-      if (editData.birthDate?.trim()) {
-        try {
-          let day, month, year;
-          
-          if (editData.birthDate.includes('.')) {
-            [day, month, year] = editData.birthDate.split('.');
-          } else if (editData.birthDate.includes('/')) {
-            [day, month, year] = editData.birthDate.split('/');
-          } else if (editData.birthDate.includes('-')) {
-            const parts = editData.birthDate.split('-');
-            if (parts.length === 3 && parts[0].length === 4) {
-              year = parts[0];
-              month = parts[1];
-              day = parts[2];
-            }
-          }
-          
-          if (day && month && year) {
-            const dayNum = parseInt(day, 10);
-            const monthNum = parseInt(month, 10);
-            const yearNum = parseInt(year, 10);
-            
-            if (dayNum < 1 || dayNum > 31 || monthNum < 1 || monthNum > 12 || yearNum < 1900 || yearNum > new Date().getFullYear()) {
-              throw new Error('Invalid birth date');
-            }
-            
-            birthDateISO = `${yearNum}-${monthNum.toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
-            
-            const testDate = new Date(birthDateISO);
-            if (isNaN(testDate.getTime())) {
-              throw new Error('Invalid birth date format');
-            }
-          }
-        } catch (dateError) {
-          console.warn('Could not parse birth date:', editData.birthDate, dateError);
-          throw new Error('Invalid birth date. Use format DD.MM.YYYY');
-        }
-      }
+      // Parse birth date if provided (already in YYYY-MM-DD format from date input)
+      const birthDateISO = editData.birthDate?.trim() || null;
 
       // Update profile
       const updateData: any = {
@@ -302,11 +264,10 @@ export function Profile() {
         throw new Error('No profile was updated. Please ensure your profile exists and try again.');
       }
 
-      // Update local state
+      // Update local state - display birth date in localized format
       const updatedProfile = { ...editData };
       if (birthDateISO) {
-        const birthDate = new Date(birthDateISO);
-        updatedProfile.birthDate = birthDate.toLocaleDateString('nb-NO');
+        updatedProfile.birthDate = new Date(birthDateISO).toLocaleDateString('nb-NO');
       }
       
       // Update avatar URL from temp if it exists
@@ -316,6 +277,7 @@ export function Profile() {
       }
       
       setProfileData(updatedProfile);
+      setEditData({ ...updatedProfile, birthDate: birthDateISO || '' }); // Keep YYYY-MM-DD in edit data
       setIsEditing(false);
 
       toast({
@@ -654,10 +616,9 @@ export function Profile() {
                 <label className="block text-sm font-medium mb-1">Birth Date</label>
                 {isEditing ? (
                   <input
-                    type="text"
+                    type="date"
                     value={editData.birthDate}
                     onChange={(e) => setEditData(prev => ({ ...prev, birthDate: e.target.value }))}
-                    placeholder="DD.MM.YYYY"
                     className="w-full px-3 py-2 border rounded-md bg-background"
                   />
                 ) : (
