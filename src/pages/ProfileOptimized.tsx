@@ -110,7 +110,7 @@ export function Profile() {
           email: memberData.email || '',
           memberNumber: memberData.member_number || '',
           joinDate: memberData.created_at ? new Date(memberData.created_at).toLocaleDateString('nb-NO') : '',
-          birthDate: '', // Birth date not available in current schema
+          birthDate: (memberData as any).birth_date ? new Date((memberData as any).birth_date).toLocaleDateString('nb-NO') : '',
           avatarUrl: memberData.avatar_url || undefined,
           startkortUrl: memberData.startkort_url || undefined,
           startkortFileName: memberData.startkort_file_name || undefined,
