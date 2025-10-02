@@ -851,10 +851,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
-      validate_phone_number: {
-        Args: { phone: string }
-        Returns: boolean
-      }
     }
     Enums: {
       [_ in never]: never
