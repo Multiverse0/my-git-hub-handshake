@@ -29,16 +29,16 @@ export function Navigation() {
     <nav 
       className="bg-gray-800 border-b border-gray-700"
       style={{ 
-        borderBottomColor: branding.primary_color + '20'
+        borderBottomColor: (branding?.primary_color || '#FFD700') + '20'
       }}
     >
       <div className="container mx-auto px-4">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
-            {(branding.logo_url || organization?.logo_url) ? (
+            {(branding?.logo_url || organization?.logo_url) ? (
               <img 
-                src={branding.logo_url || organization?.logo_url || ''} 
-                alt={`${branding.organization_name} Logo`} 
+                src={branding?.logo_url || organization?.logo_url || ''} 
+                alt={`${branding?.organization_name || 'Organization'} Logo`} 
                 className="h-10 max-w-[120px] object-contain"
               />
             ) : (
@@ -116,7 +116,7 @@ export function Navigation() {
             <Link
               to="/scanner?auto=true"
               className="p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
-              style={isActive('/scanner') ? { color: branding.primary_color } : {}}
+              style={isActive('/scanner') ? { color: branding?.primary_color || '#FFD700' } : {}}
             >
               <QrCode className="w-6 h-6" />
             </Link>
@@ -232,7 +232,7 @@ function NavLink({ to, active, children }: {
           ? 'bg-gray-900' 
           : 'text-gray-300 hover:bg-gray-700 hover:text-white'
       }`}
-      style={active ? { color: branding.primary_color } : {}}
+      style={active ? { color: branding?.primary_color || '#FFD700' } : {}}
     >
       {children}
     </Link>
@@ -256,7 +256,7 @@ function MobileNavLink({ to, active, children, onClick }: {
           ? 'bg-gray-900' 
           : 'text-gray-300 hover:bg-gray-700 hover:text-white'
       }`}
-      style={active ? { color: branding.primary_color } : {}}
+      style={active ? { color: branding?.primary_color || '#FFD700' } : {}}
     >
       {children}
     </Link>

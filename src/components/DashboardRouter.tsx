@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Navigation } from './Navigation';
 import { ProtectedRoute } from './ProtectedRoute';
+import { ErrorBoundary } from './ErrorBoundary';
 import { Home } from '../pages/Home';
 import { Scanner } from '../pages/Scanner';
 import { TrainingLog } from '../pages/TrainingLog';
@@ -100,39 +101,53 @@ export function DashboardRouter() {
       <main className="container mx-auto px-4 py-8">
         <Routes>
           <Route path="/" element={
-            <ProtectedRoute allowUnapproved={true}>
-              <Home />
-            </ProtectedRoute>
+            <ErrorBoundary>
+              <ProtectedRoute allowUnapproved={true}>
+                <Home />
+              </ProtectedRoute>
+            </ErrorBoundary>
           } />
           <Route path="/scanner" element={
-            <ProtectedRoute>
-              <Scanner />
-            </ProtectedRoute>
+            <ErrorBoundary>
+              <ProtectedRoute>
+                <Scanner />
+              </ProtectedRoute>
+            </ErrorBoundary>
           } />
           <Route path="/log" element={
-            <ProtectedRoute>
-              <TrainingLog />
-            </ProtectedRoute>
+            <ErrorBoundary>
+              <ProtectedRoute>
+                <TrainingLog />
+              </ProtectedRoute>
+            </ErrorBoundary>
           } />
           <Route path="/profile" element={
-            <ProtectedRoute allowUnapproved={true}>
-              <Profile />
-            </ProtectedRoute>
+            <ErrorBoundary>
+              <ProtectedRoute allowUnapproved={true}>
+                <Profile />
+              </ProtectedRoute>
+            </ErrorBoundary>
           } />
           <Route path="/admin" element={
-            <ProtectedRoute requireAdmin={true}>
-              <Admin />
-            </ProtectedRoute>
+            <ErrorBoundary>
+              <ProtectedRoute requireAdmin={true}>
+                <Admin />
+              </ProtectedRoute>
+            </ErrorBoundary>
           } />
           <Route path="/super-admin" element={
-            <ProtectedRoute requireSuperUser={true}>
-              <SuperAdmin />
-            </ProtectedRoute>
+            <ErrorBoundary>
+              <ProtectedRoute requireSuperUser={true}>
+                <SuperAdmin />
+              </ProtectedRoute>
+            </ErrorBoundary>
           } />
           <Route path="/organization/:orgId" element={
-            <ProtectedRoute requireSuperUser={true}>
-              <OrganizationDashboard />
-            </ProtectedRoute>
+            <ErrorBoundary>
+              <ProtectedRoute requireSuperUser={true}>
+                <OrganizationDashboard />
+              </ProtectedRoute>
+            </ErrorBoundary>
           } />
         </Routes>
       </main>

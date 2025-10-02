@@ -29,7 +29,10 @@ export function Admin() {
 
   // Load training sessions and member data from database
   const loadData = async () => {
-    if (!organization?.id) return;
+    if (!organization?.id) {
+      console.warn('[Admin] No organization ID available');
+      return;
+    }
     
     try {
       // Load training sessions
@@ -81,7 +84,10 @@ export function Admin() {
   };
 
   useEffect(() => {
-    if (!organization?.id) return;
+    if (!organization?.id) {
+      console.warn('[Admin] useEffect: No organization ID, skipping data load');
+      return;
+    }
 
     loadData();
     
