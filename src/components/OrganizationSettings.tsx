@@ -192,7 +192,7 @@ export function OrganizationSettings() {
     };
     
     loadMemberData();
-  }, [user?.organization?.id, organization?.id, user?.organization_id, orgData.subscription_type]);
+  }, [user?.organization?.id, organization?.id, user?.organization_id]);
 
   const handleSave = async () => {
     const orgId = user?.organization?.id || organization?.id || user?.organization_id;
@@ -207,7 +207,13 @@ export function OrganizationSettings() {
       return;
     }
 
-    console.log('Saving organization settings for ID:', orgId, orgData);
+    console.log('💾 Saving organization settings for ID:', orgId);
+    console.log('📊 Data being saved:', {
+      nsf_enabled: orgData.nsf_enabled,
+      dfs_enabled: orgData.dfs_enabled,
+      dssn_enabled: orgData.dssn_enabled,
+      activity_types: orgData.activity_types
+    });
 
     setSaving(true);
     setError(null);
@@ -238,7 +244,7 @@ export function OrganizationSettings() {
         return;
       }
 
-      console.log('Organization settings saved successfully');
+      console.log('✅ Organization settings saved successfully');
 
       // Trigger branding update event
       const brandingUpdateEvent = new CustomEvent('brandingUpdated', {
@@ -257,12 +263,7 @@ export function OrganizationSettings() {
       window.dispatchEvent(brandingUpdateEvent);
 
       setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-
-      // Reload page to apply theme changes
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      setTimeout(() => setSuccess(false), 5000); // Extended to 5 seconds
 
     } catch (error) {
       console.error('Error saving organization settings:', error);
