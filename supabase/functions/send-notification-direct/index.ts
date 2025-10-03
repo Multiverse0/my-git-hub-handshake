@@ -94,7 +94,7 @@ async function sendWithResend(payload: NotificationRequest): Promise<any> {
       return { success: false, provider: 'resend', error: 'Email content missing' };
     }
 
-    console.log('📤 Sending via Resend...');
+    console.log('📤 Sending via Resend from:', from);
     const result = await resend.emails.send({
       from,
       to: [payload.to.email],
@@ -102,8 +102,19 @@ async function sendWithResend(payload: NotificationRequest): Promise<any> {
       html: payload.email.html
     });
 
-    console.log('✅ Resend success:', result);
-    return { success: true, provider: 'resend', data: result };
+    // Check if Resend returned an error
+    if (result.error) {
+      console.error('❌ Resend failed:', result.error);
+      return { 
+        success: false, 
+        provider: 'resend', 
+        error: result.error.message || 'Resend failed',
+        statusCode: result.error.statusCode
+      };
+    }
+
+    console.log('✅ Resend success:', result.data);
+    return { success: true, provider: 'resend', data: result.data };
   } catch (error: any) {
     console.error('❌ Resend error:', error);
     return { success: false, provider: 'resend', error: error.message || 'Resend failed' };
@@ -135,25 +146,9 @@ const handler = async (req: Request): Promise<Response> => {
 
     const providerErrors: string[] = [];
 
-    // Try NotificationAPI first
-    const notifResult = await sendWithNotificationAPI(payload);
-    
-    if (notifResult.success) {
-      return new Response(
-        JSON.stringify({
-          success: true,
-          messageId: notifResult.data?.messageId || notifResult.data?.id || 'sent',
-          provider: 'notificationapi'
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-      );
-    }
-
-    providerErrors.push(`NotificationAPI: ${notifResult.error}`);
-    console.warn('⚠️ NotificationAPI failed, trying Resend fallback...');
-
-    // Fallback to Resend if NotificationAPI failed with auth/server errors
-    if (notifResult.shouldFallback && payload.email) {
+    // Use Resend as primary provider for direct email requests (password resets)
+    if (payload.email && !payload.templateId) {
+      console.log('📧 Using Resend as primary provider (direct email)');
       const resendResult = await sendWithResend(payload);
       
       if (resendResult.success) {
@@ -161,8 +156,7 @@ const handler = async (req: Request): Promise<Response> => {
           JSON.stringify({
             success: true,
             messageId: resendResult.data?.id || 'sent',
-            provider: 'resend',
-            note: 'Sent via fallback provider'
+            provider: 'resend'
           }),
           { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
         );
@@ -171,7 +165,25 @@ const handler = async (req: Request): Promise<Response> => {
       providerErrors.push(`Resend: ${resendResult.error}`);
     }
 
-    // Both providers failed - return structured error with HTTP 200
+    // Try NotificationAPI for template-based notifications
+    if (payload.templateId) {
+      const notifResult = await sendWithNotificationAPI(payload);
+      
+      if (notifResult.success) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            messageId: notifResult.data?.messageId || notifResult.data?.id || 'sent',
+            provider: 'notificationapi'
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+      
+      providerErrors.push(`NotificationAPI: ${notifResult.error}`);
+    }
+
+    // All providers failed
     console.error('💥 All providers failed:', providerErrors);
     return new Response(
       JSON.stringify({
