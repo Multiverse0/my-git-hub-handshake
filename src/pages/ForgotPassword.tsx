@@ -51,9 +51,9 @@ export function ForgotPassword() {
       // Use custom reset-password edge function with NotificationAPI
       const resetUrl = `${window.location.origin}/reset-password?org=${orgSlug}`;
       
-      console.log('Sending password reset email to:', email);
-      console.log('Reset URL:', resetUrl);
-      console.log('Organization:', organization);
+      console.log('🔄 Initiating password reset for:', email);
+      console.log('📧 Reset URL:', resetUrl);
+      console.log('🏢 Organization:', organization?.name);
 
       const { data, error } = await supabase.functions.invoke('reset-password', {
         body: {
@@ -64,21 +64,30 @@ export function ForgotPassword() {
         }
       });
 
+      // Log the full response for debugging
+      console.log('📬 Reset password response:', { data, error });
+
+      // Check for invoke-level errors
       if (error) {
-        console.error('Function invoke error:', error);
+        console.error('❌ Function invoke error:', error);
         throw new Error('Kunne ikke sende e-post. Vennligst prøv igjen om noen minutter.');
       }
 
-      // Handle response from Edge Function
+      // Check for function-level errors (email sending failed)
       if (data && typeof data === 'object') {
         if (data.success === false) {
-          throw new Error(data.error || 'Kunne ikke sende tilbakestillingslenke. Vennligst prøv igjen.');
+          console.error('❌ Email sending failed:', data.error);
+          throw new Error(
+            data.error || 
+            'Kunne ikke sende e-post. Vennligst sjekk at e-postadressen er korrekt og prøv igjen.'
+          );
         }
       }
 
+      console.log('✅ Password reset email sent successfully');
       setSuccess(true);
     } catch (error) {
-      console.error('Password reset error:', error);
+      console.error('❌ Password reset error:', error);
       if (error instanceof Error) {
         setError(error.message);
       } else {

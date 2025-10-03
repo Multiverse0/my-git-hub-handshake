@@ -26,7 +26,9 @@ serve(async (req) => {
       throw new Error('Email is required');
     }
 
-    console.log('Processing password reset request for:', email);
+    console.log('🔄 Processing password reset request for:', email);
+    console.log('📧 Organization:', organizationName);
+    console.log('🔗 Reset URL:', resetUrl);
 
     // Initialize Supabase Admin client
     const supabaseAdmin = createClient(
@@ -50,16 +52,36 @@ serve(async (req) => {
     });
 
     if (resetError) {
-      console.error('Error generating reset link:', resetError);
-      throw new Error(`Failed to generate reset link: ${resetError.message}`);
+      console.error('❌ Error generating reset link:', resetError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Kunne ikke generere tilbakestillingslenke. Vennligst sjekk at e-postadressen er korrekt.',
+          technicalDetails: resetError.message
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
     }
 
     if (!resetData?.properties?.action_link) {
-      throw new Error('No reset link generated');
+      console.error('❌ No reset link generated');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Kunne ikke generere tilbakestillingslenke. Vennligst prøv igjen.'
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
     }
 
     const resetLink = resetData.properties.action_link;
-    console.log('Reset link generated successfully');
+    console.log('✅ Reset link generated successfully');
 
     // Send email via send-notification-direct edge function
     const emailHtml = `
@@ -133,11 +155,12 @@ serve(async (req) => {
 
     // Handle invoke-level errors (network, timeout, etc.)
     if (notificationError) {
-      console.error('Error invoking send-notification-direct:', notificationError);
+      console.error('❌ Error invoking send-notification-direct:', notificationError);
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Could not send email. Please try again in a few minutes.'
+          error: 'E-posten kunne ikke sendes. Vennligst prøv igjen om noen minutter.',
+          technicalDetails: notificationError.message
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -146,14 +169,27 @@ serve(async (req) => {
       );
     }
 
+    // Log the notification result for debugging
+    console.log('📬 Notification result:', JSON.stringify(notificationResult, null, 2));
+
     // Handle provider-level errors (both NotificationAPI and Resend failed)
     if (!notificationResult?.success) {
-      console.error('send-notification-direct failed:', notificationResult);
+      console.error('❌ send-notification-direct failed:', notificationResult);
+      
+      // Provide more specific error messages
+      let userMessage = 'E-posten kunne ikke sendes. Vennligst prøv igjen om noen minutter.';
+      
+      if (notificationResult?.error?.includes('API key')) {
+        userMessage = 'E-posttjenesten er ikke konfigurert riktig. Kontakt administrator.';
+      } else if (notificationResult?.error?.includes('domain')) {
+        userMessage = 'E-postdomenet er ikke verifisert. Kontakt administrator.';
+      }
+      
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Could not send email. Please try again in a few minutes.',
-          details: notificationResult?.error
+          error: userMessage,
+          technicalDetails: notificationResult?.error || notificationResult?.provider_errors
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -163,6 +199,7 @@ serve(async (req) => {
     }
 
     console.log('✅ Email sent successfully via', notificationResult.provider);
+    console.log('📨 Message ID:', notificationResult.messageId);
 
     return new Response(
       JSON.stringify({ 
@@ -178,11 +215,12 @@ serve(async (req) => {
     );
 
   } catch (error: any) {
-    console.error('Error in reset-password function:', error);
+    console.error('❌ Error in reset-password function:', error);
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: 'Could not process password reset. Please try again in a few minutes.'
+        error: 'Kunne ikke behandle forespørsel om tilbakestilling av passord. Vennligst prøv igjen.',
+        technicalDetails: error.message
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
